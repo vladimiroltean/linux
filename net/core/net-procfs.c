@@ -31,19 +31,25 @@ static inline struct net_device *dev_from_same_bucket(struct seq_file *seq, loff
 
 static inline struct net_device *dev_from_bucket(struct seq_file *seq, loff_t *pos)
 {
-	struct net_device *dev;
+	struct net_device *dev = NULL;
 	unsigned int bucket;
+
+	rcu_read_lock();
 
 	do {
 		dev = dev_from_same_bucket(seq, pos);
-		if (dev)
-			return dev;
+		if (dev) {
+			dev_hold(dev);
+			break;
+		}
 
 		bucket = get_bucket(*pos) + 1;
 		*pos = set_bucket_offset(bucket, 1);
 	} while (bucket < NETDEV_HASHENTRIES);
 
-	return NULL;
+	rcu_read_unlock();
+
+	return dev;
 }
 
 /*
@@ -51,9 +57,7 @@ static inline struct net_device *dev_from_bucket(struct seq_file *seq, loff_t *p
  *	in detail.
  */
 static void *dev_seq_start(struct seq_file *seq, loff_t *pos)
-	__acquires(RCU)
 {
-	rcu_read_lock();
 	if (!*pos)
 		return SEQ_START_TOKEN;
 
@@ -66,13 +70,17 @@ static void *dev_seq_start(struct seq_file *seq, loff_t *pos)
 static void *dev_seq_next(struct seq_file *seq, void *v, loff_t *pos)
 {
 	++*pos;
+
+	if (v && v != SEQ_START_TOKEN)
+		dev_put(v);
+
 	return dev_from_bucket(seq, pos);
 }
 
 static void dev_seq_stop(struct seq_file *seq, void *v)
-	__releases(RCU)
 {
-	rcu_read_unlock();
+	if (v && v != SEQ_START_TOKEN)
+		dev_put(v);
 }
 
 static void dev_seq_printf_stats(struct seq_file *seq, struct net_device *dev)
