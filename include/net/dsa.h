@@ -207,6 +207,7 @@ struct dsa_port {
 	bool			mc_flood;
 	/* Knobs from bridge */
 	unsigned long		br_flags;
+	bool			mc_disabled;
 	bool			mrouter;
 
 	struct list_head list;
@@ -566,6 +567,8 @@ struct dsa_switch_ops {
 			     const struct switchdev_obj_port_mdb *mdb);
 	int	(*port_mdb_del)(struct dsa_switch *ds, int port,
 				const struct switchdev_obj_port_mdb *mdb);
+	int	(*port_igmp_mld_snoop)(struct dsa_switch *ds, int port,
+				       bool enable);
 	/*
 	 * RXNFC
 	 */

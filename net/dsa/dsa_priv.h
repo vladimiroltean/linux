@@ -24,6 +24,7 @@ enum {
 	DSA_NOTIFIER_VLAN_ADD,
 	DSA_NOTIFIER_VLAN_DEL,
 	DSA_NOTIFIER_MTU,
+	DSA_NOTIFIER_MC_DISABLED,
 };
 
 /* DSA_NOTIFIER_AGEING_TIME */
@@ -70,6 +71,14 @@ struct dsa_notifier_mtu_info {
 	int sw_index;
 	int port;
 	int mtu;
+};
+
+/* DSA_NOTIFIER_MC_DISABLED */
+struct dsa_notifier_mc_disabled_info {
+	int tree_index;
+	int sw_index;
+	struct net_device *br;
+	bool mc_disabled;
 };
 
 struct dsa_switchdev_event_work {
@@ -150,6 +159,10 @@ int dsa_port_bridge_join(struct dsa_port *dp, struct net_device *br);
 void dsa_port_bridge_leave(struct dsa_port *dp, struct net_device *br);
 int dsa_port_vlan_filtering(struct dsa_port *dp, bool vlan_filtering,
 			    struct switchdev_trans *trans);
+int dsa_port_multicast_toggle(struct dsa_switch *ds, int port,
+			      bool mc_disabled);
+int dsa_port_mc_disabled(struct dsa_port *dp, bool mc_disabled,
+			 struct switchdev_trans *trans);
 bool dsa_port_skip_vlan_configuration(struct dsa_port *dp);
 int dsa_port_ageing_time(struct dsa_port *dp, clock_t ageing_clock,
 			 struct switchdev_trans *trans);

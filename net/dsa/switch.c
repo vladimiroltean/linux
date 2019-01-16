@@ -337,6 +337,39 @@ static int dsa_switch_vlan_del(struct dsa_switch *ds,
 	return 0;
 }
 
+static bool
+dsa_switch_mc_disabled_match(struct dsa_switch *ds, int port,
+			     struct dsa_notifier_mc_disabled_info *info)
+{
+	struct dsa_port *dp = dsa_to_port(ds, port);
+	struct dsa_switch_tree *dst = ds->dst;
+
+	if (dp->bridge_dev == info->br)
+		return true;
+
+	if (dst->index == info->tree_index && ds->index == info->sw_index)
+		return dsa_is_cpu_port(ds, port) || dsa_is_dsa_port(ds, port);
+
+	return false;
+}
+
+static int dsa_switch_mc_disabled(struct dsa_switch *ds,
+				  struct dsa_notifier_mc_disabled_info *info)
+{
+	bool mc_disabled = info->mc_disabled;
+	int port, err;
+
+	for (port = 0; port < ds->num_ports; port++) {
+		if (dsa_switch_mc_disabled_match(ds, port, info)) {
+			err = dsa_port_multicast_toggle(ds, port, mc_disabled);
+			if (err)
+				return err;
+		}
+	}
+
+	return 0;
+}
+
 static int dsa_switch_event(struct notifier_block *nb,
 			    unsigned long event, void *info)
 {
@@ -373,6 +406,9 @@ static int dsa_switch_event(struct notifier_block *nb,
 		break;
 	case DSA_NOTIFIER_MTU:
 		err = dsa_switch_mtu(ds, info);
+		break;
+	case DSA_NOTIFIER_MC_DISABLED:
+		err = dsa_switch_mc_disabled(ds, info);
 		break;
 	default:
 		err = -EOPNOTSUPP;

@@ -475,6 +475,9 @@ static int dsa_slave_port_attr_set(struct net_device *dev,
 		/* The local bridge is a multicast router */
 		ret = dsa_port_mrouter(dp->cpu_dp, attr->u.mrouter, trans);
 		break;
+	case SWITCHDEV_ATTR_ID_BRIDGE_MC_DISABLED:
+		ret = dsa_port_mc_disabled(dp, attr->u.mc_disabled, trans);
+		break;
 	default:
 		ret = -EOPNOTSUPP;
 		break;

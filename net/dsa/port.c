@@ -144,6 +144,7 @@ int dsa_port_bridge_join(struct dsa_port *dp, struct net_device *br)
 	};
 	int err;
 
+	dp->cpu_dp->mc_disabled = !br_multicast_enabled(br);
 	dp->cpu_dp->mrouter = br_multicast_router(br);
 
 	/* Here the interface is already bridged. Reflect the current
@@ -175,6 +176,7 @@ void dsa_port_bridge_leave(struct dsa_port *dp, struct net_device *br)
 	if (err)
 		pr_err("DSA: failed to notify DSA_NOTIFIER_BRIDGE_LEAVE\n");
 
+	dp->cpu_dp->mc_disabled = true;
 	dp->cpu_dp->mrouter = false;
 
 	/* Port is leaving the bridge, disable host flooding and enable
@@ -299,7 +301,17 @@ static int dsa_port_update_flooding(struct dsa_port *dp, int uc_flood_count,
 		return 0;
 
 	uc_flood = !!uc_flood_count;
-	mc_flood = dp->mrouter;
+	/* As explained in commit 8ecd4591e761 ("mlxsw: spectrum: Add an option
+	 * to flood mc by mc_router_port"), the decision whether to flood a
+	 * multicast packet to a port depends on 3 flags: mc_disabled,
+	 * mc_router_port, mc_flood.
+	 * If mc_disabled is on, the port will be flooded according to
+	 * mc_flood, otherwise, according to mc_router_port.
+	 */
+	if (dp->mc_disabled)
+		mc_flood = !!mc_flood_count;
+	else
+		mc_flood = dp->mrouter;
 
 	uc_flood_changed = dp->uc_flood ^ uc_flood;
 	mc_flood_changed = dp->mc_flood ^ mc_flood;
@@ -386,6 +398,39 @@ int dsa_port_mrouter(struct dsa_port *dp, bool mrouter,
 
 	return dsa_port_update_flooding(dp, dp->uc_flood_count,
 					dp->mc_flood_count);
+}
+
+int dsa_port_multicast_toggle(struct dsa_switch *ds, int port, bool mc_disabled)
+{
+	struct dsa_port *dp = dsa_to_port(ds, port);
+	int err;
+
+	if (ds->ops->port_igmp_mld_snoop) {
+		err = ds->ops->port_igmp_mld_snoop(ds, port, !mc_disabled);
+		if (err)
+			return err;
+	}
+
+	dp->mc_disabled = mc_disabled;
+
+	return dsa_port_update_flooding(dp, dp->uc_flood_count,
+					dp->mc_flood_count);
+}
+
+int dsa_port_mc_disabled(struct dsa_port *dp, bool mc_disabled,
+			 struct switchdev_trans *trans)
+{
+	struct dsa_notifier_mc_disabled_info info = {
+		.tree_index = dp->ds->dst->index,
+		.sw_index = dp->ds->index,
+		.br = dp->bridge_dev,
+		.mc_disabled = mc_disabled,
+	};
+
+	if (switchdev_trans_ph_prepare(trans))
+		return 0;
+
+	return dsa_broadcast(DSA_NOTIFIER_MC_DISABLED, &info);
 }
 
 int dsa_port_mtu_change(struct dsa_port *dp, int new_mtu,
