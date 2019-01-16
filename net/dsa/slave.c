@@ -62,6 +62,158 @@ static int dsa_slave_get_iflink(const struct net_device *dev)
 	return dsa_slave_to_master(dev)->ifindex;
 }
 
+/* Add a static host MDB entry, corresponding to a slave multicast MAC address,
+ * to the CPU port. The MDB entry is reference-counted (4 slave ports listening
+ * on the same multicast MAC address will only call this function once).
+ */
+static int dsa_upstream_sync_mdb_addr(struct net_device *dev,
+				      const unsigned char *addr)
+{
+	struct switchdev_obj_port_mdb mdb;
+
+	memset(&mdb, 0, sizeof(mdb));
+	mdb.obj.id = SWITCHDEV_OBJ_ID_HOST_MDB;
+	mdb.obj.flags = SWITCHDEV_F_DEFER;
+	mdb.vid = vlan_dev_get_addr_vid(dev, addr);
+	ether_addr_copy(mdb.addr, addr);
+
+	return switchdev_port_obj_add(dev, &mdb.obj, NULL);
+}
+
+/* Delete a static host MDB entry, corresponding to a slave multicast MAC
+ * address, to the CPU port. The MDB entry is reference-counted (4 slave ports
+ * listening on the same multicast MAC address will only call this function
+ * once).
+ */
+static int dsa_upstream_unsync_mdb_addr(struct net_device *dev,
+				        const unsigned char *addr)
+{
+	struct switchdev_obj_port_mdb mdb;
+
+	memset(&mdb, 0, sizeof(mdb));
+	mdb.obj.id = SWITCHDEV_OBJ_ID_HOST_MDB;
+	mdb.obj.flags = SWITCHDEV_F_DEFER;
+	mdb.vid = vlan_dev_get_addr_vid(dev, addr);
+	ether_addr_copy(mdb.addr, addr);
+
+	return switchdev_port_obj_del(dev, &mdb.obj);
+}
+
+static int dsa_slave_sync_mdb_addr(struct net_device *dev,
+				   const unsigned char *addr)
+{
+	struct dsa_port *dp = dsa_slave_to_port(dev);
+	struct dsa_switch *ds = dp->ds;
+	int err;
+
+	err = __hw_addr_add(&ds->mc, addr, dev->addr_len + dev->vid_len,
+			    NETDEV_HW_ADDR_T_MULTICAST);
+	if (err)
+		return err;
+
+	return __hw_addr_sync_dev(&ds->mc, dev, dsa_upstream_sync_mdb_addr,
+				  dsa_upstream_unsync_mdb_addr);
+}
+
+static int dsa_slave_unsync_mdb_addr(struct net_device *dev,
+				     const unsigned char *addr)
+{
+	struct dsa_port *dp = dsa_slave_to_port(dev);
+	struct dsa_switch *ds = dp->ds;
+	int err;
+
+	err = __hw_addr_del(&ds->mc, addr, dev->addr_len + dev->vid_len,
+			    NETDEV_HW_ADDR_T_MULTICAST);
+	if (err)
+		return err;
+
+	return __hw_addr_sync_dev(&ds->mc, dev, dsa_upstream_sync_mdb_addr,
+				  dsa_upstream_unsync_mdb_addr);
+}
+
+static void dsa_slave_switchdev_event_work(struct work_struct *work);
+
+static int dsa_upstream_fdb_addr(struct net_device *slave_dev,
+				 const unsigned char *addr,
+				 unsigned long event)
+{
+	int addr_len = slave_dev->addr_len + slave_dev->vid_len;
+	struct dsa_port *dp = dsa_slave_to_port(slave_dev);
+	u16 vid = vlan_dev_get_addr_vid(slave_dev, addr);
+	struct dsa_switchdev_event_work *switchdev_work;
+
+	switchdev_work = kzalloc(sizeof(*switchdev_work), GFP_ATOMIC);
+	if (!switchdev_work)
+		return -ENOMEM;
+
+	INIT_WORK(&switchdev_work->work, dsa_slave_switchdev_event_work);
+	switchdev_work->ds = dp->ds;
+	switchdev_work->port = dsa_upstream_port(dp->ds, dp->index);
+	switchdev_work->event = event;
+
+	memcpy(switchdev_work->addr, addr, addr_len);
+	switchdev_work->vid = vid;
+
+	dev_hold(slave_dev);
+	dsa_schedule_work(&switchdev_work->work);
+
+	return 0;
+}
+
+/* Add a static FDB entry, corresponding to a slave unicast MAC address,
+ * to the CPU port. The FDB entry is reference-counted (4 slave ports having
+ * the same MAC address will only call this function once).
+ */
+static int dsa_upstream_sync_fdb_addr(struct net_device *slave_dev,
+				      const unsigned char *addr)
+{
+	return dsa_upstream_fdb_addr(slave_dev, addr,
+				     SWITCHDEV_FDB_ADD_TO_DEVICE);
+}
+
+/* Remove a static FDB entry, corresponding to a slave unicast MAC address,
+ * from the CPU port. The FDB entry is reference-counted (the MAC address is
+ * only removed when there is no remaining slave port that uses it).
+ */
+static int dsa_upstream_unsync_fdb_addr(struct net_device *slave_dev,
+					const unsigned char *addr)
+{
+	return dsa_upstream_fdb_addr(slave_dev, addr,
+				     SWITCHDEV_FDB_DEL_TO_DEVICE);
+}
+
+static int dsa_slave_sync_fdb_addr(struct net_device *dev,
+				   const unsigned char *addr)
+{
+	struct dsa_port *dp = dsa_slave_to_port(dev);
+	struct dsa_switch *ds = dp->ds;
+	int err;
+
+	err = __hw_addr_add(&ds->uc, addr, dev->addr_len + dev->vid_len,
+			    NETDEV_HW_ADDR_T_UNICAST);
+	if (err)
+		return err;
+
+	return __hw_addr_sync_dev(&ds->uc, dev, dsa_upstream_sync_fdb_addr,
+				  dsa_upstream_unsync_fdb_addr);
+}
+
+static int dsa_slave_unsync_fdb_addr(struct net_device *dev,
+				     const unsigned char *addr)
+{
+	struct dsa_port *dp = dsa_slave_to_port(dev);
+	struct dsa_switch *ds = dp->ds;
+	int err;
+
+	err = __hw_addr_del(&ds->uc, addr, dev->addr_len + dev->vid_len,
+			    NETDEV_HW_ADDR_T_UNICAST);
+	if (err)
+		return err;
+
+	return __hw_addr_sync_dev(&ds->uc, dev, dsa_upstream_sync_fdb_addr,
+				  dsa_upstream_unsync_fdb_addr);
+}
+
 static int dsa_slave_open(struct net_device *dev)
 {
 	struct net_device *master = dsa_slave_to_master(dev);
@@ -76,6 +228,9 @@ static int dsa_slave_open(struct net_device *dev)
 		if (err < 0)
 			goto out;
 	}
+	err = dsa_slave_sync_fdb_addr(dev, dev->dev_addr);
+	if (err < 0)
+		goto out;
 
 	if (dev->flags & IFF_ALLMULTI) {
 		err = dev_set_allmulti(master, 1);
@@ -103,6 +258,7 @@ clear_allmulti:
 del_unicast:
 	if (!ether_addr_equal(dev->dev_addr, master->dev_addr))
 		dev_uc_del(master, dev->dev_addr);
+	dsa_slave_unsync_fdb_addr(dev, dev->dev_addr);
 out:
 	return err;
 }
@@ -116,6 +272,9 @@ static int dsa_slave_close(struct net_device *dev)
 
 	dev_mc_unsync(master, dev);
 	dev_uc_unsync(master, dev);
+	__dev_mc_unsync(dev, dsa_slave_unsync_mdb_addr);
+	__dev_uc_unsync(dev, dsa_slave_unsync_fdb_addr);
+
 	if (dev->flags & IFF_ALLMULTI)
 		dev_set_allmulti(master, -1);
 	if (dev->flags & IFF_PROMISC)
@@ -143,7 +302,17 @@ static void dsa_slave_change_rx_flags(struct net_device *dev, int change)
 static void dsa_slave_set_rx_mode(struct net_device *dev)
 {
 	struct net_device *master = dsa_slave_to_master(dev);
+	struct dsa_port *dp = dsa_slave_to_port(dev);
 
+	/* If the port is bridged, the bridge takes care of sending
+	 * SWITCHDEV_OBJ_ID_HOST_MDB to program the host's MC filter
+	 */
+	if (netdev_mc_empty(dev) || dp->bridge_dev)
+		goto out;
+
+	__dev_mc_sync(dev, dsa_slave_sync_mdb_addr, dsa_slave_unsync_mdb_addr);
+out:
+	__dev_uc_sync(dev, dsa_slave_sync_fdb_addr, dsa_slave_unsync_fdb_addr);
 	dev_mc_sync(master, dev);
 	dev_uc_sync(master, dev);
 }
@@ -165,9 +334,15 @@ static int dsa_slave_set_mac_address(struct net_device *dev, void *a)
 		if (err < 0)
 			return err;
 	}
+	err = dsa_slave_sync_fdb_addr(dev, addr->sa_data);
+	if (err < 0)
+		goto out;
 
 	if (!ether_addr_equal(dev->dev_addr, master->dev_addr))
 		dev_uc_del(master, dev->dev_addr);
+	err = dsa_slave_unsync_fdb_addr(dev, dev->dev_addr);
+	if (err < 0)
+		goto out;
 
 out:
 	ether_addr_copy(dev->dev_addr, addr->sa_data);
@@ -1753,6 +1928,8 @@ int dsa_slave_create(struct dsa_port *port)
 	else
 		eth_hw_addr_inherit(slave_dev, master);
 	slave_dev->priv_flags |= IFF_NO_QUEUE;
+	if (ds->ops->port_fdb_add && ds->ops->port_egress_floods)
+		slave_dev->priv_flags |= IFF_UNICAST_FLT;
 	slave_dev->netdev_ops = &dsa_slave_netdev_ops;
 	slave_dev->min_mtu = 0;
 	if (ds->ops->port_max_mtu)
@@ -1760,6 +1937,7 @@ int dsa_slave_create(struct dsa_port *port)
 	else
 		slave_dev->max_mtu = ETH_MAX_MTU;
 	SET_NETDEV_DEVTYPE(slave_dev, &dsa_type);
+	vlan_dev_ivdf_set(slave_dev, true);
 
 	netdev_for_each_tx_queue(slave_dev, dsa_slave_set_lockdep_class_one,
 				 NULL);
@@ -1856,6 +2034,10 @@ static int dsa_slave_changeupper(struct net_device *dev,
 
 	if (netif_is_bridge_master(info->upper_dev)) {
 		if (info->linking) {
+			/* Remove existing MC addresses that might have been
+			 * programmed
+			 */
+			__dev_mc_unsync(dev, dsa_slave_unsync_mdb_addr);
 			err = dsa_port_bridge_join(dp, info->upper_dev);
 			if (!err)
 				dsa_bridge_mtu_normalization(dp);

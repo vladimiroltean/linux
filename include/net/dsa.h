@@ -264,6 +264,12 @@ struct dsa_switch {
 	const struct dsa_switch_ops	*ops;
 
 	/*
+	 * {MAC, VLAN} addresses that are copied to the CPU.
+	 */
+	struct netdev_hw_addr_list	uc;
+	struct netdev_hw_addr_list	mc;
+
+	/*
 	 * Slave mii_bus and devices for the individual ports.
 	 */
 	u32			phys_mii_mask;
