@@ -434,6 +434,9 @@ static int dsa_switch_setup(struct dsa_switch *ds)
 			goto unregister_notifier;
 	}
 
+	__hw_addr_init(&ds->mc);
+	__hw_addr_init(&ds->uc);
+
 	ds->setup = true;
 
 	return 0;
@@ -453,6 +456,9 @@ static void dsa_switch_teardown(struct dsa_switch *ds)
 {
 	if (!ds->setup)
 		return;
+
+	__hw_addr_flush(&ds->mc);
+	__hw_addr_flush(&ds->uc);
 
 	if (ds->slave_mii_bus && ds->ops->phy_read)
 		mdiobus_unregister(ds->slave_mii_bus);

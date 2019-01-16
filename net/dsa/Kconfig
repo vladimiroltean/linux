@@ -9,6 +9,7 @@ menuconfig NET_DSA
 	tristate "Distributed Switch Architecture"
 	depends on HAVE_NET_DSA
 	depends on BRIDGE || BRIDGE=n
+	depends on VLAN_8021Q || VLAN_8021Q=n
 	select GRO_CELLS
 	select NET_SWITCHDEV
 	select PHYLINK
@@ -22,7 +23,7 @@ if NET_DSA
 # tagging formats
 config NET_DSA_TAG_8021Q
 	tristate
-	select VLAN_8021Q
+	depends on VLAN_8021Q
 	help
 	  Unlike the other tagging protocols, the 802.1Q config option simply
 	  provides helpers for other tagging implementations that might rely on
