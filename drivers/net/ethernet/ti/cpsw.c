@@ -200,6 +200,31 @@ static int cpsw_set_mc(struct net_device *ndev, const u8 *addr,
 	return ret;
 }
 
+static int cpsw_set_uc(struct net_device *ndev, const u8 *addr,
+		       int vid, int add)
+{
+	struct cpsw_priv *priv = netdev_priv(ndev);
+	struct cpsw_common *cpsw = priv->cpsw;
+	int flags, port, ret;
+
+	if (vid < 0) {
+		if (cpsw->data.dual_emac)
+			vid = cpsw->slaves[priv->emac_port].port_vlan;
+		else
+			vid = 0;
+	}
+
+	port = HOST_PORT_NUM;
+	flags = vid ? ALE_VLAN : 0;
+
+	if (add)
+		ret = cpsw_ale_add_ucast(cpsw->ale, addr, port, flags, vid);
+	else
+		ret = cpsw_ale_del_ucast(cpsw->ale, addr, port, flags, vid);
+
+	return ret;
+}
+
 static int cpsw_add_mc_addr(struct net_device *ndev, const u8 *addr)
 {
 	u16 vid;
@@ -215,6 +240,24 @@ static int cpsw_del_mc_addr(struct net_device *ndev, const u8 *addr)
 
 	vid = vlan_dev_get_addr_vid(ndev, addr);
 	cpsw_set_mc(ndev, addr, vid ? vid : -1, 0);
+	return 0;
+}
+
+static int cpsw_add_uc_addr(struct net_device *ndev, const u8 *addr)
+{
+	u16 vid;
+
+	vid = vlan_dev_get_addr_vid(ndev, addr);
+	cpsw_set_uc(ndev, addr, vid ? vid : -1, 1);
+	return 0;
+}
+
+static int cpsw_del_uc_addr(struct net_device *ndev, const u8 *addr)
+{
+	u16 vid;
+
+	vid = vlan_dev_get_addr_vid(ndev, addr);
+	cpsw_set_uc(ndev, addr, vid ? vid : -1, 0);
 	return 0;
 }
 
@@ -243,6 +286,7 @@ static void cpsw_ndo_set_rx_mode(struct net_device *ndev)
 
 	/* add/remove mcast address either for real netdev or for vlan */
 	__dev_mc_sync(ndev, cpsw_add_mc_addr, cpsw_del_mc_addr);
+	__dev_uc_sync(ndev, cpsw_add_uc_addr, cpsw_del_uc_addr);
 }
 
 static unsigned int cpsw_rxbuf_total_len(unsigned int len)
@@ -787,6 +831,7 @@ static int cpsw_ndo_stop(struct net_device *ndev)
 
 	cpsw_info(priv, ifdown, "shutting down cpsw device\n");
 	__dev_mc_unsync(ndev, cpsw_del_mc_addr);
+	__dev_uc_unsync(ndev, cpsw_del_uc_addr);
 	netif_tx_stop_all_queues(priv->ndev);
 	netif_carrier_off(priv->ndev);
 
@@ -937,10 +982,12 @@ static inline int cpsw_add_vlan_ale_entry(struct cpsw_priv *priv,
 	if (ret != 0)
 		return ret;
 
-	ret = cpsw_ale_add_ucast(cpsw->ale, priv->mac_addr,
-				 HOST_PORT_NUM, ALE_VLAN, vid);
-	if (ret != 0)
-		goto clean_vid;
+	if (!priv->ndev->vid_len) {
+		ret = cpsw_ale_add_ucast(cpsw->ale, priv->mac_addr,
+					 HOST_PORT_NUM, ALE_VLAN, vid);
+		if (ret != 0)
+			goto clean_vid;
+	}
 
 	ret = cpsw_ale_add_mcast(cpsw->ale, priv->ndev->broadcast,
 				 mcast_mask, ALE_VLAN, vid, 0);
@@ -949,8 +996,9 @@ static inline int cpsw_add_vlan_ale_entry(struct cpsw_priv *priv,
 	return 0;
 
 clean_vlan_ucast:
-	cpsw_ale_del_ucast(cpsw->ale, priv->mac_addr,
-			   HOST_PORT_NUM, ALE_VLAN, vid);
+	if (!priv->ndev->vid_len)
+		cpsw_ale_del_ucast(cpsw->ale, priv->mac_addr,
+				   HOST_PORT_NUM, ALE_VLAN, vid);
 clean_vid:
 	cpsw_ale_del_vlan(cpsw->ale, vid, 0);
 	return ret;
@@ -1390,7 +1438,8 @@ static int cpsw_probe_dual_emac(struct cpsw_priv *priv)
 	priv_sl2->emac_port = 1;
 	cpsw->slaves[1].ndev = ndev;
 	ndev->features |= NETIF_F_HW_VLAN_CTAG_FILTER | NETIF_F_HW_VLAN_CTAG_RX;
-	vlan_dev_ivdf_set(ndev, 1);
+	ndev->priv_flags |= IFF_UNICAST_FLT;
+	vlan_dev_ivdf_set(ndev, true);
 
 	ndev->netdev_ops = &cpsw_netdev_ops;
 	ndev->ethtool_ops = &cpsw_ethtool_ops;
@@ -1570,7 +1619,7 @@ static int cpsw_probe(struct platform_device *pdev)
 	cpsw->slaves[0].ndev = ndev;
 
 	ndev->features |= NETIF_F_HW_VLAN_CTAG_FILTER | NETIF_F_HW_VLAN_CTAG_RX;
-	vlan_dev_ivdf_set(ndev, 1);
+	vlan_dev_ivdf_set(ndev, true);
 
 	ndev->netdev_ops = &cpsw_netdev_ops;
 	ndev->ethtool_ops = &cpsw_ethtool_ops;
