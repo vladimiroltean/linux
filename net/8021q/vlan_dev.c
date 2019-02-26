@@ -897,5 +897,6 @@ void vlan_setup(struct net_device *dev)
 	dev->min_mtu		= 0;
 	dev->max_mtu		= ETH_MAX_MTU;
 
+	vlan_dev_ivdf_set(dev, true);
 	eth_zero_addr(dev->broadcast);
 }

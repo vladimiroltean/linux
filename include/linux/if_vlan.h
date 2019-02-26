@@ -134,6 +134,7 @@ extern int vlan_for_each(struct net_device *dev,
 			 int (*action)(struct net_device *dev, int vid,
 				       void *arg), void *arg);
 extern u16 vlan_dev_get_addr_vid(struct net_device *dev, const u8 *addr);
+extern void vlan_dev_ivdf_set(struct net_device *dev, bool enable);
 extern struct net_device *vlan_dev_real_dev(const struct net_device *dev);
 extern u16 vlan_dev_vlan_id(const struct net_device *dev);
 extern __be16 vlan_dev_vlan_proto(const struct net_device *dev);
@@ -237,6 +238,16 @@ vlan_for_each(struct net_device *dev,
 	      void *arg)
 {
 	return 0;
+}
+
+static inline u16 vlan_dev_get_addr_vid(struct net_device *dev, const u8 *addr)
+{
+	return 0;
+}
+
+static inline void vlan_dev_ivdf_set(struct net_device *dev, bool enable)
+{
+	dev->vid_len = 0;
 }
 
 static inline struct net_device *vlan_dev_real_dev(const struct net_device *dev)
