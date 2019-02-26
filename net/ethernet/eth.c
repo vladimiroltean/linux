@@ -372,6 +372,7 @@ void ether_setup(struct net_device *dev)
 	dev->flags		= IFF_BROADCAST|IFF_MULTICAST;
 	dev->priv_flags		|= IFF_TX_SKB_SHARING;
 
+	vlan_dev_ivdf_set(dev, false);
 	eth_broadcast_addr(dev->broadcast);
 
 }
@@ -395,8 +396,15 @@ EXPORT_SYMBOL(ether_setup);
 struct net_device *alloc_etherdev_mqs(int sizeof_priv, unsigned int txqs,
 				      unsigned int rxqs)
 {
-	return alloc_netdev_mqs(sizeof_priv, "eth%d", NET_NAME_UNKNOWN,
-				ether_setup, txqs, rxqs);
+	struct net_device *dev;
+
+	dev = alloc_netdev_mqs(sizeof_priv, "eth%d", NET_NAME_UNKNOWN,
+			       ether_setup, txqs, rxqs);
+	if (!dev)
+		return NULL;
+
+	vlan_dev_ivdf_set(dev, false);
+	return dev;
 }
 EXPORT_SYMBOL(alloc_etherdev_mqs);
 

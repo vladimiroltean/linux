@@ -453,6 +453,17 @@ bool vlan_uses_dev(const struct net_device *dev)
 }
 EXPORT_SYMBOL(vlan_uses_dev);
 
+void vlan_dev_ivdf_set(struct net_device *dev, bool enable)
+{
+	if (enable) {
+		dev->vid_len = NET_8021Q_VID_TSIZE;
+		return;
+	}
+
+	dev->vid_len = 0;
+}
+EXPORT_SYMBOL(vlan_dev_ivdf_set);
+
 u16 vlan_dev_get_addr_vid(struct net_device *dev, const u8 *addr)
 {
 	u16 vid = 0;
