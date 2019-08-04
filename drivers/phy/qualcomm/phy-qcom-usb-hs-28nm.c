@@ -384,6 +384,17 @@ unset_1p8_load:
  */
 #define HSPHY_INIT_CFG(o, v, d)	{ .offset = o, .val = v, .delay = d, }
 
+static const struct hsphy_init_seq init_seq_msm8976[] = {
+	HSPHY_INIT_CFG(0x80, 0x73, 0),
+	HSPHY_INIT_CFG(0x81, 0x38, 0),
+	HSPHY_INIT_CFG(0x82, 0x1b, 0),
+};
+
+static const struct hsphy_data hsphy_data_msm8976 = {
+	.init_seq = init_seq_msm8976,
+	.init_seq_num = ARRAY_SIZE(init_seq_msm8976),
+};
+
 static const struct hsphy_init_seq init_seq_femtophy[] = {
 	HSPHY_INIT_CFG(0xc0, 0x01, 0),
 	HSPHY_INIT_CFG(0xe8, 0x0d, 0),
@@ -418,6 +429,7 @@ static const struct hsphy_data hsphy_data_mdm9607 = {
 };
 
 static const struct of_device_id qcom_snps_hsphy_match[] = {
+	{ .compatible = "qcom,usb-hs-28nm-8976", .data = &hsphy_data_msm8976, },
 	{ .compatible = "qcom,usb-hs-28nm-femtophy", .data = &hsphy_data_femtophy, },
 	{ .compatible = "qcom,usb-hs-28nm-mdm9607", .data = &hsphy_data_mdm9607, },
 	{ },
