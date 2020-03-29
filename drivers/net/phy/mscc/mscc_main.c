@@ -1570,6 +1570,7 @@ static int vsc8514_config_pre_init(struct phy_device *phydev)
 		{0x16b4, 0x00000814},
 	};
 	unsigned int i;
+	int ret;
 	u16 reg;
 
 	phy_base_write(phydev, MSCC_EXT_PAGE_ACCESS, MSCC_PHY_PAGE_STANDARD);
@@ -1595,6 +1596,15 @@ static int vsc8514_config_pre_init(struct phy_device *phydev)
 	reg = phy_base_read(phydev, MSCC_PHY_TEST_PAGE_8);
 	reg &= ~BIT(15);
 	phy_base_write(phydev, MSCC_PHY_TEST_PAGE_8, reg);
+
+	ret = phy_base_write(phydev, MSCC_EXT_PAGE_ACCESS,
+			     MSCC_PHY_PAGE_EXTENDED_3);
+	if (ret)
+		return ret;
+
+	ret = __phy_set_bits(phydev, MSCC_PHY_SERDES_CON, MSCC_PHY_SERDES_ANEG);
+	if (ret)
+		return ret;
 
 	phy_base_write(phydev, MSCC_EXT_PAGE_ACCESS, MSCC_PHY_PAGE_STANDARD);
 
@@ -1881,6 +1891,20 @@ static int vsc8514_config_init(struct phy_device *phydev)
 		phy_unlock_mdio_bus(phydev);
 		return -ETIMEDOUT;
 	}
+
+	ret = phy_base_write(phydev, MSCC_EXT_PAGE_ACCESS,
+			     MSCC_PHY_PAGE_EXTENDED_3);
+	if (ret)
+		goto err;
+
+	ret = __phy_set_bits(phydev, MSCC_PHY_SERDES_CON, MSCC_PHY_SERDES_ANEG);
+	if (ret)
+		goto err;
+
+	ret = phy_base_write(phydev, MSCC_EXT_PAGE_ACCESS,
+			     MSCC_PHY_PAGE_STANDARD);
+	if (ret)
+		goto err;
 
 	phy_unlock_mdio_bus(phydev);
 
