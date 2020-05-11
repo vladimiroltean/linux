@@ -160,9 +160,10 @@ static int brcm_tag_flow_dissect(const struct sk_buff *skb, __be16 *proto,
 	 * skb->data points 2 bytes before the actual Ethernet type field and
 	 * we have an offset of 4bytes between where skb->data and where the
 	 * payload starts.
+	 * So we can use the generic helper in both cases.
 	 */
-	*offset = BRCM_TAG_LEN;
-	*proto = ((__be16 *)skb->data)[1];
+	dsa_tag_generic_flow_dissect(skb, proto, offset, BRCM_TAG_LEN);
+
 	return 0;
 }
 #endif

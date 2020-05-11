@@ -83,12 +83,21 @@ static struct sk_buff *ar9331_tag_rcv(struct sk_buff *skb,
 	return skb;
 }
 
+static int ar9331_flow_dissect(const struct sk_buff *skb, __be16 *proto,
+			       int *offset)
+{
+	dsa_tag_generic_flow_dissect(skb, proto, offset, AR9331_HDR_LEN);
+
+	return 0;
+}
+
 static const struct dsa_device_ops ar9331_netdev_ops = {
 	.name	= "ar9331",
 	.proto	= DSA_TAG_PROTO_AR9331,
 	.xmit	= ar9331_tag_xmit,
 	.rcv	= ar9331_tag_rcv,
 	.overhead = AR9331_HDR_LEN,
+	.flow_dissect = ar9331_flow_dissect,
 };
 
 MODULE_LICENSE("GPL v2");

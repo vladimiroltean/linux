@@ -333,6 +333,18 @@ static struct sk_buff *sja1105_rcv(struct sk_buff *skb,
 					      is_meta);
 }
 
+static int sja1105_flow_dissect(const struct sk_buff *skb, __be16 *proto,
+				int *offset)
+{
+	/* No tag added for management frames, all ok */
+	if (unlikely(sja1105_is_link_local(skb)))
+		return 0;
+
+	dsa_tag_generic_flow_dissect(skb, proto, offset, VLAN_HLEN);
+
+	return 0;
+}
+
 static const struct dsa_device_ops sja1105_netdev_ops = {
 	.name = "sja1105",
 	.proto = DSA_TAG_PROTO_SJA1105,
@@ -340,6 +352,7 @@ static const struct dsa_device_ops sja1105_netdev_ops = {
 	.rcv = sja1105_rcv,
 	.filter = sja1105_filter,
 	.overhead = VLAN_HLEN,
+	.flow_dissect = sja1105_flow_dissect,
 };
 
 MODULE_LICENSE("GPL v2");
