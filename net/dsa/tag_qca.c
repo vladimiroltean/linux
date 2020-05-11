@@ -92,8 +92,7 @@ static struct sk_buff *qca_tag_rcv(struct sk_buff *skb, struct net_device *dev,
 static int qca_tag_flow_dissect(const struct sk_buff *skb, __be16 *proto,
                                 int *offset)
 {
-	*offset = QCA_HDR_LEN;
-	*proto = ((__be16 *)skb->data)[0];
+	dsa_tag_generic_flow_dissect(skb, proto, offset, QCA_HDR_LEN);
 
 	return 0;
 }

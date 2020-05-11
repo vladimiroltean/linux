@@ -228,12 +228,21 @@ static struct sk_buff *ocelot_rcv(struct sk_buff *skb,
 	return skb;
 }
 
+static int ocelot_flow_dissect(const struct sk_buff *skb, __be16 *proto,
+			       int *offset)
+{
+	dsa_tag_generic_flow_dissect(skb, proto, offset, OCELOT_TOTAL_TAG_LEN);
+
+	return 0;
+}
+
 static const struct dsa_device_ops ocelot_netdev_ops = {
 	.name			= "ocelot",
 	.proto			= DSA_TAG_PROTO_OCELOT,
 	.xmit			= ocelot_xmit,
 	.rcv			= ocelot_rcv,
 	.overhead		= OCELOT_TOTAL_TAG_LEN,
+	.flow_dissect		= ocelot_flow_dissect,
 };
 
 MODULE_LICENSE("GPL v2");

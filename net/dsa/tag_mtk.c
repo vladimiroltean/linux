@@ -108,8 +108,7 @@ static struct sk_buff *mtk_tag_rcv(struct sk_buff *skb, struct net_device *dev,
 static int mtk_tag_flow_dissect(const struct sk_buff *skb, __be16 *proto,
 				int *offset)
 {
-	*offset = 4;
-	*proto = ((__be16 *)skb->data)[1];
+	dsa_tag_generic_flow_dissect(skb, proto, offset, MTK_HDR_LEN);
 
 	return 0;
 }

@@ -195,8 +195,8 @@ static struct sk_buff *edsa_rcv(struct sk_buff *skb, struct net_device *dev,
 static int edsa_tag_flow_dissect(const struct sk_buff *skb, __be16 *proto,
 				 int *offset)
 {
-	*offset = 8;
-	*proto = ((__be16 *)skb->data)[3];
+	dsa_tag_generic_flow_dissect(skb, proto, offset, EDSA_HLEN);
+
 	return 0;
 }
 
