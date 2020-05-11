@@ -271,6 +271,37 @@ static void dsa_netdev_ops_set(struct net_device *dev,
 	dev->dsa_ptr->netdev_ops = ops;
 }
 
+static void dsa_master_set_promisc(struct net_device *dev)
+{
+	struct dsa_port *cpu_dp = dev->dsa_ptr;
+	struct dsa_switch *ds = cpu_dp->ds;
+	unsigned int flags;
+
+	if (!ds->promisc_on_master)
+		return;
+
+	flags = dev_get_flags(dev);
+
+	cpu_dp->orig_master_flags = flags;
+
+	rtnl_lock();
+	dev_change_flags(dev, flags | IFF_PROMISC, NULL);
+	rtnl_unlock();
+}
+
+static void dsa_master_reset_promisc(struct net_device *dev)
+{
+	struct dsa_port *cpu_dp = dev->dsa_ptr;
+	struct dsa_switch *ds = cpu_dp->ds;
+
+	if (!ds->promisc_on_master)
+		return;
+
+	rtnl_lock();
+	dev_change_flags(dev, cpu_dp->orig_master_flags, NULL);
+	rtnl_unlock();
+}
+
 static ssize_t tagging_show(struct device *d, struct device_attribute *attr,
 			    char *buf)
 {
@@ -326,9 +357,12 @@ int dsa_master_setup(struct net_device *dev, struct dsa_port *cpu_dp)
 	dev->dsa_ptr = cpu_dp;
 	lockdep_set_class(&dev->addr_list_lock,
 			  &dsa_master_addr_list_lock_key);
+
+	dsa_master_set_promisc(dev);
+
 	ret = dsa_master_ethtool_setup(dev);
 	if (ret)
-		return ret;
+		goto out_err_reset_promisc;
 
 	dsa_netdev_ops_set(dev, &dsa_netdev_ops);
 
@@ -341,6 +375,8 @@ int dsa_master_setup(struct net_device *dev, struct dsa_port *cpu_dp)
 out_err_ndo_teardown:
 	dsa_netdev_ops_set(dev, NULL);
 	dsa_master_ethtool_teardown(dev);
+out_err_reset_promisc:
+	dsa_master_reset_promisc(dev);
 	return ret;
 }
 
@@ -350,6 +386,7 @@ void dsa_master_teardown(struct net_device *dev)
 	dsa_netdev_ops_set(dev, NULL);
 	dsa_master_ethtool_teardown(dev);
 	dsa_master_reset_mtu(dev);
+	dsa_master_reset_promisc(dev);
 
 	dev->dsa_ptr = NULL;
 
