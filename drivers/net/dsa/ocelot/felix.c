@@ -537,7 +537,7 @@ static int felix_init_structs(struct felix *felix, int num_phys_ports)
 			return PTR_ERR(target);
 		}
 
-		template = devm_kzalloc(ocelot->dev, OCELOT_TAG_LEN,
+		template = devm_kzalloc(ocelot->dev, OCELOT_TOTAL_TAG_LEN,
 					GFP_KERNEL);
 		if (!template) {
 			dev_err(ocelot->dev,
@@ -615,8 +615,8 @@ static int felix_setup(struct dsa_switch *ds)
 		/* Bring up the CPU port module and configure the NPI port */
 		if (dsa_is_cpu_port(ds, port))
 			ocelot_configure_cpu(ocelot, port,
-					     OCELOT_TAG_PREFIX_NONE,
-					     OCELOT_TAG_PREFIX_LONG);
+					     OCELOT_TAG_PREFIX_SHORT,
+					     OCELOT_TAG_PREFIX_SHORT);
 
 		/* Set the default QoS Classification based on PCP and DEI
 		 * bits of vlan tag.
@@ -631,6 +631,7 @@ static int felix_setup(struct dsa_switch *ds)
 				 ANA_FLOODING_FLD_UNICAST(PGID_UC),
 				 ANA_FLOODING, tc);
 
+	ds->promisc_on_master = true;
 	ds->mtu_enforcement_ingress = true;
 	ds->configure_vlan_while_not_filtering = true;
 	/* It looks like the MAC/PCS interrupt register - PM0_IEVENT (0x8040)
