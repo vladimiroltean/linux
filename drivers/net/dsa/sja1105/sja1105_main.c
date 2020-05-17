@@ -45,11 +45,9 @@ sja1105_port_allow_traffic(struct sja1105_l2_forwarding_entry *l2_fwd,
 	if (allow) {
 		l2_fwd[from].bc_domain  |= BIT(to);
 		l2_fwd[from].reach_port |= BIT(to);
-		l2_fwd[from].fl_domain  |= BIT(to);
 	} else {
 		l2_fwd[from].bc_domain  &= ~BIT(to);
 		l2_fwd[from].reach_port &= ~BIT(to);
-		l2_fwd[from].fl_domain  &= ~BIT(to);
 	}
 }
 
@@ -220,17 +218,38 @@ static int sja1105_init_mii_settings(struct sja1105_private *priv,
 
 static int sja1105_init_static_fdb(struct sja1105_private *priv)
 {
+	struct sja1105_l2_lookup_entry *l2_lookup;
 	struct sja1105_table *table;
 
 	table = &priv->static_config.tables[BLK_IDX_L2_LOOKUP];
 
-	/* We only populate the FDB table through dynamic
-	 * L2 Address Lookup entries
+	/* We only populate the FDB table through dynamic L2 Address Lookup
+	 * entries, except for a special entry at the end which is a catch-all
+	 * for unknown multicast and will be used to control flooding domain.
 	 */
 	if (table->entry_count) {
 		kfree(table->entries);
 		table->entry_count = 0;
 	}
+
+	if (!priv->info->can_limit_mcast_flood)
+		return 0;
+
+	table->entries = kcalloc(1, table->ops->unpacked_entry_size,
+				 GFP_KERNEL);
+	if (!table->entries)
+		return -ENOMEM;
+
+	table->entry_count = 1;
+	l2_lookup = table->entries;
+
+	/* All L2 multicast addresses have an odd first octet */
+	l2_lookup[0].macaddr = 0x010000000000;
+	l2_lookup[0].mask_macaddr = 0x010000000000;
+	l2_lookup[0].lockeds = true;
+	l2_lookup[0].index = SJA1105_MAX_L2_LOOKUP_COUNT - 1;
+	l2_lookup[0].destports = 0;
+
 	return 0;
 }
 
@@ -3342,6 +3361,71 @@ static void sja1105_port_policer_del(struct dsa_switch *ds, int port)
 	sja1105_static_config_reload(priv, SJA1105_BEST_EFFORT_POLICING);
 }
 
+static int sja1105_port_egress_floods(struct dsa_switch *ds, int to,
+				      bool unicast, bool multicast)
+{
+	struct sja1105_l2_forwarding_entry *l2_fwd;
+	struct sja1105_l2_lookup_entry *l2_lookup;
+	struct sja1105_private *priv = ds->priv;
+	struct sja1105_table *table;
+	int from, rc;
+	int match;
+
+	dev_err(ds->dev, "%s: port %d unicast %d multicast %d\n",
+		__func__, to, unicast, multicast);
+
+	if ((unicast != multicast) && !priv->info->can_limit_mcast_flood)
+		return -EOPNOTSUPP;
+
+	l2_fwd = priv->static_config.tables[BLK_IDX_L2_FORWARDING].entries;
+
+	for (from = 0; from < ds->num_ports; from++) {
+		if (dsa_is_unused_port(priv->ds, from))
+			continue;
+		if (from == to)
+			continue;
+
+		if (unicast)
+			l2_fwd[from].fl_domain |= BIT(to);
+		else
+			l2_fwd[from].fl_domain &= ~BIT(to);
+
+		rc = sja1105_dynamic_config_write(priv, BLK_IDX_L2_FORWARDING,
+						  from, &l2_fwd[from], true);
+		if (rc < 0)
+			return rc;
+	}
+
+	if (!priv->info->can_limit_mcast_flood)
+		return 0;
+
+	table = &priv->static_config.tables[BLK_IDX_L2_LOOKUP];
+	l2_lookup = table->entries;
+
+	for (match = 0; match < table->entry_count; match++)
+		if (l2_lookup[match].macaddr == 0x010000000000 &&
+		    l2_lookup[match].mask_macaddr == 0x010000000000)
+			break;
+
+	if (match == table->entry_count) {
+		dev_err(ds->dev, "Could not find FDB entry for unknown multicast\n");
+		return -ENOSPC;
+	}
+
+	if (multicast)
+		l2_lookup[match].destports |= BIT(to);
+	else
+		l2_lookup[match].destports &= ~BIT(to);
+
+	dev_err(priv->ds->dev, "%s: match %d, index %lld, mac %012llx destports 0x%llx\n",
+		__func__, match, l2_lookup[match].index, l2_lookup[match].macaddr, l2_lookup[match].destports);
+
+	return sja1105_dynamic_config_write(priv, BLK_IDX_L2_LOOKUP,
+					    l2_lookup[match].index,
+					    &l2_lookup[match],
+					    true);
+}
+
 static const struct dsa_switch_ops sja1105_switch_ops = {
 	.get_tag_protocol	= sja1105_get_tag_protocol,
 	.setup			= sja1105_setup,
@@ -3373,6 +3457,7 @@ static const struct dsa_switch_ops sja1105_switch_ops = {
 	.port_mdb_prepare	= sja1105_mdb_prepare,
 	.port_mdb_add		= sja1105_mdb_add,
 	.port_mdb_del		= sja1105_mdb_del,
+	.port_egress_floods	= sja1105_port_egress_floods,
 	.port_hwtstamp_get	= sja1105_hwtstamp_get,
 	.port_hwtstamp_set	= sja1105_hwtstamp_set,
 	.port_rxtstamp		= sja1105_port_rxtstamp,
