@@ -4321,6 +4321,13 @@ void __hw_addr_unsync_dev(struct netdev_hw_addr_list *list,
 			  int (*unsync)(struct net_device *,
 					const unsigned char *));
 void __hw_addr_init(struct netdev_hw_addr_list *list);
+void __hw_addr_flush(struct netdev_hw_addr_list *list);
+int __hw_addr_add(struct netdev_hw_addr_list *list,
+		  const unsigned char *addr, int addr_len,
+		  unsigned char addr_type);
+int __hw_addr_del(struct netdev_hw_addr_list *list,
+		  const unsigned char *addr, int addr_len,
+		  unsigned char addr_type);
 
 /* Functions used for device addresses handling */
 int dev_addr_add(struct net_device *dev, const unsigned char *addr,

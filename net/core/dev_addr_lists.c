@@ -77,13 +77,14 @@ static int __hw_addr_add_ex(struct netdev_hw_addr_list *list,
 				   sync);
 }
 
-static int __hw_addr_add(struct netdev_hw_addr_list *list,
-			 const unsigned char *addr, int addr_len,
-			 unsigned char addr_type)
+int __hw_addr_add(struct netdev_hw_addr_list *list,
+		  const unsigned char *addr, int addr_len,
+		  unsigned char addr_type)
 {
 	return __hw_addr_add_ex(list, addr, addr_len, addr_type, false, false,
 				0);
 }
+EXPORT_SYMBOL(__hw_addr_add);
 
 static int __hw_addr_del_entry(struct netdev_hw_addr_list *list,
 			       struct netdev_hw_addr *ha, bool global,
@@ -123,12 +124,13 @@ static int __hw_addr_del_ex(struct netdev_hw_addr_list *list,
 	return -ENOENT;
 }
 
-static int __hw_addr_del(struct netdev_hw_addr_list *list,
-			 const unsigned char *addr, int addr_len,
-			 unsigned char addr_type)
+int __hw_addr_del(struct netdev_hw_addr_list *list,
+		  const unsigned char *addr, int addr_len,
+		  unsigned char addr_type)
 {
 	return __hw_addr_del_ex(list, addr, addr_len, addr_type, false, false);
 }
+EXPORT_SYMBOL(__hw_addr_del);
 
 static int __hw_addr_sync_one(struct netdev_hw_addr_list *to_list,
 			       struct netdev_hw_addr *ha,
@@ -403,7 +405,7 @@ void __hw_addr_unsync_dev(struct netdev_hw_addr_list *list,
 }
 EXPORT_SYMBOL(__hw_addr_unsync_dev);
 
-static void __hw_addr_flush(struct netdev_hw_addr_list *list)
+void __hw_addr_flush(struct netdev_hw_addr_list *list)
 {
 	struct netdev_hw_addr *ha, *tmp;
 
@@ -413,6 +415,7 @@ static void __hw_addr_flush(struct netdev_hw_addr_list *list)
 	}
 	list->count = 0;
 }
+EXPORT_SYMBOL(__hw_addr_flush);
 
 void __hw_addr_init(struct netdev_hw_addr_list *list)
 {
