@@ -324,8 +324,11 @@ int dsa_port_mrouter(struct dsa_port *dp, bool mrouter,
 	struct dsa_switch *ds = dp->ds;
 	int port = dp->index;
 
+	if (!ds->ops->port_egress_floods)
+		return -EOPNOTSUPP;
+
 	if (switchdev_trans_ph_prepare(trans))
-		return ds->ops->port_egress_floods ? 0 : -EOPNOTSUPP;
+		return 0;
 
 	return ds->ops->port_egress_floods(ds, port, true, mrouter);
 }
