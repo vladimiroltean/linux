@@ -166,6 +166,128 @@ void br_manage_promisc(struct net_bridge *br)
 	}
 }
 
+static void br_switchdev_set_host_flood(struct net_device *dev,
+					struct net_device *lower_dev,
+					const struct list_head *filter_list)
+{
+	struct switchdev_attr attr = {
+		.orig_dev = dev,
+		.id = SWITCHDEV_ATTR_ID_BRIDGE_HOST_FLOOD,
+		.u.filters = filter_list,
+	};
+
+	switchdev_port_attr_set(lower_dev, &attr);
+}
+
+static struct switchdev_host_flood_filter
+*br_prepare_host_flood_filter(struct net_device *dev)
+{
+	struct switchdev_host_flood_filter *filter;
+
+	filter = kzalloc(sizeof(*filter), GFP_KERNEL);
+	if (!filter)
+		return NULL;
+
+	if (is_vlan_dev(dev)) {
+		filter->type = HOST_FLOOD_FILTER_VLAN;
+		filter->vlan.vlan_id = vlan_dev_vlan_id(dev);
+		filter->vlan.vlan_proto = vlan_dev_vlan_proto(dev);
+	} else {
+		filter->type = HOST_FLOOD_FILTER_ALL;
+	}
+
+	return filter;
+}
+
+/* If there are no filters (all ports are part of the same switch),
+ * add a HOST_FLOOD_FILTER_NONE filter to denote no host flooding should be
+ * done.
+ * If there is a HOST_FLOOD_FILTER_ALL filter, remove all other filters.
+ */
+static int br_normalize_host_flood_filters(struct list_head *filter_list)
+{
+	struct switchdev_host_flood_filter *filter, *tmp;
+	bool flood_all = false;
+
+	if (list_empty(filter_list)) {
+		filter = kzalloc(sizeof(*filter), GFP_KERNEL);
+		if (!filter)
+			return -ENOMEM;
+
+		filter->type = HOST_FLOOD_FILTER_NONE;
+		list_add(&filter->list, filter_list);
+		return 0;
+	}
+
+	list_for_each_entry(filter, filter_list, list) {
+		if (filter->type == HOST_FLOOD_FILTER_ALL) {
+			flood_all = true;
+			break;
+		}
+	}
+
+	if (!flood_all)
+		return 0;
+
+	list_for_each_entry_safe(filter, tmp, filter_list, list) {
+		if (filter->type != HOST_FLOOD_FILTER_ALL) {
+			list_del(&filter->list);
+			kfree(filter);
+		}
+	}
+
+	return 0;
+}
+
+static void br_free_host_flood_filters(struct list_head *filter_list)
+{
+	struct switchdev_host_flood_filter *filter, *tmp;
+
+	list_for_each_entry_safe(filter, tmp, filter_list, list) {
+		list_del(&filter->list);
+		kfree(filter);
+	}
+}
+
+static int br_manage_host_flood(struct net_bridge *br)
+{
+	struct net_bridge_port *p, *q;
+
+	list_for_each_entry(p, &br->port_list, list) {
+		struct switchdev_host_flood_filter *filter;
+		struct list_head filter_list;
+		int err;
+
+		INIT_LIST_HEAD(&filter_list);
+
+		list_for_each_entry(q, &br->port_list, list) {
+			if (p == q)
+				continue;
+
+			if (!netdev_port_same_parent_id(p->dev, q->dev)) {
+				filter = br_prepare_host_flood_filter(q->dev);
+				if (!filter)
+					return -ENOMEM;
+
+				list_add(&filter->list, &filter_list);
+				break;
+			}
+		}
+
+		err = br_normalize_host_flood_filters(&filter_list);
+		if (err) {
+			br_free_host_flood_filters(&filter_list);
+			return err;
+		}
+
+		br_switchdev_set_host_flood(br->dev, p->dev, &filter_list);
+
+		br_free_host_flood_filters(&filter_list);
+	}
+
+	return 0;
+}
+
 int nbp_backup_change(struct net_bridge_port *p,
 		      struct net_device *backup_dev)
 {
@@ -679,6 +801,12 @@ int br_add_if(struct net_bridge *br, struct net_device *dev,
 		goto err7;
 	}
 
+	err = br_manage_host_flood(br);
+	if (err) {
+		netdev_err(dev, "br_manage_host_flood returned %d\n", err);
+		goto err7;
+	}
+
 	spin_lock_bh(&br->lock);
 	changed_addr = br_stp_recalculate_bridge_id(br);
 
@@ -725,6 +853,7 @@ int br_del_if(struct net_bridge *br, struct net_device *dev)
 {
 	struct net_bridge_port *p;
 	bool changed_addr;
+	int err;
 
 	p = br_port_get_rtnl(dev);
 	if (!p || p->br != br)
@@ -738,6 +867,10 @@ int br_del_if(struct net_bridge *br, struct net_device *dev)
 
 	br_mtu_auto_adjust(br);
 	br_set_gso_limits(br);
+
+	err = br_manage_host_flood(br);
+	if (err)
+		netdev_err(dev, "br_manage_host_flood returned %d\n", err);
 
 	spin_lock_bh(&br->lock);
 	changed_addr = br_stp_recalculate_bridge_id(br);
