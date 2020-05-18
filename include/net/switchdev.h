@@ -30,6 +30,26 @@ static inline bool switchdev_trans_ph_commit(struct switchdev_trans *trans)
 	return trans && !trans->ph_prepare;
 }
 
+enum switchdev_host_flood_filter_type {
+	HOST_FLOOD_FILTER_NONE,
+	HOST_FLOOD_FILTER_ALL,
+	HOST_FLOOD_FILTER_VLAN,
+};
+
+struct switchdev_host_flood_filter {
+	enum switchdev_host_flood_filter_type type;
+	struct list_head list;
+	bool uc;
+	bool mc;
+	union {
+		/* HOST_FLOOD_FILTER_VLAN */
+		struct {
+			u16 vlan_id;
+			__be16 vlan_proto;
+		} vlan;
+	};
+};
+
 enum switchdev_attr_id {
 	SWITCHDEV_ATTR_ID_UNDEFINED,
 	SWITCHDEV_ATTR_ID_PORT_STP_STATE,
@@ -40,6 +60,7 @@ enum switchdev_attr_id {
 	SWITCHDEV_ATTR_ID_BRIDGE_VLAN_FILTERING,
 	SWITCHDEV_ATTR_ID_BRIDGE_MC_DISABLED,
 	SWITCHDEV_ATTR_ID_BRIDGE_MROUTER,
+	SWITCHDEV_ATTR_ID_BRIDGE_HOST_FLOOD,
 #if IS_ENABLED(CONFIG_BRIDGE_MRP)
 	SWITCHDEV_ATTR_ID_MRP_PORT_STATE,
 	SWITCHDEV_ATTR_ID_MRP_PORT_ROLE,
@@ -59,6 +80,7 @@ struct switchdev_attr {
 		clock_t ageing_time;			/* BRIDGE_AGEING_TIME */
 		bool vlan_filtering;			/* BRIDGE_VLAN_FILTERING */
 		bool mc_disabled;			/* MC_DISABLED */
+		const struct list_head *filters;	/* BRIDGE_HOST_FLOOD */
 #if IS_ENABLED(CONFIG_BRIDGE_MRP)
 		u8 mrp_port_state;			/* MRP_PORT_STATE */
 		u8 mrp_port_role;			/* MRP_PORT_ROLE */
