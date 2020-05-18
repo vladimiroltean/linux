@@ -3077,6 +3077,7 @@ static void sja1105_teardown(struct dsa_switch *ds)
 static int sja1105_port_enable(struct dsa_switch *ds, int port,
 			       struct phy_device *phy)
 {
+	struct sja1105_private *priv = ds->priv;
 	struct net_device *slave;
 
 	if (!dsa_is_user_port(ds, port))
@@ -3084,7 +3085,17 @@ static int sja1105_port_enable(struct dsa_switch *ds, int port,
 
 	slave = dsa_to_port(ds, port)->slave;
 
-	slave->features &= ~NETIF_F_HW_VLAN_CTAG_FILTER;
+	if (priv->vlan_state == SJA1105_VLAN_BEST_EFFORT) {
+		slave->features |= NETIF_F_HW_VLAN_CTAG_RX;
+		slave->features |= NETIF_F_HW_VLAN_CTAG_FILTER;
+		slave->hw_features |= NETIF_F_HW_VLAN_CTAG_RX;
+		slave->hw_features |= NETIF_F_HW_VLAN_CTAG_FILTER;
+	} else {
+		slave->features &= ~NETIF_F_HW_VLAN_CTAG_RX;
+		slave->features &= ~NETIF_F_HW_VLAN_CTAG_FILTER;
+		slave->hw_features &= ~NETIF_F_HW_VLAN_CTAG_RX;
+		slave->hw_features &= ~NETIF_F_HW_VLAN_CTAG_FILTER;
+	}
 
 	return 0;
 }
