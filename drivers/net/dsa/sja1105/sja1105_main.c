@@ -1477,6 +1477,8 @@ static int sja1105_fdb_add(struct dsa_switch *ds, int port,
 {
 	struct sja1105_private *priv = ds->priv;
 
+	dev_err(ds->dev, "%s: port %d addr %pM vid %d\n", __func__, port, addr, vid);
+
 	/* dsa_8021q is in effect when the bridge's vlan_filtering isn't,
 	 * so the switch still does some VLAN processing internally.
 	 * But Shared VLAN Learning (SVL) is also active, and it will take
@@ -1496,6 +1498,8 @@ static int sja1105_fdb_del(struct dsa_switch *ds, int port,
 			   const unsigned char *addr, u16 vid)
 {
 	struct sja1105_private *priv = ds->priv;
+
+	dev_err(ds->dev, "%s: port %d addr %pM vid %d\n", __func__, port, addr, vid);
 
 	if (priv->vlan_state != SJA1105_VLAN_FILTERING_FULL)
 		vid = 0;
