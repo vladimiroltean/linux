@@ -144,10 +144,7 @@ int dsa_port_bridge_join(struct dsa_port *dp, struct net_device *br)
 	};
 	int err;
 
-	/* Set the flooding mode before joining the port in the switch */
-	err = dsa_port_bridge_flags(dp, BR_FLOOD | BR_MCAST_FLOOD, NULL);
-	if (err)
-		return err;
+	dp->cpu_dp->mrouter = br_multicast_router(br);
 
 	/* Here the interface is already bridged. Reflect the current
 	 * configuration so that drivers can program their chips accordingly.
@@ -155,12 +152,6 @@ int dsa_port_bridge_join(struct dsa_port *dp, struct net_device *br)
 	dp->bridge_dev = br;
 
 	err = dsa_broadcast(DSA_NOTIFIER_BRIDGE_JOIN, &info);
-
-	/* The bridging is rolled back on error */
-	if (err) {
-		dsa_port_bridge_flags(dp, 0, NULL);
-		dp->bridge_dev = NULL;
-	}
 
 	return err;
 }
@@ -184,8 +175,12 @@ void dsa_port_bridge_leave(struct dsa_port *dp, struct net_device *br)
 	if (err)
 		pr_err("DSA: failed to notify DSA_NOTIFIER_BRIDGE_LEAVE\n");
 
-	/* Port is leaving the bridge, disable flooding */
-	dsa_port_bridge_flags(dp, 0, NULL);
+	dp->cpu_dp->mrouter = false;
+
+	/* Port is leaving the bridge, disable host flooding and enable
+	 * egress flooding
+	 */
+	dsa_port_bridge_flags(dp, BR_FLOOD | BR_MCAST_FLOOD, NULL);
 
 	/* Port left the bridge, put in BR_STATE_DISABLED by the bridge layer,
 	 * so allow it to be in BR_STATE_FORWARDING to be kept functional
@@ -289,48 +284,108 @@ int dsa_port_ageing_time(struct dsa_port *dp, clock_t ageing_clock,
 	return dsa_port_notify(dp, DSA_NOTIFIER_AGEING_TIME, &info);
 }
 
-int dsa_port_pre_bridge_flags(const struct dsa_port *dp, unsigned long flags,
-			      struct switchdev_trans *trans)
+static int dsa_port_update_flooding(struct dsa_port *dp, int uc_flood_count,
+				    int mc_flood_count)
 {
 	struct dsa_switch *ds = dp->ds;
+	bool uc_flood_changed;
+	bool mc_flood_changed;
+	int port = dp->index;
+	bool uc_flood;
+	bool mc_flood;
+	int err;
 
-	if (!ds->ops->port_egress_floods ||
-	    (flags & ~(BR_FLOOD | BR_MCAST_FLOOD)))
-		return -EINVAL;
+	if (!ds->ops->port_egress_floods)
+		return 0;
+
+	uc_flood = !!uc_flood_count;
+	mc_flood = dp->mrouter;
+
+	uc_flood_changed = dp->uc_flood ^ uc_flood;
+	mc_flood_changed = dp->mc_flood ^ mc_flood;
+
+	if (uc_flood_changed || mc_flood_changed) {
+		err = ds->ops->port_egress_floods(ds, port, uc_flood, mc_flood);
+		if (err)
+			return err;
+	}
+
+	dp->uc_flood_count = uc_flood_count;
+	dp->mc_flood_count = mc_flood_count;
+	dp->uc_flood = uc_flood;
+	dp->mc_flood = mc_flood;
 
 	return 0;
 }
 
-int dsa_port_bridge_flags(const struct dsa_port *dp, unsigned long flags,
+int dsa_port_pre_bridge_flags(const struct dsa_port *dp, unsigned long flags,
+			      struct switchdev_trans *trans)
+{
+	const unsigned long mask = BR_FLOOD | BR_MCAST_FLOOD | BR_BCAST_FLOOD |
+				   BR_HOST_FLOOD | BR_HOST_MCAST_FLOOD |
+				   BR_HOST_BCAST_FLOOD;
+	struct dsa_switch *ds = dp->ds;
+
+	if (!ds->ops->port_egress_floods || (flags & ~mask))
+		return -EOPNOTSUPP;
+
+	return 0;
+}
+
+int dsa_port_bridge_flags(struct dsa_port *dp, unsigned long flags,
 			  struct switchdev_trans *trans)
 {
-	struct dsa_switch *ds = dp->ds;
-	int port = dp->index;
+	struct dsa_port *cpu_dp = dp->cpu_dp;
+	int cpu_uc_flood_count;
+	int cpu_mc_flood_count;
+	unsigned long changed;
+	int uc_flood_count;
+	int mc_flood_count;
 	int err = 0;
 
 	if (switchdev_trans_ph_prepare(trans))
 		return 0;
 
-	if (ds->ops->port_egress_floods)
-		err = ds->ops->port_egress_floods(ds, port, flags & BR_FLOOD,
-						  flags & BR_MCAST_FLOOD);
+	uc_flood_count = dp->uc_flood_count;
+	mc_flood_count = dp->mc_flood_count;
+	cpu_uc_flood_count = cpu_dp->uc_flood_count;
+	cpu_mc_flood_count = cpu_dp->mc_flood_count;
 
-	return err;
+	changed = dp->br_flags ^ flags;
+
+	if (changed & BR_FLOOD)
+		uc_flood_count += (flags & BR_FLOOD) ? 1 : -1;
+	if (changed & BR_MCAST_FLOOD)
+		mc_flood_count += (flags & BR_MCAST_FLOOD) ? 1 : -1;
+	if (changed & BR_HOST_FLOOD)
+		cpu_uc_flood_count += (flags & BR_HOST_FLOOD) ? 1 : -1;
+	if (changed & BR_HOST_MCAST_FLOOD)
+		cpu_mc_flood_count += (flags & BR_HOST_MCAST_FLOOD) ? 1 : -1;
+
+	err = dsa_port_update_flooding(dp, uc_flood_count, mc_flood_count);
+	if (err && err != -EOPNOTSUPP)
+		return err;
+
+	err = dsa_port_update_flooding(cpu_dp, cpu_uc_flood_count,
+				       cpu_mc_flood_count);
+	if (err && err != -EOPNOTSUPP)
+		return err;
+
+	dp->br_flags = flags;
+
+	return 0;
 }
 
 int dsa_port_mrouter(struct dsa_port *dp, bool mrouter,
 		     struct switchdev_trans *trans)
 {
-	struct dsa_switch *ds = dp->ds;
-	int port = dp->index;
-
-	if (!ds->ops->port_egress_floods)
-		return -EOPNOTSUPP;
-
 	if (switchdev_trans_ph_prepare(trans))
 		return 0;
 
-	return ds->ops->port_egress_floods(ds, port, true, mrouter);
+	dp->mrouter = mrouter;
+
+	return dsa_port_update_flooding(dp, dp->uc_flood_count,
+					dp->mc_flood_count);
 }
 
 int dsa_port_mtu_change(struct dsa_port *dp, int new_mtu,

@@ -200,6 +200,14 @@ struct dsa_port {
 	struct devlink_port	devlink_port;
 	struct phylink		*pl;
 	struct phylink_config	pl_config;
+	/* Operational state of flooding */
+	int			uc_flood_count;
+	int			mc_flood_count;
+	bool			uc_flood;
+	bool			mc_flood;
+	/* Knobs from bridge */
+	unsigned long		br_flags;
+	bool			mrouter;
 
 	struct list_head list;
 
