@@ -727,6 +727,14 @@ static int felix_get_max_mtu(struct dsa_switch *ds, int port)
 	return ocelot_get_max_mtu(ocelot, port);
 }
 
+static int felix_port_egress_floods(struct dsa_switch *ds, int port,
+				    bool unicast, bool multicast)
+{
+	struct ocelot *ocelot = ds->priv;
+
+	return ocelot_port_egress_floods(ocelot, port, unicast, multicast);
+}
+
 static int felix_cls_flower_add(struct dsa_switch *ds, int port,
 				struct flow_cls_offload *cls, bool ingress)
 {
@@ -819,6 +827,7 @@ const struct dsa_switch_ops felix_switch_ops = {
 	.port_txtstamp		= felix_txtstamp,
 	.port_change_mtu	= felix_change_mtu,
 	.port_max_mtu		= felix_get_max_mtu,
+	.port_egress_floods	= felix_port_egress_floods,
 	.port_policer_add	= felix_port_policer_add,
 	.port_policer_del	= felix_port_policer_del,
 	.cls_flower_add		= felix_cls_flower_add,

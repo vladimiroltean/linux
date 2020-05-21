@@ -932,6 +932,35 @@ int ocelot_port_igmp_mld_snoop(struct ocelot *ocelot, int port, bool enable)
 }
 EXPORT_SYMBOL(ocelot_port_igmp_mld_snoop);
 
+int ocelot_port_egress_floods(struct ocelot *ocelot, int port, bool unicast,
+			      bool multicast)
+{
+	u32 pgid_uc = 0;
+	u32 pgid_mc = 0;
+
+	if (port == ocelot->npi)
+		port = ocelot->num_phys_ports;
+
+	if (unicast)
+		pgid_uc = ANA_PGID_PGID_PGID(BIT(port));
+	if (multicast)
+		pgid_mc = ANA_PGID_PGID_PGID(BIT(port));
+
+	dev_err(ocelot->dev, "%s: port %d unicast %d multicast %d\n", __func__, port, unicast, multicast);
+
+	ocelot_rmw_rix(ocelot, pgid_uc, ANA_PGID_PGID_PGID(BIT(port)),
+		       ANA_PGID_PGID, PGID_UC);
+	ocelot_rmw_rix(ocelot, pgid_mc, ANA_PGID_PGID_PGID(BIT(port)),
+		       ANA_PGID_PGID, PGID_MC);
+	ocelot_rmw_rix(ocelot, pgid_mc, ANA_PGID_PGID_PGID(BIT(port)),
+		       ANA_PGID_PGID, PGID_MCIPV4);
+	ocelot_rmw_rix(ocelot, pgid_mc, ANA_PGID_PGID_PGID(BIT(port)),
+		       ANA_PGID_PGID, PGID_MCIPV6);
+
+	return 0;
+}
+EXPORT_SYMBOL(ocelot_port_egress_floods);
+
 static struct ocelot_multicast *ocelot_multicast_get(struct ocelot *ocelot,
 						     const unsigned char *addr,
 						     u16 vid)

@@ -713,6 +713,28 @@ static void ocelot_port_attr_ageing_set(struct ocelot *ocelot, int port,
 	ocelot_set_ageing_time(ocelot, ageing_time);
 }
 
+static int ocelot_port_pre_bridge_flags(struct ocelot *ocelot, int port,
+					unsigned long flags)
+{
+	const unsigned long mask = BR_FLOOD | BR_MCAST_FLOOD | BR_BCAST_FLOOD;
+
+	if (flags & ~mask)
+		return -EOPNOTSUPP;
+
+	return 0;
+}
+
+static int ocelot_port_bridge_flags(struct ocelot *ocelot, int port,
+				    unsigned long flags,
+				    struct switchdev_trans *trans)
+{
+	if (switchdev_trans_ph_prepare(trans))
+		return 0;
+
+	return ocelot_port_egress_floods(ocelot, port, flags & BR_FLOOD,
+					 flags & BR_MCAST_FLOOD);
+}
+
 static int ocelot_port_attr_set(struct net_device *dev,
 				const struct switchdev_attr *attr,
 				struct switchdev_trans *trans)
@@ -723,6 +745,14 @@ static int ocelot_port_attr_set(struct net_device *dev,
 	int err = 0;
 
 	switch (attr->id) {
+	case SWITCHDEV_ATTR_ID_PORT_PRE_BRIDGE_FLAGS:
+		err = ocelot_port_pre_bridge_flags(ocelot, port,
+						   attr->u.brport_flags);
+		break;
+	case SWITCHDEV_ATTR_ID_PORT_BRIDGE_FLAGS:
+		err = ocelot_port_bridge_flags(ocelot, port,
+					       attr->u.brport_flags, trans);
+		break;
 	case SWITCHDEV_ATTR_ID_PORT_STP_STATE:
 		ocelot_port_attr_stp_state_set(ocelot, port, trans,
 					       attr->u.stp_state);
