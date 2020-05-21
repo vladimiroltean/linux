@@ -713,20 +713,6 @@ static void ocelot_port_attr_ageing_set(struct ocelot *ocelot, int port,
 	ocelot_set_ageing_time(ocelot, ageing_time);
 }
 
-static void ocelot_port_attr_mc_set(struct ocelot *ocelot, int port, bool mc)
-{
-	u32 cpu_fwd_mcast = ANA_PORT_CPU_FWD_CFG_CPU_IGMP_REDIR_ENA |
-			    ANA_PORT_CPU_FWD_CFG_CPU_MLD_REDIR_ENA |
-			    ANA_PORT_CPU_FWD_CFG_CPU_IPMC_CTRL_COPY_ENA;
-	u32 val = 0;
-
-	if (mc)
-		val = cpu_fwd_mcast;
-
-	ocelot_rmw_gix(ocelot, val, cpu_fwd_mcast,
-		       ANA_PORT_CPU_FWD_CFG, port);
-}
-
 static int ocelot_port_attr_set(struct net_device *dev,
 				const struct switchdev_attr *attr,
 				struct switchdev_trans *trans)
@@ -749,7 +735,8 @@ static int ocelot_port_attr_set(struct net_device *dev,
 					   attr->u.vlan_filtering);
 		break;
 	case SWITCHDEV_ATTR_ID_BRIDGE_MC_DISABLED:
-		ocelot_port_attr_mc_set(ocelot, port, !attr->u.mc_disabled);
+		ocelot_port_igmp_mld_snoop(ocelot, port,
+					   !attr->u.mc_disabled);
 		break;
 	default:
 		err = -EOPNOTSUPP;
