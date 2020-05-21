@@ -915,6 +915,23 @@ void ocelot_set_ageing_time(struct ocelot *ocelot, unsigned int msecs)
 }
 EXPORT_SYMBOL(ocelot_set_ageing_time);
 
+int ocelot_port_igmp_mld_snoop(struct ocelot *ocelot, int port, bool enable)
+{
+	u32 cpu_fwd_mcast = ANA_PORT_CPU_FWD_CFG_CPU_IGMP_REDIR_ENA |
+			    ANA_PORT_CPU_FWD_CFG_CPU_MLD_REDIR_ENA |
+			    ANA_PORT_CPU_FWD_CFG_CPU_IPMC_CTRL_COPY_ENA;
+	u32 val = 0;
+
+	if (enable)
+		val = cpu_fwd_mcast;
+
+	ocelot_rmw_gix(ocelot, val, cpu_fwd_mcast,
+		       ANA_PORT_CPU_FWD_CFG, port);
+
+	return 0;
+}
+EXPORT_SYMBOL(ocelot_port_igmp_mld_snoop);
+
 static struct ocelot_multicast *ocelot_multicast_get(struct ocelot *ocelot,
 						     const unsigned char *addr,
 						     u16 vid)
