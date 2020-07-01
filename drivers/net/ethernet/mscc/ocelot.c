@@ -4,6 +4,7 @@
  *
  * Copyright (c) 2017 Microsemi Corporation
  */
+#include <linux/dsa/ocelot.h>
 #include <linux/if_bridge.h>
 #include "ocelot.h"
 #include "ocelot_vcap.h"
@@ -422,8 +423,7 @@ int ocelot_port_add_txtstamp_skb(struct ocelot_port *ocelot_port,
 	if (ocelot->ptp && shinfo->tx_flags & SKBTX_HW_TSTAMP &&
 	    ocelot_port->ptp_cmd == IFH_REW_OP_TWO_STEP_PTP) {
 		shinfo->tx_flags |= SKBTX_IN_PROGRESS;
-		/* Store timestamp ID in cb[0] of sk_buff */
-		skb->cb[0] = ocelot_port->ts_id % 4;
+		OCELOT_SKB_CB(skb)->tstamp_id = ocelot_port->ts_id % 4;
 		skb_queue_tail(&ocelot_port->tx_skbs, skb);
 		return 0;
 	}
@@ -488,7 +488,7 @@ void ocelot_get_txtstamp(struct ocelot *ocelot)
 		spin_lock_irqsave(&port->tx_skbs.lock, flags);
 
 		skb_queue_walk_safe(&port->tx_skbs, skb, skb_tmp) {
-			if (skb->cb[0] != id)
+			if (OCELOT_SKB_CB(skb)->tstamp_id != id)
 				continue;
 			__skb_unlink(skb, &port->tx_skbs);
 			skb_match = skb;
