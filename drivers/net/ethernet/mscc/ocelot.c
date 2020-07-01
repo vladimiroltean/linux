@@ -525,7 +525,7 @@ void ocelot_get_txtstamp(struct ocelot *ocelot)
 		/* Get the h/w timestamp */
 		ocelot_get_hwtimestamp(ocelot, &ts);
 
-		if (unlikely(!skb_match))
+		if (unlikely(WARN_ON(!skb_match)))
 			continue;
 
 		/* Set the timestamp into the skb */
