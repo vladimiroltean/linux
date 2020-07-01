@@ -503,7 +503,7 @@ void ocelot_get_txtstamp(struct ocelot *ocelot)
 		/* Next ts */
 		ocelot_write(ocelot, SYS_PTP_NXT_PTP_NXT, SYS_PTP_NXT);
 
-		if (unlikely(!skb_match))
+		if (unlikely(WARN_ON(!skb_match)))
 			continue;
 
 		/* Set the timestamp into the skb */
