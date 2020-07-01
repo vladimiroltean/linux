@@ -544,14 +544,14 @@ void ocelot_get_txtstamp(struct ocelot *ocelot)
 
 		spin_unlock_irqrestore(&port->tx_skbs.lock, flags);
 
+		/* Get the h/w timestamp */
+		ocelot_get_hwtimestamp(ocelot, &ts);
+
 		/* Next ts */
 		ocelot_write(ocelot, SYS_PTP_NXT_PTP_NXT, SYS_PTP_NXT);
 
 		if (unlikely(!skb_match))
 			continue;
-
-		/* Get the h/w timestamp */
-		ocelot_get_hwtimestamp(ocelot, &ts);
 
 		/* Set the timestamp into the skb */
 		memset(&shhwtstamps, 0, sizeof(shhwtstamps));
