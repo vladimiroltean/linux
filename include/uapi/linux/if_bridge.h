@@ -520,12 +520,14 @@ struct br_mdb_entry {
 #define MDB_FLAGS_FAST_LEAVE	(1 << 1)
 #define MDB_FLAGS_STAR_EXCL	(1 << 2)
 #define MDB_FLAGS_BLOCKED	(1 << 3)
+#define MDB_FLAGS_L2		(1 << 5)
 	__u8 flags;
 	__u16 vid;
 	struct {
 		union {
 			__be32	ip4;
 			struct in6_addr ip6;
+			unsigned char mac_addr[ETH_ALEN];
 		} u;
 		__be16		proto;
 	} addr;

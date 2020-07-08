@@ -215,6 +215,7 @@ struct net_bridge_fdb_entry {
 #define MDB_PG_FLAGS_FAST_LEAVE	BIT(2)
 #define MDB_PG_FLAGS_STAR_EXCL	BIT(3)
 #define MDB_PG_FLAGS_BLOCKED	BIT(4)
+#define MDB_PG_FLAGS_L2		BIT(5)
 
 #define PG_SRC_ENT_LIMIT	32
 
@@ -272,6 +273,7 @@ struct net_bridge_mdb_entry {
 	struct net_bridge_port_group __rcu *ports;
 	struct br_ip			addr;
 	bool				host_joined;
+	bool				l2;
 
 	struct timer_list		timer;
 	struct hlist_node		mdb_node;
@@ -871,7 +873,8 @@ __br_multicast_querier_exists(struct net_bridge *br,
 }
 
 static inline bool br_multicast_querier_exists(struct net_bridge *br,
-					       struct ethhdr *eth)
+					       struct ethhdr *eth,
+					       const struct net_bridge_mdb_entry *mdb)
 {
 	switch (eth->h_proto) {
 	case (htons(ETH_P_IP)):
@@ -883,7 +886,7 @@ static inline bool br_multicast_querier_exists(struct net_bridge *br,
 			&br->ip6_other_query, true);
 #endif
 	default:
-		return false;
+		return !!(mdb && mdb->l2);
 	}
 }
 

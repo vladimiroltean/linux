@@ -26,6 +26,7 @@ struct br_ip {
 		struct in6_addr ip6;
 #endif
 	} dst;
+	unsigned char	mac_addr[ETH_ALEN];
 	__be16		proto;
 	__u16           vid;
 };
