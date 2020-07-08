@@ -62,6 +62,8 @@ static void __mdb_entry_fill_flags(struct br_mdb_entry *e, unsigned char flags)
 		e->flags |= MDB_FLAGS_OFFLOAD;
 	if (flags & MDB_PG_FLAGS_FAST_LEAVE)
 		e->flags |= MDB_FLAGS_FAST_LEAVE;
+	if (flags & MDB_PG_FLAGS_L2)
+		e->flags |= MDB_FLAGS_L2;
 }
 
 static void __mdb_entry_to_br_ip(struct br_mdb_entry *entry, struct br_ip *ip)
@@ -72,9 +74,11 @@ static void __mdb_entry_to_br_ip(struct br_mdb_entry *entry, struct br_ip *ip)
 	if (ip->proto == htons(ETH_P_IP))
 		ip->u.ip4 = entry->addr.u.ip4;
 #if IS_ENABLED(CONFIG_IPV6)
-	else
+	else if (ip->proto == htons(ETH_P_IPV6))
 		ip->u.ip6 = entry->addr.u.ip6;
 #endif
+	else
+		memcpy(ip->mac_addr, entry->addr.u.mac_addr, ETH_ALEN);
 }
 
 static int __mdb_fill_info(struct sk_buff *skb,
@@ -103,9 +107,12 @@ static int __mdb_fill_info(struct sk_buff *skb,
 	if (mp->addr.proto == htons(ETH_P_IP))
 		e.addr.u.ip4 = mp->addr.u.ip4;
 #if IS_ENABLED(CONFIG_IPV6)
-	if (mp->addr.proto == htons(ETH_P_IPV6))
+	else if (mp->addr.proto == htons(ETH_P_IPV6))
 		e.addr.u.ip6 = mp->addr.u.ip6;
 #endif
+	else
+		memcpy(e.addr.u.mac_addr, mp->addr.mac_addr, ETH_ALEN);
+
 	e.addr.proto = mp->addr.proto;
 	nest_ent = nla_nest_start_noflag(skb,
 					 MDBA_MDB_ENTRY_INFO);
@@ -399,9 +406,11 @@ static void __br_mdb_notify(struct net_device *dev, struct net_bridge_port *p,
 	if (entry->addr.proto == htons(ETH_P_IP))
 		ip_eth_mc_map(entry->addr.u.ip4, mdb.addr);
 #if IS_ENABLED(CONFIG_IPV6)
-	else
+	else if (entry->addr.proto == htons(ETH_P_IPV6))
 		ipv6_eth_mc_map(&entry->addr.u.ip6, mdb.addr);
 #endif
+	else
+		memcpy(mdb.addr, entry->addr.u.mac_addr, ETH_ALEN);
 
 	mdb.obj.orig_dev = port_dev;
 	if (p && port_dev && type == RTM_NEWMDB) {
@@ -447,6 +456,7 @@ void br_mdb_notify(struct net_device *dev, struct net_bridge_port *port,
 		entry.ifindex = port->dev->ifindex;
 	else
 		entry.ifindex = dev->ifindex;
+	memcpy(entry.addr.u.mac_addr, group->mac_addr, ETH_ALEN);
 	entry.addr.proto = group->proto;
 	entry.addr.u.ip4 = group->u.ip4;
 #if IS_ENABLED(CONFIG_IPV6)
@@ -529,18 +539,24 @@ static bool is_valid_mdb_entry(struct br_mdb_entry *entry)
 	if (entry->ifindex == 0)
 		return false;
 
-	if (entry->addr.proto == htons(ETH_P_IP)) {
+	switch (entry->addr.proto) {
+	case htons(ETH_P_IP):
 		if (!ipv4_is_multicast(entry->addr.u.ip4))
 			return false;
 		if (ipv4_is_local_multicast(entry->addr.u.ip4))
 			return false;
+		break;
 #if IS_ENABLED(CONFIG_IPV6)
-	} else if (entry->addr.proto == htons(ETH_P_IPV6)) {
+	case htons(ETH_P_IPV6):
 		if (ipv6_addr_is_ll_all_nodes(&entry->addr.u.ip6))
 			return false;
+		break;
 #endif
-	} else
-		return false;
+	default:
+		if (entry->addr.proto != 0)
+			return false;
+	}
+
 	if (entry->state != MDB_PERMANENT && entry->state != MDB_TEMPORARY)
 		return false;
 	if (entry->vid >= VLAN_VID_MASK)
@@ -616,6 +632,9 @@ static int br_mdb_add_group(struct net_bridge *br, struct net_bridge_port *port,
 			return err;
 	}
 
+	if (mp->l2 && state != MDB_PERMANENT)
+		return -EINVAL;
+
 	/* host join */
 	if (!port) {
 		/* don't allow any flags for host-joined groups */
@@ -642,7 +661,7 @@ static int br_mdb_add_group(struct net_bridge *br, struct net_bridge_port *port,
 	if (unlikely(!p))
 		return -ENOMEM;
 	rcu_assign_pointer(*pp, p);
-	if (state == MDB_TEMPORARY)
+	if (state == MDB_TEMPORARY && !mp->l2)
 		mod_timer(&p->timer, now + br->multicast_membership_interval);
 
 	return 0;

@@ -495,10 +495,12 @@ struct br_mdb_entry {
 	__u8 state;
 #define MDB_FLAGS_OFFLOAD	(1 << 0)
 #define MDB_FLAGS_FAST_LEAVE	(1 << 1)
+#define MDB_FLAGS_L2		(1 << 2)
 	__u8 flags;
 	__u16 vid;
 	struct {
 		union {
+			__u8 mac_addr[ETH_ALEN];
 			__be32	ip4;
 			struct in6_addr ip6;
 		} u;

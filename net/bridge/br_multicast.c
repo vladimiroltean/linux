@@ -133,7 +133,8 @@ struct net_bridge_mdb_entry *br_mdb_get(struct net_bridge *br,
 		break;
 #endif
 	default:
-		return NULL;
+		ip.proto = 0;
+		memcpy(&ip.mac_addr, eth_hdr(skb)->h_dest, ETH_ALEN);
 	}
 
 	return br_mdb_ip_get_rcu(br, &ip);
@@ -457,6 +458,7 @@ struct net_bridge_mdb_entry *br_multicast_new_group(struct net_bridge *br,
 
 	mp->br = br;
 	mp->addr = *group;
+	mp->l2 = !!(group->proto == 0);
 	timer_setup(&mp->timer, br_multicast_group_expired, 0);
 	err = rhashtable_lookup_insert_fast(&br->mdb_hash_tbl, &mp->rhnode,
 					    br_mdb_rht_params);
@@ -486,6 +488,8 @@ struct net_bridge_port_group *br_multicast_new_port_group(
 	p->addr = *group;
 	p->port = port;
 	p->flags = flags;
+	if (group->proto == htons(0))
+		p->flags |= MDB_PG_FLAGS_L2;
 	rcu_assign_pointer(p->next, next);
 	hlist_add_head(&p->mglist, &port->mglist);
 	timer_setup(&p->timer, br_multicast_port_group_expired, 0);
@@ -519,7 +523,9 @@ void br_multicast_host_join(struct net_bridge_mdb_entry *mp, bool notify)
 			br_mdb_notify(mp->br->dev, NULL, &mp->addr,
 				      RTM_NEWMDB, 0);
 	}
-	mod_timer(&mp->timer, jiffies + mp->br->multicast_membership_interval);
+	if (!mp->l2)
+		mod_timer(&mp->timer,
+			  jiffies + mp->br->multicast_membership_interval);
 }
 
 void br_multicast_host_leave(struct net_bridge_mdb_entry *mp, bool notify)
@@ -2261,7 +2267,7 @@ bool br_multicast_has_querier_anywhere(struct net_device *dev, int proto)
 	memset(&eth, 0, sizeof(eth));
 	eth.h_proto = htons(proto);
 
-	ret = br_multicast_querier_exists(br, &eth);
+	ret = br_multicast_querier_exists(br, &eth, NULL);
 
 unlock:
 	rcu_read_unlock();
