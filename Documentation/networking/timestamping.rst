@@ -257,13 +257,13 @@ setsockopt::
 
   struct msghdr *msg;
   ...
-  cmsg			       = CMSG_FIRSTHDR(msg);
-  cmsg->cmsg_level	       = SOL_SOCKET;
-  cmsg->cmsg_type	       = SO_TIMESTAMPING;
-  cmsg->cmsg_len	       = CMSG_LEN(sizeof(__u32));
+  cmsg                         = CMSG_FIRSTHDR(msg);
+  cmsg->cmsg_level             = SOL_SOCKET;
+  cmsg->cmsg_type              = SO_TIMESTAMPING;
+  cmsg->cmsg_len               = CMSG_LEN(sizeof(__u32));
   *((__u32 *) CMSG_DATA(cmsg)) = SOF_TIMESTAMPING_TX_SCHED |
-				 SOF_TIMESTAMPING_TX_SOFTWARE |
-				 SOF_TIMESTAMPING_TX_ACK;
+                                 SOF_TIMESTAMPING_TX_SOFTWARE |
+                                 SOF_TIMESTAMPING_TX_ACK;
   err = sendmsg(fd, msg, 0);
 
 The SOF_TIMESTAMPING_TX_* flags set via cmsg will override
@@ -273,7 +273,7 @@ Moreover, applications must still enable timestamp reporting via
 setsockopt to receive timestamps::
 
   __u32 val = SOF_TIMESTAMPING_SOFTWARE |
-	      SOF_TIMESTAMPING_OPT_ID /* or any other flag */;
+              SOF_TIMESTAMPING_OPT_ID /* or any other flag */;
   err = setsockopt(fd, SOL_SOCKET, SO_TIMESTAMPING, &val, sizeof(val));
 
 
@@ -354,14 +354,14 @@ SOL_SOCKET, cmsg_type SCM_TIMESTAMPING, and payload of type
 
 For SO_TIMESTAMPING_OLD::
 
-	struct scm_timestamping {
-		struct timespec ts[3];
-	};
+        struct scm_timestamping {
+                struct timespec ts[3];
+        };
 
 For SO_TIMESTAMPING_NEW::
 
-	struct scm_timestamping64 {
-		struct __kernel_timespec ts[3];
+        struct scm_timestamping64 {
+                struct __kernel_timespec ts[3];
 
 Always use SO_TIMESTAMPING_NEW timestamp to always get timestamp in
 struct scm_timestamping64 format.
@@ -468,11 +468,11 @@ Hardware time stamping must also be initialized for each device driver
 that is expected to do hardware time stamping. The parameter is defined in
 include/uapi/linux/net_tstamp.h as::
 
-	struct hwtstamp_config {
-		int flags;	/* no flags defined right now, must be zero */
-		int tx_type;	/* HWTSTAMP_TX_* */
-		int rx_filter;	/* HWTSTAMP_FILTER_* */
-	};
+        struct hwtstamp_config {
+                int flags;      /* no flags defined right now, must be zero */
+                int tx_type;    /* HWTSTAMP_TX_* */
+                int rx_filter;  /* HWTSTAMP_FILTER_* */
+        };
 
 Desired behavior is passed into the kernel and to a specific device by
 calling ioctl(SIOCSHWTSTAMP) with a pointer to a struct ifreq whose
@@ -505,42 +505,42 @@ not been implemented in all drivers.
 
 ::
 
-    /* possible values for hwtstamp_config->tx_type */
-    enum {
-	    /*
-	    * no outgoing packet will need hardware time stamping;
-	    * should a packet arrive which asks for it, no hardware
-	    * time stamping will be done
-	    */
-	    HWTSTAMP_TX_OFF,
+   /* possible values for hwtstamp_config->tx_type */
+   enum {
+           /*
+           * no outgoing packet will need hardware time stamping;
+           * should a packet arrive which asks for it, no hardware
+           * time stamping will be done
+           */
+           HWTSTAMP_TX_OFF,
 
-	    /*
-	    * enables hardware time stamping for outgoing packets;
-	    * the sender of the packet decides which are to be
-	    * time stamped by setting SOF_TIMESTAMPING_TX_SOFTWARE
-	    * before sending the packet
-	    */
-	    HWTSTAMP_TX_ON,
-    };
+           /*
+           * enables hardware time stamping for outgoing packets;
+           * the sender of the packet decides which are to be
+           * time stamped by setting SOF_TIMESTAMPING_TX_SOFTWARE
+           * before sending the packet
+           */
+           HWTSTAMP_TX_ON,
+   };
 
-    /* possible values for hwtstamp_config->rx_filter */
-    enum {
-	    /* time stamp no incoming packet at all */
-	    HWTSTAMP_FILTER_NONE,
+   /* possible values for hwtstamp_config->rx_filter */
+   enum {
+           /* time stamp no incoming packet at all */
+           HWTSTAMP_FILTER_NONE,
 
-	    /* time stamp any incoming packet */
-	    HWTSTAMP_FILTER_ALL,
+           /* time stamp any incoming packet */
+           HWTSTAMP_FILTER_ALL,
 
-	    /* return value: time stamp all packets requested plus some others */
-	    HWTSTAMP_FILTER_SOME,
+           /* return value: time stamp all packets requested plus some others */
+           HWTSTAMP_FILTER_SOME,
 
-	    /* PTP v1, UDP, any kind of event packet */
-	    HWTSTAMP_FILTER_PTP_V1_L4_EVENT,
+           /* PTP v1, UDP, any kind of event packet */
+           HWTSTAMP_FILTER_PTP_V1_L4_EVENT,
 
-	    /* for the complete list of values, please check
-	    * the include file include/uapi/linux/net_tstamp.h
-	    */
-    };
+           /* for the complete list of values, please check
+           * the include file include/uapi/linux/net_tstamp.h
+           */
+   };
 
 3.1 Hardware Timestamping Implementation: Device Drivers
 --------------------------------------------------------
@@ -555,10 +555,10 @@ to the shared time stamp structure of the skb call skb_hwtstamps(). Then
 set the time stamps in the structure::
 
     struct skb_shared_hwtstamps {
-	    /* hardware time stamp transformed into duration
-	    * since arbitrary point in time
-	    */
-	    ktime_t	hwtstamp;
+            /* hardware time stamp transformed into duration
+            * since arbitrary point in time
+            */
+            ktime_t     hwtstamp;
     };
 
 Time stamps for outgoing packets are to be generated as follows:
