@@ -1981,12 +1981,24 @@ int dsa_slave_create(struct dsa_port *port)
 
 	dsa_slave_notify(slave_dev, DSA_PORT_REGISTER);
 
-	ret = register_netdev(slave_dev);
+	rtnl_lock();
+
+	ret = register_netdevice(slave_dev);
 	if (ret) {
 		netdev_err(master, "error %d registering interface %s\n",
 			   ret, slave_dev->name);
+		rtnl_unlock();
 		goto out_phy;
 	}
+
+	ret = netdev_upper_dev_link(master, slave_dev, NULL);
+	if (ret) {
+		unregister_netdevice(slave_dev);
+		rtnl_unlock();
+		goto out_phy;
+	}
+
+	rtnl_unlock();
 
 	return 0;
 
@@ -2006,11 +2018,13 @@ out_free:
 
 void dsa_slave_destroy(struct net_device *slave_dev)
 {
+	struct net_device *master = dsa_slave_to_master(slave_dev);
 	struct dsa_port *dp = dsa_slave_to_port(slave_dev);
 	struct dsa_slave_priv *p = netdev_priv(slave_dev);
 
 	netif_carrier_off(slave_dev);
 	rtnl_lock();
+	netdev_upper_dev_unlink(master, slave_dev);
 	phylink_disconnect_phy(dp->pl);
 	rtnl_unlock();
 
