@@ -2024,12 +2024,13 @@ void dsa_slave_destroy(struct net_device *slave_dev)
 
 	netif_carrier_off(slave_dev);
 	rtnl_lock();
-	netdev_upper_dev_unlink(master, slave_dev);
 	phylink_disconnect_phy(dp->pl);
-	rtnl_unlock();
 
 	dsa_slave_notify(slave_dev, DSA_PORT_UNREGISTER);
-	unregister_netdev(slave_dev);
+	netdev_upper_dev_unlink(master, slave_dev);
+	unregister_netdevice(slave_dev);
+	rtnl_unlock();
+
 	phylink_destroy(dp->pl);
 	gro_cells_destroy(&p->gcells);
 	free_percpu(p->stats64);
