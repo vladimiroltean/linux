@@ -18,9 +18,9 @@
 /* GCB_MIIM_MII_CMD */
 #define MSCC_MIIM_CMD_OPR_WRITE			BIT(1)
 #define MSCC_MIIM_CMD_OPR_READ			BIT(2)
-#define MSCC_MIIM_CMD_WRDATA_SHIFT		4
-#define MSCC_MIIM_CMD_REGAD_SHIFT		20
-#define MSCC_MIIM_CMD_PHYAD_SHIFT		25
+#define MSCC_MIIM_CMD_WRDATA(x)			((x) << 4)
+#define MSCC_MIIM_CMD_REGAD(x)			((x) << 20)
+#define MSCC_MIIM_CMD_PHYAD(x)			((x) << 25)
 #define MSCC_MIIM_CMD_VLD			BIT(31)
 
 static const u32 vsc9953_ana_regmap[] = {
@@ -754,7 +754,7 @@ static int vsc9953_mdio_write(struct mii_bus *bus, int phy_id, int regnum,
 			      u16 value)
 {
 	struct ocelot *ocelot = bus->priv;
-	int err, cmd, val;
+	int err, val;
 
 	/* Wait while MIIM controller becomes idle */
 	err = readx_poll_timeout(vsc9953_gcb_miim_pending_status, ocelot,
@@ -764,13 +764,9 @@ static int vsc9953_mdio_write(struct mii_bus *bus, int phy_id, int regnum,
 		goto out;
 	}
 
-	cmd = MSCC_MIIM_CMD_VLD | (phy_id << MSCC_MIIM_CMD_PHYAD_SHIFT) |
-	      (regnum << MSCC_MIIM_CMD_REGAD_SHIFT) |
-	      (value << MSCC_MIIM_CMD_WRDATA_SHIFT) |
-	      MSCC_MIIM_CMD_OPR_WRITE;
-
-	ocelot_write(ocelot, cmd, GCB_MIIM_MII_CMD);
-
+	ocelot_write(ocelot, MSCC_MIIM_CMD_VLD | MSCC_MIIM_CMD_PHYAD(phy_id) |
+		     MSCC_MIIM_CMD_REGAD(regnum) | MSCC_MIIM_CMD_WRDATA(value),
+		     GCB_MIIM_MII_CMD);
 out:
 	return err;
 }
@@ -778,7 +774,7 @@ out:
 static int vsc9953_mdio_read(struct mii_bus *bus, int phy_id, int regnum)
 {
 	struct ocelot *ocelot = bus->priv;
-	int err, cmd, val;
+	int err, val;
 
 	/* Wait until MIIM controller becomes idle */
 	err = readx_poll_timeout(vsc9953_gcb_miim_pending_status, ocelot,
@@ -789,10 +785,9 @@ static int vsc9953_mdio_read(struct mii_bus *bus, int phy_id, int regnum)
 	}
 
 	/* Write the MIIM COMMAND register */
-	cmd = MSCC_MIIM_CMD_VLD | (phy_id << MSCC_MIIM_CMD_PHYAD_SHIFT) |
-	      (regnum << MSCC_MIIM_CMD_REGAD_SHIFT) | MSCC_MIIM_CMD_OPR_READ;
-
-	ocelot_write(ocelot, cmd, GCB_MIIM_MII_CMD);
+	ocelot_write(ocelot, MSCC_MIIM_CMD_VLD | MSCC_MIIM_CMD_PHYAD(phy_id) |
+		     MSCC_MIIM_CMD_REGAD(regnum) | MSCC_MIIM_CMD_OPR_READ,
+		     GCB_MIIM_MII_CMD);
 
 	/* Wait while read operation via the MIIM controller is in progress */
 	err = readx_poll_timeout(vsc9953_gcb_miim_busy_status, ocelot,
