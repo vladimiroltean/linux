@@ -82,6 +82,7 @@ struct dsa_notifier_mc_disabled_info {
 };
 
 struct dsa_switchdev_event_work {
+	struct net_device *dev; /* for dev_hold and dev_put only */
 	struct dsa_switch *ds;
 	int port;
 	struct work_struct work;
