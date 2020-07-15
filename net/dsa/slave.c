@@ -147,6 +147,7 @@ static int dsa_upstream_fdb_addr(struct net_device *slave_dev,
 		return -ENOMEM;
 
 	INIT_WORK(&switchdev_work->work, dsa_slave_switchdev_event_work);
+	switchdev_work->dev = slave_dev;
 	switchdev_work->ds = dp->ds;
 	switchdev_work->port = dsa_upstream_port(dp->ds, dp->index);
 	switchdev_work->event = event;
@@ -2149,9 +2150,8 @@ static void dsa_slave_switchdev_event_work(struct work_struct *work)
 	}
 	rtnl_unlock();
 
+	dev_put(switchdev_work->dev);
 	kfree(switchdev_work);
-	if (dsa_is_user_port(ds, dp->index))
-		dev_put(dp->slave);
 }
 
 /* Called under rcu_read_lock() */
@@ -2182,6 +2182,7 @@ static int dsa_slave_switchdev_event(struct notifier_block *unused,
 
 	INIT_WORK(&switchdev_work->work,
 		  dsa_slave_switchdev_event_work);
+	switchdev_work->dev = dev;
 	switchdev_work->ds = dp->ds;
 	switchdev_work->port = dp->index;
 	switchdev_work->event = event;
