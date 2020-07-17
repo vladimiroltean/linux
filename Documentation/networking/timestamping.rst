@@ -791,3 +791,29 @@ The correct solution to this problem is to implement the PHY timestamping
 requirements in the MAC driver found broken, and submit as a bug fix patch to
 netdev@vger.kernel.org. See :ref:`Documentation/process/stable-kernel-rules.rst
 <stable_kernel_rules>` for more details.
+
+3.4 Frequently asked questions
+------------------------------
+
+Q: When should drivers set SKBTX_IN_PROGRESS?
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+When the interface they represent offers both ``SOF_TIMESTAMPING_TX_HARDWARE``
+and ``SOF_TIMESTAMPING_TX_SOFTWARE``.
+Originally, the network stack could deliver either a hardware or a software
+time stamp, but not both. This flag prevents software timestamp delivery.
+This restriction was eventually lifted via the ``SOF_TIMESTAMPING_OPT_TX_SWHW``
+option, but still the original behavior is preserved as the default.
+
+Q: Should drivers that don't offer SOF_TIMESTAMPING_TX_SOFTWARE call skb_tx_timestamp()?
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The ``skb_clone_tx_timestamp()`` function from its body helps with propagation
+of TX timestamps from PTP PHYs, and the required placement of this call is the
+same as for software TX timestamping.
+Additionally, since PTP is broken on ports with timestamping PHYs and unmet
+requirements, the consequence is that any driver which may be ever coupled to
+a timestamping-capable PHY in ``netdev->phydev`` should call at least
+``skb_clone_tx_timestamp()``. However, calling the higher-level
+``skb_tx_timestamp()`` instead achieves the same purpose, but also offers
+additional compliance to ``SOF_TIMESTAMPING_TX_SOFTWARE``.
