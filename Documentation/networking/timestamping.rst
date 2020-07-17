@@ -754,3 +754,40 @@ check in their "TX confirmation" portion, not only for
 that PTP timestamping is not enabled for anything other than the outermost PHC,
 this enhanced check will avoid delivering a duplicated TX timestamp to user
 space.
+
+Another known limitation is the design of the ``__ethtool_get_ts_info``
+function::
+
+  int __ethtool_get_ts_info(struct net_device *dev, struct ethtool_ts_info *info)
+  {
+          const struct ethtool_ops *ops = dev->ethtool_ops;
+          struct phy_device *phydev = dev->phydev;
+
+          memset(info, 0, sizeof(*info));
+          info->cmd = ETHTOOL_GET_TS_INFO;
+
+          if (phy_has_tsinfo(phydev))
+                  return phy_ts_info(phydev, info);
+          if (ops->get_ts_info)
+                  return ops->get_ts_info(dev, info);
+
+          info->so_timestamping = SOF_TIMESTAMPING_RX_SOFTWARE |
+                                  SOF_TIMESTAMPING_SOFTWARE;
+          info->phc_index = -1;
+
+          return 0;
+  }
+
+Because the generic function searches first for the timestamping capabilities
+of the attached PHY, and returns them directly without consulting the MAC
+driver, no checking is being done whether the requirements described in `3.2.2
+Ethernet PHYs`_ are implemented or not. Therefore, if the MAC driver does not
+satisfy the requirements for PHY timestamping, and
+``CONFIG_NETWORK_PHY_TIMESTAMPING`` is enabled, then a non-functional PHC index
+(the one corresponding to the PHY) will be reported to user space, via
+``ethtool -T``.
+
+The correct solution to this problem is to implement the PHY timestamping
+requirements in the MAC driver found broken, and submit as a bug fix patch to
+netdev@vger.kernel.org. See :ref:`Documentation/process/stable-kernel-rules.rst
+<stable_kernel_rules>` for more details.
