@@ -1940,11 +1940,8 @@ int dsa_slave_create(struct dsa_port *port)
 	if (ds->ops->port_fdb_add && ds->ops->port_egress_floods)
 		slave_dev->priv_flags |= IFF_UNICAST_FLT;
 	slave_dev->netdev_ops = &dsa_slave_netdev_ops;
-	slave_dev->min_mtu = 0;
 	if (ds->ops->port_max_mtu)
 		slave_dev->max_mtu = ds->ops->port_max_mtu(ds, port->index);
-	else
-		slave_dev->max_mtu = ETH_MAX_MTU;
 	SET_NETDEV_DEVTYPE(slave_dev, &dsa_type);
 	vlan_dev_ivdf_set(slave_dev, true);
 
