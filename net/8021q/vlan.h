@@ -6,8 +6,6 @@
 #include <linux/u64_stats_sync.h>
 #include <linux/list.h>
 
-#define NET_8021Q_VID_TSIZE	2
-
 /* if this changes, algorithm will have to be reworked because this
  * depends on completely exhausting the VLAN identifier space.  Thus
  * it gives constant time look-up, but in many cases it wastes memory.

@@ -19,6 +19,8 @@
 #define VLAN_ETH_HLEN	18		/* Total octets in header.	 */
 #define VLAN_ETH_ZLEN	64		/* Min. octets in frame sans FCS */
 
+#define NET_8021Q_VID_TSIZE	2
+
 /*
  * According to 802.3ac, the packet can be 4 bytes longer. --Klika Jan
  */
