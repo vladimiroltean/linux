@@ -188,6 +188,9 @@ static struct switchdev_host_flood_filter
 	if (!filter)
 		return NULL;
 
+	filter->uc = true;
+	filter->mc = true;
+
 	if (is_vlan_dev(dev)) {
 		filter->type = HOST_FLOOD_FILTER_VLAN;
 		filter->vlan.vlan_id = vlan_dev_vlan_id(dev);
@@ -200,8 +203,8 @@ static struct switchdev_host_flood_filter
 }
 
 /* If there are no filters (all ports are part of the same switch),
- * add a HOST_FLOOD_FILTER_NONE filter to denote no host flooding should be
- * done.
+ * add a HOST_FLOOD_FILTER_ALL filter manually to denote no host flooding
+ * should be done.
  * If there is a HOST_FLOOD_FILTER_ALL filter, remove all other filters.
  */
 static int br_normalize_host_flood_filters(struct list_head *filter_list)
@@ -214,7 +217,9 @@ static int br_normalize_host_flood_filters(struct list_head *filter_list)
 		if (!filter)
 			return -ENOMEM;
 
-		filter->type = HOST_FLOOD_FILTER_NONE;
+		filter->type = HOST_FLOOD_FILTER_ALL;
+		filter->uc = false;
+		filter->mc = false;
 		list_add(&filter->list, filter_list);
 		return 0;
 	}

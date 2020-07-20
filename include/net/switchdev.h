@@ -31,7 +31,6 @@ static inline bool switchdev_trans_ph_commit(struct switchdev_trans *trans)
 }
 
 enum switchdev_host_flood_filter_type {
-	HOST_FLOOD_FILTER_NONE,
 	HOST_FLOOD_FILTER_ALL,
 	HOST_FLOOD_FILTER_VLAN,
 };
