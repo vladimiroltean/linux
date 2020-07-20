@@ -309,6 +309,53 @@ static void ocelot_vlan_init(struct ocelot *ocelot)
 	}
 }
 
+static void ocelot_set_vlan_flooding(struct ocelot *ocelot, u16 vid,
+				     bool enable)
+{
+	unsigned char bcast[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+	int val = ANA_TABLES_VLANTIDX_V_INDEX(vid);
+
+	if (!enable)
+		val |= ANA_TABLES_VLANTIDX_VLAN_FLOOD_DIS;
+
+	ocelot_write(ocelot, val, ANA_TABLES_VLANTIDX);
+
+//	if (!enable)
+//		ocelot_mact_learn(ocelot, PGID_CPU, bcast, vid,
+//				  ENTRYTYPE_LOCKED);
+//	else
+//		ocelot_mact_forget(ocelot, bcast, vid);
+}
+
+int ocelot_port_host_floods(struct ocelot *ocelot, int port,
+			    const struct list_head *filters)
+{
+	struct switchdev_host_flood_filter *filter;
+	int mask = BIT(ocelot->num_phys_ports);
+
+	list_for_each_entry(filter, filters, list) {
+		switch (filter->type) {
+		case HOST_FLOOD_FILTER_ALL:
+			ocelot_rmw_rix(ocelot, filter->uc ? mask : 0, mask,
+				       ANA_PGID_PGID, PGID_UC);
+			ocelot_rmw_rix(ocelot, filter->mc ? mask : 0, mask,
+				       ANA_PGID_PGID, PGID_MC);
+			ocelot_rmw_rix(ocelot, filter->mc ? mask : 0, mask,
+				       ANA_PGID_PGID, PGID_MCIPV4);
+			ocelot_rmw_rix(ocelot, filter->mc ? mask : 0, mask,
+				       ANA_PGID_PGID, PGID_MCIPV6);
+			break;
+		case HOST_FLOOD_FILTER_VLAN:
+			ocelot_set_vlan_flooding(ocelot, filter->vlan.vlan_id,
+						 filter->uc);
+			break;
+		}
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(ocelot_port_host_floods);
+
 void ocelot_adjust_link(struct ocelot *ocelot, int port,
 			struct phy_device *phydev)
 {
@@ -1480,7 +1527,7 @@ int ocelot_init(struct ocelot *ocelot)
 
 	/* Setup flooding PGIDs */
 	ocelot_write_rix(ocelot, ANA_FLOODING_FLD_MULTICAST(PGID_MC) |
-			 ANA_FLOODING_FLD_BROADCAST(PGID_MC) |
+			 ANA_FLOODING_FLD_BROADCAST(PGID_BC) |
 			 ANA_FLOODING_FLD_UNICAST(PGID_UC),
 			 ANA_FLOODING, 0);
 	ocelot_write(ocelot, ANA_FLOODING_IPMC_FLD_MC6_DATA(PGID_MCIPV6) |
@@ -1501,15 +1548,16 @@ int ocelot_init(struct ocelot *ocelot)
 		ocelot_write_rix(ocelot, 0, ANA_PGID_PGID, PGID_SRC + port);
 	}
 
-	/* Allow broadcast MAC frames. */
 	for_each_nonreserved_multicast_dest_pgid(ocelot, i) {
 		u32 val = ANA_PGID_PGID_PGID(GENMASK(ocelot->num_phys_ports - 1, 0));
 
 		ocelot_write_rix(ocelot, val, ANA_PGID_PGID, i);
 	}
+	/* Allow broadcast MAC frames. */
 	ocelot_write_rix(ocelot,
 			 ANA_PGID_PGID_PGID(GENMASK(ocelot->num_phys_ports, 0)),
-			 ANA_PGID_PGID, PGID_MC);
+			 ANA_PGID_PGID, PGID_BC);
+	ocelot_write_rix(ocelot, 0, ANA_PGID_PGID, PGID_MC);
 	ocelot_write_rix(ocelot, 0, ANA_PGID_PGID, PGID_MCIPV4);
 	ocelot_write_rix(ocelot, 0, ANA_PGID_PGID, PGID_MCIPV6);
 

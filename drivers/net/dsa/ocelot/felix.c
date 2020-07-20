@@ -168,6 +168,14 @@ static int felix_vlan_del(struct dsa_switch *ds, int port,
 	return 0;
 }
 
+static int felix_port_host_floods(struct dsa_switch *ds, int port,
+				  const struct list_head *filters)
+{
+	struct ocelot *ocelot = ds->priv;
+
+	return ocelot_port_host_floods(ocelot, port, filters);
+}
+
 static int felix_port_enable(struct dsa_switch *ds, int port,
 			     struct phy_device *phy)
 {
@@ -609,18 +617,10 @@ static int felix_setup(struct dsa_switch *ds)
 		felix_port_qos_map_init(ocelot, port);
 	}
 
-	/* Include the CPU port module in the forwarding mask for unknown
-	 * unicast - the hardware default value for ANA_FLOODING_FLD_UNICAST
-	 * excludes BIT(ocelot->num_phys_ports), and so does ocelot_init, since
-	 * Ocelot relies on whitelisting MAC addresses towards PGID_CPU.
-	 */
-	ocelot_write_rix(ocelot,
-			 ANA_PGID_PGID_PGID(GENMASK(ocelot->num_phys_ports, 0)),
-			 ANA_PGID_PGID, PGID_UC);
 	/* Setup the per-traffic class flooding PGIDs */
 	for (tc = 0; tc < FELIX_NUM_TC; tc++)
 		ocelot_write_rix(ocelot, ANA_FLOODING_FLD_MULTICAST(PGID_MC) |
-				 ANA_FLOODING_FLD_BROADCAST(PGID_MC) |
+				 ANA_FLOODING_FLD_BROADCAST(PGID_BC) |
 				 ANA_FLOODING_FLD_UNICAST(PGID_UC),
 				 ANA_FLOODING, tc);
 
@@ -805,6 +805,7 @@ const struct dsa_switch_ops felix_switch_ops = {
 	.port_vlan_filtering	= felix_vlan_filtering,
 	.port_vlan_add		= felix_vlan_add,
 	.port_vlan_del		= felix_vlan_del,
+	.port_host_floods	= felix_port_host_floods,
 	.port_hwtstamp_get	= felix_hwtstamp_get,
 	.port_hwtstamp_set	= felix_hwtstamp_set,
 	.port_rxtstamp		= felix_rxtstamp,
