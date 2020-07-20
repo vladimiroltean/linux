@@ -153,25 +153,50 @@ struct net_bridge_fdb_entry *br_fdb_find_rcu(struct net_bridge *br,
  * are then updated with the new information.
  * Called under RTNL.
  */
-static void fdb_add_hw_addr(struct net_bridge *br, const unsigned char *addr)
+static void fdb_add_hw_addr(struct net_bridge *br, const unsigned char *addr,
+			    u16 vid)
 {
-	int err;
 	struct net_bridge_port *p;
+	int err;
+
+	netdev_err(br->dev, "%s: addr %pM vid %d\n", __func__, addr, vid);
 
 	ASSERT_RTNL();
 
 	list_for_each_entry(p, &br->port_list, list) {
-		if (!br_promisc_port(p)) {
-			err = dev_uc_add(p->dev, addr);
+//		if (!br_promisc_port(p)) {
+		if (p->dev->vid_len) {
+			unsigned char naddr[ETH_ALEN + NET_8021Q_VID_TSIZE];
+
+			memcpy(naddr, addr, p->dev->addr_len);
+			naddr[p->dev->addr_len] = vid & 0xff;
+			naddr[p->dev->addr_len + 1] = (vid >> 8) & 0xf;
+			err = dev_vid_uc_add(p->dev, naddr);
 			if (err)
 				goto undo;
+			continue;
 		}
+
+		err = dev_uc_add(p->dev, addr);
+		if (err)
+			goto undo;
+//		}
 	}
 
 	return;
 undo:
 	list_for_each_entry_continue_reverse(p, &br->port_list, list) {
-		if (!br_promisc_port(p))
+		if (p->dev->vid_len) {
+			unsigned char naddr[ETH_ALEN + NET_8021Q_VID_TSIZE];
+
+			memcpy(naddr, addr, p->dev->addr_len);
+			naddr[p->dev->addr_len] = vid & 0xff;
+			naddr[p->dev->addr_len + 1] = (vid >> 8) & 0xf;
+			dev_vid_uc_del(p->dev, naddr);
+			continue;
+		}
+
+//		if (!br_promisc_port(p))
 			dev_uc_del(p->dev, addr);
 	}
 }
@@ -181,14 +206,25 @@ undo:
  * the ports with needed information.
  * Called under RTNL.
  */
-static void fdb_del_hw_addr(struct net_bridge *br, const unsigned char *addr)
+static void fdb_del_hw_addr(struct net_bridge *br, const unsigned char *addr,
+			    u16 vid)
 {
 	struct net_bridge_port *p;
 
 	ASSERT_RTNL();
 
 	list_for_each_entry(p, &br->port_list, list) {
-		if (!br_promisc_port(p))
+		if (p->dev->vid_len) {
+			unsigned char naddr[ETH_ALEN + NET_8021Q_VID_TSIZE];
+
+			memcpy(naddr, addr, p->dev->addr_len);
+			naddr[p->dev->addr_len] = vid & 0xff;
+			naddr[p->dev->addr_len + 1] = (vid >> 8) & 0xf;
+			dev_vid_uc_del(p->dev, naddr);
+			continue;
+		}
+
+//		if (!br_promisc_port(p))
 			dev_uc_del(p->dev, addr);
 	}
 }
@@ -199,7 +235,7 @@ static void fdb_delete(struct net_bridge *br, struct net_bridge_fdb_entry *f,
 	trace_fdb_delete(br, f);
 
 	if (test_bit(BR_FDB_STATIC, &f->flags))
-		fdb_del_hw_addr(br, f->key.addr.addr);
+		fdb_del_hw_addr(br, f->key.addr.addr, f->key.vlan_id);
 
 	hlist_del_init_rcu(&f->fdb_node);
 	rhashtable_remove_fast(&br->fdb_hash_tbl, &f->rhnode,
@@ -548,7 +584,7 @@ static int fdb_insert(struct net_bridge *br, struct net_bridge_port *source,
 	if (!fdb)
 		return -ENOMEM;
 
-	fdb_add_hw_addr(br, addr);
+	fdb_add_hw_addr(br, addr, vid);
 	fdb_notify(br, fdb, RTM_NEWNEIGH, true);
 	return 0;
 }
@@ -912,15 +948,15 @@ static int fdb_add_entry(struct net_bridge *br, struct net_bridge_port *source,
 		if (state & NUD_PERMANENT) {
 			set_bit(BR_FDB_LOCAL, &fdb->flags);
 			if (!test_and_set_bit(BR_FDB_STATIC, &fdb->flags))
-				fdb_add_hw_addr(br, addr);
+				fdb_add_hw_addr(br, addr, vid);
 		} else if (state & NUD_NOARP) {
 			clear_bit(BR_FDB_LOCAL, &fdb->flags);
 			if (!test_and_set_bit(BR_FDB_STATIC, &fdb->flags))
-				fdb_add_hw_addr(br, addr);
+				fdb_add_hw_addr(br, addr, vid);
 		} else {
 			clear_bit(BR_FDB_LOCAL, &fdb->flags);
 			if (test_and_clear_bit(BR_FDB_STATIC, &fdb->flags))
-				fdb_del_hw_addr(br, addr);
+				fdb_del_hw_addr(br, addr, vid);
 		}
 
 		modified = true;

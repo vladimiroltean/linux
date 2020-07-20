@@ -454,6 +454,7 @@ void br_dev_setup(struct net_device *dev)
 
 	eth_hw_addr_random(dev);
 	ether_setup(dev);
+	vlan_dev_ivdf_set(dev, true);
 
 	dev->netdev_ops = &br_netdev_ops;
 	dev->needs_free_netdev = true;
