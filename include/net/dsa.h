@@ -539,6 +539,8 @@ struct dsa_switch_ops {
 	void	(*port_fast_age)(struct dsa_switch *ds, int port);
 	int	(*port_egress_floods)(struct dsa_switch *ds, int port,
 				      bool unicast, bool multicast);
+	int	(*port_host_floods)(struct dsa_switch *ds, int port,
+				    const struct list_head *filters);
 
 	/*
 	 * VLAN support

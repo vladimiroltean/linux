@@ -289,6 +289,22 @@ int dsa_port_ageing_time(struct dsa_port *dp, clock_t ageing_clock,
 	return dsa_port_notify(dp, DSA_NOTIFIER_AGEING_TIME, &info);
 }
 
+int dsa_port_set_host_floods(struct dsa_port *dp,
+			     const struct list_head *filters,
+			     struct switchdev_trans *trans)
+{
+	struct dsa_switch *ds = dp->ds;
+	int port = dp->index;
+
+	if (!ds->ops->port_host_floods)
+		return -EOPNOTSUPP;
+
+	if (switchdev_trans_ph_prepare(trans))
+		return 0;
+
+	return ds->ops->port_host_floods(ds, port, filters);
+}
+
 int dsa_port_pre_bridge_flags(const struct dsa_port *dp, unsigned long flags,
 			      struct switchdev_trans *trans)
 {
