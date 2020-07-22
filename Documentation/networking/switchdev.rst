@@ -385,3 +385,123 @@ The driver can monitor for updates to arp_tbl using the netevent notifier
 NETEVENT_NEIGH_UPDATE.  The device can be programmed with resolved nexthops
 for the routes as arp_tbl updates.  The driver implements ndo_neigh_destroy
 to know when arp_tbl neighbor entries are purged from the port.
+
+Device driver expected behavior
+-------------------------------
+
+Below is a set of defined behavior that switchdev enabled network devices must
+adhere to.
+
+Configuration-less state
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Upon driver bring up, the network devices must be fully operational, and the
+backing driver must configure the network device such that it is possible to
+send and receive traffic to this network device and it is properly separated
+from other network devices/ports (e.g.: as is frequent with a switch ASIC). How
+this is achieved is heavily hardware dependent, but a simple solution can be to
+use per-port VLAN identifiers unless a better mechanism is available
+(proprietary metadata for each network port for instance).
+
+The network device must be capable of running a full IP protocol stack
+including multicast, DHCP, IPv4/6, etc. If necessary, it should program the
+appropriate filters for VLAN, multicast, unicast etc. The underlying device
+driver must effectively be configured in a similar fashion to what it would do
+when IGMP snooping is enabled for IP multicast over these switchdev network
+devices and unsolicited multicast must be filtered as early as possible into
+the hardware.
+
+When configuring VLANs on top of the network device, all VLANs must be working,
+irrespective of the state of other network devices (e.g.: other ports being part
+of a VLAN-aware bridge doing ingress VID checking). See below for details.
+
+If the device implements e.g.: VLAN filtering, putting the interface in
+promiscuous mode should allow the reception of all VLAN tags (including those
+not present in the filter(s)).
+
+Bridged switch ports
+^^^^^^^^^^^^^^^^^^^^
+
+When a switchdev enabled network device is added as a bridge member, it should
+not disrupt any functionality of non-bridged network devices and they
+should continue to behave as normal network devices. Depending on the bridge
+configuration knobs below, the expected behavior is documented.
+
+Bridge VLAN filtering
+^^^^^^^^^^^^^^^^^^^^^
+
+The Linux bridge allows the configuration of a VLAN filtering mode (statically,
+at device creation time, and dynamically, during run time) which must be
+observed by the underlying switchdev network device/hardware:
+
+- with VLAN filtering turned off: the bridge is strictly VLAN unaware and its
+  data path will only process untagged Ethernet frames. Frames ingressing the
+  device with a VID that is not programmed into the bridge/switch's VLAN table
+  must be forwarded and may be processed using a VLAN device (see below).
+
+- with VLAN filtering turned on: the bridge is VLAN-aware and frames ingressing
+  the device with a VID that is not programmed into the bridges/switch's VLAN
+  table must be dropped (strict VID checking).
+
+Non-bridged network ports of the same switch fabric must not be disturbed in any
+way by the enabling of VLAN filtering on the bridge device(s).
+
+VLAN devices configured on top of a switchdev network device (e.g: sw0p1.100)
+which is a bridge port member must also observe the following behavior:
+
+- with VLAN filtering turned off, enslaving VLAN devices into the bridge might
+  be allowed provided that there is sufficient separation using e.g.: a
+  reserved VLAN ID (4095 for instance) for untagged traffic. The VLAN data path
+  is used to pop/push the VLAN tag such that the bridge's data path only
+  processes untagged traffic.
+
+- with VLAN filtering turned on, these VLAN devices can be created as long as
+  there is not an existing VLAN entry into the bridge with an identical VID and
+  port membership. These VLAN devices cannot be enslaved into the bridge since
+  they duplicate functionality/use case with the bridge's VLAN data path
+  processing.
+
+Because VLAN filtering can be turned on/off at runtime, the switchdev driver
+must be able to reconfigure the underlying hardware on the fly to honor the
+toggling of that option and behave appropriately.
+
+A switchdev driver can also refuse to support dynamic toggling of the VLAN
+filtering knob at runtime and require a destruction of the bridge device(s) and
+creation of new bridge device(s) with a different VLAN filtering value to
+ensure VLAN awareness is pushed down to the hardware.
+
+Finally, even when VLAN filtering in the bridge is turned off, the underlying
+switch hardware and driver may still configured itself in a VLAN-aware mode
+provided that the behavior described above is observed.
+
+Bridge IGMP snooping
+^^^^^^^^^^^^^^^^^^^^
+
+The Linux bridge allows the configuration of IGMP snooping (statically, at
+interface creation time, or dynamically, during runtime) which must be observed
+by the underlying switchdev network device/hardware in the following way:
+
+- when IGMP snooping is turned off, multicast traffic must be flooded to all
+  ports within the same bridge that have mcast_flood=true. The CPU/management
+  port should ideally not be flooded (unless the ingress interface has
+  IFF_ALLMULTI or IFF_PROMISC) and continue to learn multicast traffic through
+  the network stack notifications. If the hardware is not capable of doing that
+  then the CPU/management port must also be flooded and multicast filtering
+  happens in software.
+
+- when IGMP snooping is turned on, multicast traffic must selectively flow
+  to the appropriate network ports (including CPU/management port). Flooding of
+  unknown multicast should be only towards the ports connected to a multicast
+  router (the local device may also act as a multicast router).
+
+The switch must adhere to RFC 4541 and flood multicast traffic accordingly
+since that is what the Linux bridge implementation does.
+
+Because IGMP snooping can be turned on/off at runtime, the switchdev driver
+must be able to reconfigure the underlying hardware on the fly to honor the
+toggling of that option and behave appropriately.
+
+A switchdev driver can also refuse to support dynamic toggling of the multicast
+snooping knob at runtime and require the destruction of the bridge device(s)
+and creation of a new bridge device(s) with a different multicast snooping
+value.
