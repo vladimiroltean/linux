@@ -265,10 +265,12 @@ struct ocelot_ace_rule *ocelot_ace_rule_create(struct ocelot *ocelot, int port,
 	if (!ace)
 		return NULL;
 
-	if (ingress)
+	if (ingress) {
 		ace->ingress_port_mask = BIT(port);
-	else
+	} else {
 		ace->egress_port = port;
+		ace->ingress_port = -1;
+	}
 	return ace;
 }
 

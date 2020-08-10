@@ -222,8 +222,9 @@ struct ocelot_ace_rule {
 	u8 vcap_id;
 
 	struct ocelot_ace_stats stats;
-	unsigned long ingress_port_mask;
-	u8 egress_port;
+	unsigned long ingress_port_mask; /* IS1 and IS2 only */
+	u8 egress_port; /* ES0 only */
+	int ingress_port; /* ES0 only */
 
 	int pag_val; /* IS2 only */
 	int pag_mask; /* IS2 only */
