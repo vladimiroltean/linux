@@ -377,7 +377,8 @@ static void is2_entry_set(struct ocelot *ocelot, int ix,
 
 	data.type = IS2_ACTION_TYPE_NORMAL;
 
-	vcap_key_set(vcap, &data, VCAP_IS2_HK_PAG, 0, 0);
+	vcap_key_set(vcap, &data, VCAP_IS2_HK_PAG, ace->pag_val,
+		     ace->pag_mask);
 	vcap_key_set(vcap, &data, VCAP_IS2_HK_IGR_PORT_MASK, 0,
 		     ~ace->ingress_port_mask);
 	vcap_key_bit_set(vcap, &data, VCAP_IS2_HK_FIRST, OCELOT_VCAP_BIT_ANY);
@@ -677,6 +678,12 @@ static void is1_action_set(struct ocelot *ocelot, struct vcap_data *data,
 		vcap_action_set(vcap, data, VCAP_IS1_ACT_VLAN_POP_CNT,
 				ace->is1_action.pop_cnt);
 		ace->is1_action.pop_cnt = 0;
+	}
+	if (is1_action->pag_override_ena) {
+		vcap_action_set(vcap, data, VCAP_IS1_ACT_PAG_OVERRIDE_MASK,
+				is1_action->pag_override_mask);
+		vcap_action_set(vcap, data, VCAP_IS1_ACT_PAG_VAL,
+				is1_action->pag_val);
 	}
 }
 

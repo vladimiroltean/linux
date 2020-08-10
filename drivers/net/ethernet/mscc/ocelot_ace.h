@@ -183,12 +183,15 @@ struct ocelot_ace_stats {
 
 struct ocelot_is1_action {
 	bool vlan_modify_ena;
+	bool pag_override_ena;
 	bool qos_ena;
 	u8 qos_val;
 	u16 vid;
 	u16 pcp;
 	u8 dei;
 	u8 pop_cnt;
+	u8 pag_override_mask;
+	u8 pag_val;
 };
 
 struct ocelot_is2_action {
@@ -221,6 +224,9 @@ struct ocelot_ace_rule {
 	struct ocelot_ace_stats stats;
 	unsigned long ingress_port_mask;
 	u8 egress_port;
+
+	int pag_val; /* IS2 only */
+	int pag_mask; /* IS2 only */
 
 	enum ocelot_vcap_bit dmac_mc;
 	enum ocelot_vcap_bit dmac_bc;
