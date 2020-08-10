@@ -894,6 +894,7 @@ static void es0_action_set(struct ocelot *ocelot, struct vcap_data *data,
 				es0_action->cvlan_pcp);
 	} else {
 		vcap_action_set(vcap, data, VCAP_ES0_ACT_PUSH_OUTER_TAG, 1);
+		vcap_action_set(vcap, data, VCAP_ES0_ACT_TAG_A_TPID_SEL, 1);
 		vcap_action_set(vcap, data, VCAP_ES0_ACT_TAG_A_VID_SEL, 1);
 		vcap_action_set(vcap, data, VCAP_ES0_ACT_VID_A_VAL,
 				es0_action->vid);
