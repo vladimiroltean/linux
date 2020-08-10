@@ -340,6 +340,15 @@ static void is2_action_set(struct ocelot *ocelot, struct vcap_data *data,
 		vcap_action_set(vcap, data, VCAP_IS2_ACT_CPU_QU_NUM, 0);
 		vcap_action_set(vcap, data, VCAP_IS2_ACT_CPU_COPY_ENA, 0);
 	}
+	if (ace->is2_action.redir_ena) {
+		vcap_action_set(vcap, data, VCAP_IS2_ACT_PORT_MASK,
+				ace->is2_action.redir_port_mask);
+		vcap_action_set(vcap, data, VCAP_IS2_ACT_MASK_MODE, 3);
+		vcap_action_set(vcap, data, VCAP_IS2_ACT_POLICE_ENA, 0);
+		vcap_action_set(vcap, data, VCAP_IS2_ACT_POLICE_IDX, 0);
+		vcap_action_set(vcap, data, VCAP_IS2_ACT_CPU_QU_NUM, 0);
+		vcap_action_set(vcap, data, VCAP_IS2_ACT_CPU_COPY_ENA, 0);
+	}
 }
 
 static void is2_entry_set(struct ocelot *ocelot, int ix,

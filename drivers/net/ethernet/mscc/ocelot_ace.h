@@ -195,8 +195,10 @@ struct ocelot_is2_action {
 	bool drop_ena;
 	bool trap_ena;
 	bool police_ena;
+	bool redir_ena;
 	struct ocelot_policer pol;
 	u32 pol_ix;
+	unsigned long redir_port_mask;
 };
 
 struct ocelot_es0_action {
