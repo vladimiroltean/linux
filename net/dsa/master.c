@@ -200,7 +200,8 @@ static int dsa_master_get_phys_port_name(struct net_device *dev,
 static netdev_features_t dsa_master_fix_features(struct net_device *dev,
 						 netdev_features_t features)
 {
-	return features & ~NETIF_F_HW_VLAN_CTAG_RX;
+	return features & ~(NETIF_F_HW_VLAN_CTAG_RX |
+			    NETIF_F_HW_VLAN_CTAG_FILTER);
 }
 
 static int dsa_master_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
@@ -288,6 +289,10 @@ static int dsa_master_ndo_setup(struct net_device *dev)
 	ops->ndo_do_ioctl = dsa_master_ioctl;
 
 	dev->netdev_ops  = ops;
+
+	rtnl_lock();
+	netdev_update_features(dev);
+	rtnl_unlock();
 
 	return 0;
 }
