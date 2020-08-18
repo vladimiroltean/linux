@@ -11,3 +11,8 @@ obj-$(CONFIG_MSCC_OCELOT_SWITCH) += mscc_ocelot.o
 mscc_ocelot-y := \
 	ocelot_vsc7514.o \
 	ocelot_net.o
+
+obj-$(CONFIG_MSCC_OCELOT_SWITCH_FELIX) += mscc_felix.o
+mscc_felix-y := \
+	ocelot_vsc9959.o \
+	ocelot_net.o
