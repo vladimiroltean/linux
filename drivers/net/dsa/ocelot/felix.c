@@ -10,6 +10,7 @@
 #include <soc/mscc/ocelot_ptp.h>
 #include <soc/mscc/ocelot.h>
 #include <linux/packing.h>
+#include <linux/ptp_classify.h>
 #include <linux/module.h>
 #include <linux/of_net.h>
 #include <linux/pci.h>
@@ -849,6 +850,65 @@ static int felix_hwtstamp_set(struct dsa_switch *ds, int port,
 	return ocelot_hwstamp_set(ocelot, port, ifr);
 }
 
+static bool ocelot_check_xtr_pkt(struct ocelot *ocelot, unsigned int ptp_type)
+{
+#if IS_ENABLED(CONFIG_NET_DSA_TAG_OCELOT_QUIRK_NO_XTR_IRQ)
+	if (ptp_type != PTP_CLASS_NONE) {
+		int err, grp = 0;
+
+		while (ocelot_read(ocelot, QS_XTR_DATA_PRESENT) & BIT(grp)) {
+			struct felix *felix = ocelot_to_felix(ocelot);
+			struct ocelot_frame_info info = {};
+			struct dsa_port *dp;
+			struct sk_buff *skb;
+			unsigned int type;
+
+			err = ocelot_xtr_poll_xfh(ocelot, grp, &info);
+			if (err)
+				break;
+
+			if (WARN_ON(info.port >= ocelot->num_phys_ports))
+				goto out;
+
+			dp = dsa_to_port(felix->ds, info.port);
+
+			err = ocelot_xtr_poll_frame(ocelot, grp, dp->slave,
+						    &info, &skb);
+			if (err)
+				break;
+
+			/* We trap to the CPU port module all PTP frames, but
+			 * felix_rxtstamp() only gets called for event frames.
+			 * So we need to avoid sending duplicate general
+			 * message frames by running a second BPF classifier
+			 * here and dropping those.
+			 */
+			__skb_push(skb, ETH_HLEN);
+
+			type = ptp_classify_raw(skb);
+
+			__skb_pull(skb, ETH_HLEN);
+
+			if (type == PTP_CLASS_NONE) {
+				kfree_skb(skb);
+				continue;
+			}
+
+			netif_rx(skb);
+		}
+
+out:
+		if (err < 0) {
+			ocelot_write(ocelot, QS_XTR_FLUSH, BIT(grp));
+			ocelot_write(ocelot, QS_XTR_FLUSH, 0);
+		}
+
+		return true;
+	}
+#endif
+	return false;
+}
+
 static bool felix_rxtstamp(struct dsa_switch *ds, int port,
 			   struct sk_buff *skb, unsigned int type)
 {
@@ -858,6 +918,18 @@ static bool felix_rxtstamp(struct dsa_switch *ds, int port,
 	u32 tstamp_lo, tstamp_hi;
 	struct timespec64 ts;
 	u64 tstamp, val;
+
+	/* If the "no XTR IRQ" workaround is in use, tell DSA to defer this skb
+	 * for RX timestamping. Then free it, and poll for its copy through
+	 * MMIO in the CPU port module, and inject that into the stack from
+	 * ocelot_xtr_poll().
+	 * If the "no XTR IRQ" workaround isn't in use, this is a no-op and
+	 * should be eliminated by the compiler as dead code.
+	 */
+	if (ocelot_check_xtr_pkt(ocelot, type)) {
+		kfree_skb(skb);
+		return true;
+	}
 
 	ocelot_ptp_gettime64(&ocelot->ptp_info, &ts);
 	tstamp = ktime_set(ts.tv_sec, ts.tv_nsec);
