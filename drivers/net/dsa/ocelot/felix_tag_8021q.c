@@ -142,6 +142,85 @@ static const struct dsa_8021q_ops felix_tag_8021q_ops = {
 	.vlan_add	= felix_tag_8021q_vlan_add,
 };
 
+/* Set up a VCAP IS2 rule for delivering PTP frames to the CPU port module.
+ * If the NET_DSA_TAG_OCELOT_QUIRK_NO_XTR_IRQ is in place, then also copy those
+ * PTP frames to the tag_8021q CPU port.
+ */
+static int felix_setup_mmio_filtering(struct felix *felix)
+{
+	struct ocelot_vcap_filter *redirect_rule;
+	struct ocelot_vcap_filter *tagging_rule;
+	struct ocelot *ocelot = &felix->ocelot;
+	unsigned long ingress_port_mask;
+	int cpu = ocelot->dsa_8021q_cpu;
+	int ret;
+
+	tagging_rule = kzalloc(sizeof(struct ocelot_vcap_filter), GFP_KERNEL);
+	if (!tagging_rule)
+		return -ENOMEM;
+
+	redirect_rule = kzalloc(sizeof(struct ocelot_vcap_filter), GFP_KERNEL);
+	if (!redirect_rule) {
+		kfree(tagging_rule);
+		return -ENOMEM;
+	}
+
+	ingress_port_mask = GENMASK(ocelot->num_phys_ports - 1, 0) & ~BIT(cpu);
+
+	tagging_rule->key_type = OCELOT_VCAP_KEY_ETYPE;
+	*(u16 *)tagging_rule->key.etype.etype.value = htons(ETH_P_1588);
+	*(u16 *)tagging_rule->key.etype.etype.mask = 0xffff;
+	tagging_rule->ingress_port_mask = ingress_port_mask;
+	tagging_rule->prio = 1;
+	tagging_rule->id.cookie = ocelot->num_phys_ports;
+	tagging_rule->id.tc_offload = false;
+	tagging_rule->block_id = VCAP_IS1;
+	tagging_rule->type = OCELOT_VCAP_FILTER_OFFLOAD;
+	tagging_rule->lookup = 0;
+	tagging_rule->action.pag_override_mask = 0xff;
+	tagging_rule->action.pag_val = ocelot->num_phys_ports;
+
+	ret = ocelot_vcap_filter_add(ocelot, tagging_rule, NULL);
+	if (ret) {
+		kfree(tagging_rule);
+		kfree(redirect_rule);
+		return ret;
+	}
+
+	redirect_rule->key_type = OCELOT_VCAP_KEY_ANY;
+	redirect_rule->ingress_port_mask = ingress_port_mask;
+	redirect_rule->pag = ocelot->num_phys_ports;
+	redirect_rule->prio = 1;
+	redirect_rule->id.cookie = ocelot->num_phys_ports;
+	redirect_rule->id.tc_offload = false;
+	redirect_rule->block_id = VCAP_IS2;
+	redirect_rule->type = OCELOT_VCAP_FILTER_OFFLOAD;
+	redirect_rule->lookup = 0;
+	redirect_rule->action.cpu_copy_ena = true;
+	if (felix->info->quirk_no_xtr_irq) {
+		/* Redirect to the tag_8021q CPU but also copy PTP packets to
+		 * the CPU port module
+		 */
+		redirect_rule->action.mask_mode = OCELOT_MASK_MODE_REDIRECT;
+		redirect_rule->action.port_mask = BIT(cpu);
+	} else {
+		/* Trap PTP packets only to the CPU port module (which is
+		 * redirected to the NPI port)
+		 */
+		redirect_rule->action.mask_mode = OCELOT_MASK_MODE_PERMIT_DENY;
+		redirect_rule->action.port_mask = 0;
+	}
+
+	ret = ocelot_vcap_filter_add(ocelot, redirect_rule, NULL);
+	if (ret) {
+		ocelot_vcap_filter_del(ocelot, tagging_rule);
+		kfree(redirect_rule);
+		return ret;
+	}
+
+	return 0;
+}
+
 int felix_setup_8021q_tagging(struct ocelot *ocelot)
 {
 	struct felix *felix = ocelot_to_felix(ocelot);
@@ -161,6 +240,8 @@ int felix_setup_8021q_tagging(struct ocelot *ocelot)
 	rtnl_lock();
 	ret = dsa_8021q_setup(felix->dsa_8021q_ctx, true);
 	rtnl_unlock();
+	if (ret)
+		return ret;
 
-	return ret;
+	return felix_setup_mmio_filtering(felix);
 }
