@@ -651,6 +651,7 @@ int ocelot_xtr_poll_xfh(struct ocelot *ocelot, int grp,
 
 	return 0;
 }
+EXPORT_SYMBOL(ocelot_xtr_poll_xfh);
 
 int ocelot_xtr_poll_frame(struct ocelot *ocelot, int grp,
 			  struct net_device *dev,
@@ -728,6 +729,7 @@ int ocelot_xtr_poll_frame(struct ocelot *ocelot, int grp,
 out:
 	return err;
 }
+EXPORT_SYMBOL(ocelot_xtr_poll_frame);
 
 /* Generate the IFH for frame injection
  *
@@ -806,6 +808,7 @@ void ocelot_port_inject_frame(struct ocelot *ocelot, int port, int grp,
 	skb->dev->stats.tx_packets++;
 	skb->dev->stats.tx_bytes += skb->len;
 }
+EXPORT_SYMBOL(ocelot_port_inject_frame);
 
 int ocelot_fdb_add(struct ocelot *ocelot, int port,
 		   const unsigned char *addr, u16 vid)

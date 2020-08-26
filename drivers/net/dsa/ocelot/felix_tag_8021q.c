@@ -11,8 +11,69 @@
 #include <soc/mscc/ocelot_vcap.h>
 #include <linux/dsa/8021q.h>
 #include <linux/if_bridge.h>
+#include <linux/ptp_classify.h>
 #include "felix.h"
 #include "felix_tag_8021q.h"
+
+bool felix_check_xtr_pkt(struct ocelot *ocelot, unsigned int ptp_type)
+{
+	struct felix *felix = ocelot_to_felix(ocelot);
+	int err, grp = 0;
+
+	if (!felix->info->quirk_no_xtr_irq)
+		return false;
+
+	if (ptp_type == PTP_CLASS_NONE)
+		return false;
+
+	while (ocelot_read(ocelot, QS_XTR_DATA_PRESENT) & BIT(grp)) {
+		struct ocelot_frame_info info = {};
+		struct dsa_port *dp;
+		struct sk_buff *skb;
+		unsigned int type;
+
+		err = ocelot_xtr_poll_xfh(ocelot, grp, &info);
+		if (err)
+			break;
+
+		if (WARN_ON(info.port >= ocelot->num_phys_ports))
+			goto out;
+
+		dp = dsa_to_port(felix->ds, info.port);
+
+		err = ocelot_xtr_poll_frame(ocelot, grp, dp->slave,
+					    &info, &skb);
+		if (err)
+			break;
+
+		/* We trap to the CPU port module all PTP frames, but
+		 * felix_rxtstamp() only gets called for event frames.
+		 * So we need to avoid sending duplicate general
+		 * message frames by running a second BPF classifier
+		 * here and dropping those.
+		 */
+		__skb_push(skb, ETH_HLEN);
+
+		type = ptp_classify_raw(skb);
+
+		__skb_pull(skb, ETH_HLEN);
+
+		if (type == PTP_CLASS_NONE) {
+			kfree_skb(skb);
+			continue;
+		}
+
+		netif_rx(skb);
+	}
+
+out:
+	if (err < 0) {
+		ocelot_write(ocelot, QS_XTR_FLUSH, BIT(grp));
+		ocelot_write(ocelot, QS_XTR_FLUSH, 0);
+	}
+
+	return true;
+}
 
 static int felix_tag_8021q_rxvlan_add(struct ocelot *ocelot, int port, u16 vid,
 				      bool pvid, bool untagged)
