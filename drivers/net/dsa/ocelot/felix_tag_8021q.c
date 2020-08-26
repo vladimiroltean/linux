@@ -116,11 +116,82 @@ int felix_tag_8021q_vlan_add(struct ocelot *ocelot, int port, u16 vid,
 	return 0;
 }
 
+/* Set up a VCAP IS2 rule for delivering PTP frames to the CPU port module.
+ * If the NET_DSA_TAG_OCELOT_QUIRK_NO_XTR_IRQ is in place, then also copy those
+ * PTP frames to the tag_8021q CPU port.
+ */
+static int felix_setup_mmio_filtering(struct ocelot *ocelot)
+{
+	struct ocelot_ace_rule *redirect_rule;
+	struct ocelot_ace_rule *tagging_rule;
+	unsigned long ingress_port_mask;
+	int cpu = ocelot->dsa_8021q_cpu;
+	int ret;
+
+	tagging_rule = kzalloc(sizeof(struct ocelot_ace_rule), GFP_KERNEL);
+	if (!tagging_rule)
+		return -ENOMEM;
+
+	redirect_rule = kzalloc(sizeof(struct ocelot_ace_rule), GFP_KERNEL);
+	if (!redirect_rule) {
+		kfree(tagging_rule);
+		return -ENOMEM;
+	}
+
+	ingress_port_mask = GENMASK(ocelot->num_phys_ports - 1, 0) & ~BIT(cpu);
+
+	tagging_rule->type = OCELOT_ACE_TYPE_ETYPE;
+	*(u16 *)tagging_rule->frame.etype.etype.value = htons(ETH_P_1588);
+	*(u16 *)tagging_rule->frame.etype.etype.mask = 0xffff;
+	tagging_rule->ingress_port_mask = ingress_port_mask;
+	tagging_rule->prio = 1;
+	tagging_rule->id = 3000;
+	tagging_rule->vcap_id = VCAP_IS1;
+	tagging_rule->is1_action.pag_override_ena = true;
+	tagging_rule->is1_action.pag_override_mask = 0xff;
+	tagging_rule->is1_action.pag_val = 1;
+
+	ret = ocelot_ace_rule_offload_add(ocelot, tagging_rule, NULL);
+	if (ret) {
+		kfree(tagging_rule);
+		kfree(redirect_rule);
+		return ret;
+	}
+
+	redirect_rule->type = OCELOT_ACE_TYPE_ANY;
+	redirect_rule->ingress_port_mask = ingress_port_mask;
+	redirect_rule->pag_mask = 0xff;
+	redirect_rule->pag_val = 1;
+	redirect_rule->prio = 1;
+	redirect_rule->id = 4000;
+	redirect_rule->vcap_id = VCAP_IS2;
+	if (IS_ENABLED(CONFIG_NET_DSA_TAG_OCELOT_QUIRK_NO_XTR_IRQ)) {
+		redirect_rule->is2_action.redir_ena = true;
+		redirect_rule->is2_action.redir_port_mask = BIT(cpu);
+		redirect_rule->is2_action.cpu_copy_ena = true;
+	} else {
+		redirect_rule->is2_action.trap_ena = true;
+	}
+
+	ret = ocelot_ace_rule_offload_add(ocelot, redirect_rule, NULL);
+	if (ret) {
+		kfree(tagging_rule);
+		kfree(redirect_rule);
+		return ret;
+	}
+
+	return 0;
+}
+
 int felix_setup_8021q_tagging(struct ocelot *ocelot)
 {
 	struct felix *felix = ocelot_to_felix(ocelot);
 	struct dsa_switch *ds = felix->ds;
 	int rc, port;
+
+	rc = felix_setup_mmio_filtering(ocelot);
+	if (rc)
+		return rc;
 
 	for (port = 0; port < ds->num_ports; port++) {
 		if (dsa_is_unused_port(ds, port))
