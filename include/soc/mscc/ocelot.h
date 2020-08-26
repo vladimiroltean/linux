@@ -850,5 +850,6 @@ int ocelot_xtr_poll_frame(struct ocelot *ocelot, int grp,
 			  struct net_device *dev,
 			  struct ocelot_frame_info *info,
 			  struct sk_buff **skb);
+void ocelot_drain_cpu_queue(struct ocelot *ocelot, int grp);
 
 #endif
