@@ -2446,21 +2446,6 @@ static void ocelot_cpu_port_init(struct ocelot *ocelot)
 			 ANA_PORT_VLAN_CFG, cpu);
 }
 
-/* Entry for PTP over Ethernet (etype 0x88f7)
- * Action: trap to CPU port
- */
-static struct ocelot_ace_rule ptp_rule = {
-	.prio		= 1,
-	.vcap_id	= VCAP_IS2,
-	.type		= OCELOT_ACE_TYPE_ETYPE,
-	.dmac_mc	= OCELOT_VCAP_BIT_1,
-	.is2_action.trap_ena = true,
-	.frame.etype.etype.value[0]	= 0x88,
-	.frame.etype.etype.value[1]	= 0xf7,
-	.frame.etype.etype.mask[0]	= 0xff,
-	.frame.etype.etype.mask[1]	= 0xff,
-};
-
 int ocelot_init(struct ocelot *ocelot)
 {
 	char queue_name[32];
@@ -2606,12 +2591,6 @@ int ocelot_init(struct ocelot *ocelot)
 				"Timestamp initialization failed\n");
 			return ret;
 		}
-
-		/* Available on all ingress port except CPU port */
-		ptp_rule.ingress_port_mask =
-			GENMASK(ocelot->num_phys_ports - 1, 0);
-		ptp_rule.ingress_port_mask &= ~BIT(ocelot->npi);
-		ocelot_ace_rule_offload_add(ocelot, &ptp_rule, NULL);
 	}
 
 	return 0;
