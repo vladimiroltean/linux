@@ -641,10 +641,15 @@ int ocelot_port_add_txtstamp_skb(struct ocelot_port *ocelot_port,
 
 	if (ocelot->ptp && shinfo->tx_flags & SKBTX_HW_TSTAMP &&
 	    ocelot_port->ptp_cmd == IFH_REW_OP_TWO_STEP_PTP) {
+		spin_lock(&ocelot_port->ts_id_lock);
+
 		shinfo->tx_flags |= SKBTX_IN_PROGRESS;
 		/* Store timestamp ID in cb[0] of sk_buff */
-		skb->cb[0] = ocelot_port->ts_id % 4;
+		skb->cb[0] = ocelot_port->ts_id;
+		ocelot_port->ts_id = (ocelot_port->ts_id + 1) % 4;
 		skb_queue_tail(&ocelot_port->tx_skbs, skb);
+
+		spin_unlock(&ocelot_port->ts_id_lock);
 		return 0;
 	}
 	return -ENODATA;
@@ -681,10 +686,8 @@ static int ocelot_port_xmit(struct sk_buff *skb, struct net_device *dev)
 
 	if (ocelot->ptp && shinfo->tx_flags & SKBTX_HW_TSTAMP) {
 		info.rew_op = ocelot_port->ptp_cmd;
-		if (ocelot_port->ptp_cmd == IFH_REW_OP_TWO_STEP_PTP) {
-			info.rew_op |= (ocelot_port->ts_id  % 4) << 3;
-			ocelot_port->ts_id++;
-		}
+		if (ocelot_port->ptp_cmd == IFH_REW_OP_TWO_STEP_PTP)
+			info.rew_op |= skb->cb[0] << 3;
 	}
 
 	ocelot_gen_ifh(ifh, &info);
@@ -2310,6 +2313,12 @@ int ocelot_init(struct ocelot *ocelot)
 	ocelot->stats_queue = create_singlethread_workqueue(queue_name);
 	if (!ocelot->stats_queue)
 		return -ENOMEM;
+
+	for (port = 0; port < ocelot->num_phys_ports; port++) {
+		struct ocelot_port *ocelot_port = ocelot->ports[port];
+
+		spin_lock_init(&ocelot_port->ts_id_lock);
+	}
 
 	INIT_LIST_HEAD(&ocelot->multicast);
 	INIT_LIST_HEAD(&ocelot->policer);
