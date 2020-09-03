@@ -197,6 +197,7 @@ struct ocelot_is1_action {
 struct ocelot_is2_action {
 	bool drop_ena;
 	bool trap_ena;
+	bool cpu_copy_ena;
 	bool police_ena;
 	bool redir_ena;
 	struct ocelot_policer pol;
