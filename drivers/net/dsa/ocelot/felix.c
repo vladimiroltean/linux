@@ -805,6 +805,9 @@ static int felix_setup(struct dsa_switch *ds)
 	 */
 	ds->vlan_bridge_vtu = true;
 
+	if (IS_ENABLED(CONFIG_NET_DSA_TAG_OCELOT_QUIRK_NO_XTR_IRQ))
+		ds->promisc_on_master = true;
+
 	err = felix_setup_devlink_params(ds);
 	if (err < 0)
 		return err;
