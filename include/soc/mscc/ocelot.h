@@ -669,6 +669,15 @@ struct ocelot_policer {
 	u32 burst; /* bytes */
 };
 
+struct ocelot_frame_info {
+	u32 len;
+	u16 port;
+	u16 vid;
+	u8 tag_type;
+	u16 rew_op;
+	u32 timestamp;	/* rew_val */
+};
+
 #define ocelot_read_ix(ocelot, reg, gi, ri) __ocelot_read_ix(ocelot, reg, reg##_GSZ * (gi) + reg##_RSZ * (ri))
 #define ocelot_read_gix(ocelot, reg, gi) __ocelot_read_ix(ocelot, reg, reg##_GSZ * (gi))
 #define ocelot_read_rix(ocelot, reg, ri) __ocelot_read_ix(ocelot, reg, reg##_RSZ * (ri))

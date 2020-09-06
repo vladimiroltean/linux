@@ -533,7 +533,7 @@ static int ocelot_chip_init(struct ocelot *ocelot, const struct ocelot_ops *ops)
 	return 0;
 }
 
-static int ocelot_parse_ifh(u32 *_ifh, struct frame_info *info)
+static int ocelot_parse_ifh(u32 *_ifh, struct ocelot_frame_info *info)
 {
 	u8 llen, wlen;
 	u64 ifh[2];
@@ -607,10 +607,10 @@ static irqreturn_t ocelot_xtr_irq_handler(int irq, void *arg)
 
 	while (ocelot_read(ocelot, QS_XTR_DATA_PRESENT) & BIT(grp)) {
 		struct skb_shared_hwtstamps *shhwtstamps;
+		struct ocelot_frame_info info = {};
 		struct ocelot_port_private *priv;
 		struct ocelot_port *ocelot_port;
 		u64 tod_in_ns, full_ts_in_ns;
-		struct frame_info info = {};
 		struct net_device *dev;
 		u32 ifh[4], val, *buf;
 		struct timespec64 ts;

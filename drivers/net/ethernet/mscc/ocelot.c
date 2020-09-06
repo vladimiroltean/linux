@@ -576,7 +576,7 @@ EXPORT_SYMBOL(ocelot_get_txtstamp);
  * bit 16: tag type 0: C-tag, 1: S-tag
  * bit 0-11: VID
  */
-static int ocelot_gen_ifh(u32 *ifh, struct frame_info *info)
+static int ocelot_gen_ifh(u32 *ifh, struct ocelot_frame_info *info)
 {
 	ifh[0] = IFH_INJ_BYPASS | ((0x1ff & info->rew_op) << 21);
 	ifh[1] = (0xf00 & info->port) >> 8;
@@ -601,7 +601,7 @@ bool ocelot_can_inject(struct ocelot *ocelot, int grp)
 void ocelot_port_inject_frame(struct ocelot *ocelot, int port, int grp,
 			      u32 rew_op, struct sk_buff *skb)
 {
-	struct frame_info info = {};
+	struct ocelot_frame_info info = {};
 	u32 ifh[OCELOT_TAG_LEN / 4];
 	unsigned int i, count, last;
 
