@@ -65,6 +65,7 @@ struct felix {
 	struct ocelot			ocelot;
 	struct mii_bus			*imdio;
 	struct phy_device		**pcs;
+	bool				expect_dsa_8021q;
 };
 
 #endif

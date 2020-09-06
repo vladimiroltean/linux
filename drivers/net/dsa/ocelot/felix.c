@@ -16,8 +16,9 @@
 #include <linux/of.h>
 #include <net/pkt_sched.h>
 #include <net/dsa.h>
-#include "felix_tsn.h"
 #include "felix.h"
+#include "felix_tag_8021q.h"
+#include "felix_tsn.h"
 
 static enum dsa_tag_protocol felix_get_tag_protocol(struct dsa_switch *ds,
 						    int port,
@@ -104,13 +105,20 @@ static void felix_vlan_add(struct dsa_switch *ds, int port,
 			   const struct switchdev_obj_port_vlan *vlan)
 {
 	struct ocelot *ocelot = ds->priv;
+	struct felix *felix = ocelot_to_felix(ocelot);
 	u16 vid;
 	int err;
 
 	for (vid = vlan->vid_begin; vid <= vlan->vid_end; vid++) {
-		err = ocelot_vlan_add(ocelot, port, vid,
-				      vlan->flags & BRIDGE_VLAN_INFO_PVID,
-				      vlan->flags & BRIDGE_VLAN_INFO_UNTAGGED);
+		bool untagged = vlan->flags & BRIDGE_VLAN_INFO_UNTAGGED;
+		bool pvid = vlan->flags & BRIDGE_VLAN_INFO_PVID;
+
+		if (felix->expect_dsa_8021q)
+			err = felix_tag_8021q_vlan_add(ocelot, port, vid,
+						       pvid, untagged);
+		else
+			err = ocelot_vlan_add(ocelot, port, vid,
+					      pvid, untagged);
 		if (err) {
 			dev_err(ds->dev, "Failed to add VLAN %d to port %d: %d\n",
 				vid, port, err);
@@ -462,6 +470,7 @@ static int felix_parse_dt(struct felix *felix, phy_interface_t *port_phy_modes)
 static int felix_init_structs(struct felix *felix, int num_phys_ports)
 {
 	struct ocelot *ocelot = &felix->ocelot;
+	enum ocelot_tag_prefix xtr_prefix;
 	phy_interface_t *port_phy_modes;
 	resource_size_t switch_base;
 	int port, i, err;
@@ -472,6 +481,11 @@ static int felix_init_structs(struct felix *felix, int num_phys_ports)
 	if (!ocelot->ports)
 		return -ENOMEM;
 
+	if (IS_ENABLED(CONFIG_NET_DSA_TAG_OCELOT_NPI))
+		xtr_prefix = OCELOT_TAG_PREFIX_LONG;
+	else if (IS_ENABLED(CONFIG_NET_DSA_TAG_OCELOT_8021Q))
+		xtr_prefix = OCELOT_TAG_PREFIX_NONE;
+
 	ocelot->map		= felix->info->map;
 	ocelot->stats_layout	= felix->info->stats_layout;
 	ocelot->num_stats	= felix->info->num_stats;
@@ -481,7 +495,7 @@ static int felix_init_structs(struct felix *felix, int num_phys_ports)
 	ocelot->ops		= felix->info->ops;
 	ocelot->policer_base	= felix->info->policer_base;
 	ocelot->inj_prefix	= OCELOT_TAG_PREFIX_NONE;
-	ocelot->xtr_prefix	= OCELOT_TAG_PREFIX_LONG;
+	ocelot->xtr_prefix	= xtr_prefix;
 
 	port_phy_modes = kcalloc(num_phys_ports, sizeof(phy_interface_t),
 				 GFP_KERNEL);
@@ -685,6 +699,22 @@ static void felix_npi_port_init(struct ocelot *ocelot, int port)
 			 SYS_PORT_MODE, port);
 }
 
+static void felix_8021q_cpu_port_init(struct ocelot *ocelot, int port)
+{
+	ocelot->dsa_8021q_cpu = port;
+
+	/* Overwrite PGID_CPU with the non-tagging port */
+	ocelot_write_rix(ocelot, BIT(ocelot->dsa_8021q_cpu),
+			 ANA_PGID_PGID, PGID_CPU);
+
+	/* This overwrites ocelot_init():
+	 * Do not forward BPDU frames from the dsa_8021q CPU port
+	 * to the CPU port module. This creates a redirection loop.
+	 */
+	ocelot_write_gix(ocelot, ANA_PORT_CPU_FWD_BPDU_CFG_BPDU_REDIR_ENA(0),
+			 ANA_PORT_CPU_FWD_BPDU_CFG, port);
+}
+
 /* Hardware initialization done here so that we can allocate structures with
  * devm without fear of dsa_register_switch returning -EPROBE_DEFER and causing
  * us to allocate structures twice (leak memory) and map PCI memory twice
@@ -694,7 +724,7 @@ static int felix_setup(struct dsa_switch *ds)
 {
 	struct ocelot *ocelot = ds->priv;
 	struct felix *felix = ocelot_to_felix(ocelot);
-	int port, err;
+	int port, cpu = -1, err;
 
 	err = felix_init_structs(felix, ds->num_ports);
 	if (err)
@@ -703,10 +733,20 @@ static int felix_setup(struct dsa_switch *ds)
 	ocelot_init(ocelot);
 
 	for (port = 0; port < ds->num_ports; port++) {
+		if (dsa_is_unused_port(ds, port))
+			continue;
+
 		ocelot_init_port(ocelot, port);
 
-		if (dsa_is_cpu_port(ds, port))
-			felix_npi_port_init(ocelot, port);
+		cpu = dsa_upstream_port(ds, port);
+		if (port == cpu)
+			continue;
+
+		/* Allow forwarding to and from the CPU port */
+		ocelot_rmw_rix(ocelot, BIT(cpu), BIT(cpu),
+			       ANA_PGID_PGID, PGID_SRC + port);
+		ocelot_rmw_rix(ocelot, BIT(port), BIT(port),
+			       ANA_PGID_PGID, PGID_SRC + cpu);
 
 		/* Set the default QoS Classification based on PCP and DEI
 		 * bits of vlan tag.
@@ -714,14 +754,45 @@ static int felix_setup(struct dsa_switch *ds)
 		felix_port_qos_map_init(ocelot, port, ds->num_tx_queues);
 	}
 
-	/* Include the CPU port module in the forwarding mask for unknown
-	 * unicast - the hardware default value for ANA_FLOODING_FLD_UNICAST
-	 * excludes BIT(ocelot->num_phys_ports), and so does ocelot_init, since
-	 * Ocelot relies on whitelisting MAC addresses towards PGID_CPU.
-	 */
-	ocelot_write_rix(ocelot,
-			 ANA_PGID_PGID_PGID(GENMASK(ocelot->num_phys_ports, 0)),
-			 ANA_PGID_PGID, PGID_UC);
+	if (cpu == -1) {
+		dev_err(ds->dev, "No CPU port!\n");
+		return -ENODEV;
+	}
+
+	if (IS_ENABLED(CONFIG_NET_DSA_TAG_OCELOT_NPI)) {
+		felix_npi_port_init(ocelot, cpu);
+
+		/* Include the CPU port module (and indirectly, the NPI port)
+		 * in the forwarding mask for unknown unicast - the hardware
+		 * default value for ANA_FLOODING_FLD_UNICAST excludes
+		 * BIT(ocelot->num_phys_ports), and so does ocelot_init,
+		 * since Ocelot relies on whitelisting MAC addresses towards
+		 * PGID_CPU.
+		 * We do this because DSA does not yet perform RX filtering,
+		 * and the NPI port does not perform source address learning,
+		 * so traffic sent to Linux is effectively unknown from the
+		 * switch's perspective.
+		 */
+		ocelot_write_rix(ocelot,
+				 ANA_PGID_PGID_PGID(GENMASK(ocelot->num_phys_ports, 0)),
+				 ANA_PGID_PGID, PGID_UC);
+	} else if (IS_ENABLED(CONFIG_NET_DSA_TAG_OCELOT_8021Q)) {
+		felix_8021q_cpu_port_init(ocelot, cpu);
+
+		/* In tag_8021q mode, we only use the CPU port module for
+		 * injecting and extracting PTP over MMIO. So we want to
+		 * disable flooding of any kind to the CPU port module. The
+		 * assumption is that the only traffic that will ever reach the
+		 * CPU port module in this mode is the one redirected through
+		 * the custom PTP rules installed in felix_tag_8021q.c.
+		 */
+		ocelot_write_rix(ocelot,
+				 ANA_PGID_PGID_PGID(GENMASK(ocelot->num_phys_ports - 1, 0)),
+				 ANA_PGID_PGID, PGID_UC);
+		ocelot_write_rix(ocelot,
+				 ANA_PGID_PGID_PGID(GENMASK(ocelot->num_phys_ports - 1, 0)),
+				 ANA_PGID_PGID, PGID_MC);
+	}
 
 	ds->mtu_enforcement_ingress = true;
 	/* It looks like the MAC/PCS interrupt register - PM0_IEVENT (0x8040)
@@ -736,6 +807,10 @@ static int felix_setup(struct dsa_switch *ds)
 
 	err = felix_setup_devlink_params(ds);
 	if (err < 0)
+		return err;
+
+	err = felix_setup_8021q_tagging(ocelot);
+	if (err && err != -EOPNOTSUPP)
 		return err;
 
 	return 0;
