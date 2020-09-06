@@ -111,6 +111,40 @@ config NET_DSA_TAG_OCELOT
 	  Say Y or M if you want to enable support for tagging frames for the
 	  Ocelot switches (VSC7511, VSC7512, VSC7513, VSC7514, VSC9959).
 
+choice
+	prompt "Tagging format"
+	depends on NET_DSA_TAG_OCELOT
+	default NET_DSA_TAG_OCELOT_NPI
+	help
+	  Choose the tagging format for frames delivered by the Ocelot
+	  switches to the CPU.
+
+config NET_DSA_TAG_OCELOT_NPI
+	bool "Native tagging over NPI"
+	help
+	  Say Y if you want to enable NPI tagging for the Ocelot switches.
+	  In this mode, the frames over the Ethernet CPU port are prepended
+	  with a hardware-defined injection/extraction frame header.
+	  Flow control (PAUSE frames) over the CPU port is not supported
+	  when operating in this mode.
+
+	  If unsure, say Y.
+
+config NET_DSA_TAG_OCELOT_8021Q
+	bool "VLAN-based tagging"
+	select NET_DSA_TAG_8021Q
+	help
+	  Say Y if you want to enable support for tagging frames with a custom
+	  VLAN-based header. Frames that require timestamping, such as PTP, are
+	  not delivered over Ethernet but over register-based MMIO. Flow
+	  control over the CPU port is functional in this mode. When using this
+	  mode, less TCAM resources (VCAP IS1, IS2, ES0) are available for use
+	  with tc-flower.
+
+	  If unsure, say N.
+
+endchoice
+
 config NET_DSA_TAG_QCA
 	tristate "Tag driver for Qualcomm Atheros QCA8K switches"
 	help

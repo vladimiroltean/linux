@@ -631,6 +631,7 @@ struct ocelot {
 	u8				num_phys_ports;
 
 	int				npi;
+	int				dsa_8021q_cpu;
 
 	enum ocelot_tag_prefix		inj_prefix;
 	enum ocelot_tag_prefix		xtr_prefix;

@@ -911,8 +911,13 @@ void ocelot_bridge_stp_state_set(struct ocelot *ocelot, int port, u8 state)
 	 * a source for the other ports.
 	 */
 	for (p = 0; p < ocelot->num_phys_ports; p++) {
+		unsigned long mask = 0;
+
+		if (p == ocelot->dsa_8021q_cpu)
+			continue;
+
 		if (ocelot->bridge_fwd_mask & BIT(p)) {
-			unsigned long mask = ocelot->bridge_fwd_mask & ~BIT(p);
+			mask = ocelot->bridge_fwd_mask & ~BIT(p);
 
 			for (i = 0; i < ocelot->num_phys_ports; i++) {
 				unsigned long bond_mask = ocelot->lags[i];
@@ -925,13 +930,12 @@ void ocelot_bridge_stp_state_set(struct ocelot *ocelot, int port, u8 state)
 					break;
 				}
 			}
-
-			ocelot_write_rix(ocelot, mask,
-					 ANA_PGID_PGID, PGID_SRC + p);
-		} else {
-			ocelot_write_rix(ocelot, 0,
-					 ANA_PGID_PGID, PGID_SRC + p);
 		}
+
+		if (ocelot->dsa_8021q_cpu >= 0)
+			mask |= ocelot->dsa_8021q_cpu;
+
+		ocelot_write_rix(ocelot, mask, ANA_PGID_PGID, PGID_SRC + p);
 	}
 }
 EXPORT_SYMBOL(ocelot_bridge_stp_state_set);
