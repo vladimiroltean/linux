@@ -337,9 +337,6 @@ static int dsa_slave_vlan_add(struct net_device *dev,
 	if (obj->orig_dev != dev)
 		return -EOPNOTSUPP;
 
-	if (dsa_port_skip_vlan_configuration(dp))
-		return 0;
-
 	vlan = *SWITCHDEV_OBJ_PORT_VLAN(obj);
 
 	/* Deny adding a bridge VLAN when there is already an 802.1Q upper with
@@ -351,6 +348,12 @@ static int dsa_slave_vlan_add(struct net_device *dev,
 		rcu_read_unlock();
 		if (err)
 			return err;
+	}
+
+	if (dsa_port_skip_vlan_configuration(dp)) {
+		netdev_warn(dev, "skipping configuration of VLAN range %d-%d\n",
+			    vlan.vid_begin, vlan.vid_end);
+		return 0;
 	}
 
 	err = dsa_port_vlan_add(dp, &vlan, trans);
@@ -424,10 +427,13 @@ static int dsa_slave_vlan_del(struct net_device *dev,
 	if (obj->orig_dev != dev)
 		return -EOPNOTSUPP;
 
-	if (dsa_port_skip_vlan_configuration(dp))
-		return 0;
-
 	vlan = SWITCHDEV_OBJ_PORT_VLAN(obj);
+
+	if (dsa_port_skip_vlan_configuration(dp)) {
+		netdev_warn(dev, "skipping deletion of VLAN range %d-%d\n",
+			    vlan->vid_begin, vlan->vid_end);
+		return 0;
+	}
 
 	/* Do not deprogram the CPU port as it may be shared with other user
 	 * ports which can be members of this VLAN as well.

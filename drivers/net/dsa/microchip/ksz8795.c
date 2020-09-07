@@ -1098,6 +1098,8 @@ static int ksz8795_setup(struct dsa_switch *ds)
 
 	ksz_init_mib_timer(dev);
 
+	ds->configure_vlan_while_not_filtering = false;
+
 	return 0;
 }
 
