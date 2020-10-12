@@ -8,6 +8,98 @@
 #include "ocelot.h"
 #include "ocelot_vcap.h"
 
+struct ocelot_devlink_private {
+	struct ocelot *ocelot;
+};
+
+static const struct devlink_ops ocelot_devlink_ops = {
+};
+
+static int ocelot_port_devlink_init(struct ocelot *ocelot, int port)
+{
+	struct ocelot_port *ocelot_port = ocelot->ports[port];
+	struct devlink *dl = ocelot->devlink;
+	struct devlink_port_attrs attrs = {};
+	struct ocelot_port_private *priv;
+	struct devlink_port *dlp;
+
+	if (!ocelot_port)
+		return 0;
+
+	priv = container_of(ocelot_port, struct ocelot_port_private, port);
+	dlp = &priv->devlink_port;
+
+	attrs.phys.port_number = port;
+
+	if (priv->dev)
+		attrs.flavour = DEVLINK_PORT_FLAVOUR_PHYSICAL;
+	else
+		attrs.flavour = DEVLINK_PORT_FLAVOUR_UNUSED;
+
+	devlink_port_attrs_set(dlp, &attrs);
+
+	return devlink_port_register(dl, dlp, port);
+}
+
+static void ocelot_port_devlink_teardown(struct ocelot *ocelot, int port)
+{
+	struct ocelot_port *ocelot_port = ocelot->ports[port];
+	struct ocelot_port_private *priv;
+	struct devlink_port *dlp;
+
+	if (!ocelot_port)
+		return;
+
+	priv = container_of(ocelot_port, struct ocelot_port_private, port);
+	dlp = &priv->devlink_port;
+
+	devlink_port_unregister(dlp);
+}
+
+int ocelot_devlink_init(struct ocelot *ocelot)
+{
+	struct ocelot_devlink_private *dl_priv;
+	int port, err;
+
+	ocelot->devlink = devlink_alloc(&ocelot_devlink_ops, sizeof(*dl_priv));
+	if (!ocelot->devlink)
+		return -ENOMEM;
+	dl_priv = devlink_priv(ocelot->devlink);
+	dl_priv->ocelot = ocelot;
+
+	err = devlink_register(ocelot->devlink, ocelot->dev);
+	if (err)
+		goto free_devlink;
+
+	for (port = 0; port < ocelot->num_phys_ports; port++) {
+		err = ocelot_port_devlink_init(ocelot, port);
+		if (err) {
+			while (port-- > 0)
+				ocelot_port_devlink_teardown(ocelot, port);
+			goto unregister_devlink;
+		}
+	}
+
+	return 0;
+
+unregister_devlink:
+	devlink_unregister(ocelot->devlink);
+free_devlink:
+	devlink_free(ocelot->devlink);
+	return err;
+}
+
+void ocelot_devlink_teardown(struct ocelot *ocelot)
+{
+	int port;
+
+	for (port = 0; port < ocelot->num_phys_ports; port++)
+		ocelot_port_devlink_teardown(ocelot, port);
+
+	devlink_unregister(ocelot->devlink);
+	devlink_free(ocelot->devlink);
+}
+
 int ocelot_setup_tc_cls_flower(struct ocelot_port_private *priv,
 			       struct flow_cls_offload *f,
 			       bool ingress)
