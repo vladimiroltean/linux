@@ -57,6 +57,8 @@ struct ocelot_port_private {
 	struct phy *serdes;
 
 	struct ocelot_port_tc tc;
+
+	struct devlink_port devlink_port;
 };
 
 struct ocelot_dump_ctx {
@@ -121,6 +123,8 @@ void ocelot_port_writel(struct ocelot_port *port, u32 val, u32 reg);
 
 int ocelot_probe_port(struct ocelot *ocelot, int port, struct regmap *target,
 		      struct phy_device *phy);
+int ocelot_devlink_init(struct ocelot *ocelot);
+void ocelot_devlink_teardown(struct ocelot *ocelot);
 
 extern struct notifier_block ocelot_netdevice_nb;
 extern struct notifier_block ocelot_switchdev_nb;

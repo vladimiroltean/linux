@@ -1293,6 +1293,12 @@ static int mscc_ocelot_probe(struct platform_device *pdev)
 		}
 	}
 
+	err = ocelot_devlink_init(ocelot);
+	if (err) {
+		mscc_ocelot_release_ports(ocelot);
+		goto out_ocelot_deinit;
+	}
+
 	register_netdevice_notifier(&ocelot_netdevice_nb);
 	register_switchdev_notifier(&ocelot_switchdev_nb);
 	register_switchdev_blocking_notifier(&ocelot_switchdev_blocking_nb);
@@ -1314,6 +1320,7 @@ static int mscc_ocelot_remove(struct platform_device *pdev)
 {
 	struct ocelot *ocelot = platform_get_drvdata(pdev);
 
+	ocelot_devlink_teardown(ocelot);
 	ocelot_deinit_timestamp(ocelot);
 	mscc_ocelot_release_ports(ocelot);
 	ocelot_deinit(ocelot);

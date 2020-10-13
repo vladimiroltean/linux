@@ -602,6 +602,7 @@ struct ocelot_port {
 
 struct ocelot {
 	struct device			*dev;
+	struct devlink			*devlink;
 
 	const struct ocelot_ops		*ops;
 	struct regmap			*targets[TARGET_MAX];

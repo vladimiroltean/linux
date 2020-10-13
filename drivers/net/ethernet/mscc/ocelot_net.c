@@ -8,6 +8,116 @@
 #include "ocelot.h"
 #include "ocelot_vcap.h"
 
+struct ocelot_devlink_private {
+	struct ocelot *ocelot;
+};
+
+static const struct devlink_ops ocelot_devlink_ops = {
+};
+
+static int ocelot_port_devlink_init(struct ocelot *ocelot, int port)
+{
+	struct ocelot_port *ocelot_port = ocelot->ports[port];
+	int id_len = sizeof(ocelot->base_mac);
+	struct devlink *dl = ocelot->devlink;
+	struct devlink_port_attrs attrs = {};
+	struct ocelot_port_private *priv;
+	struct devlink_port *dlp;
+	int err;
+
+	if (!ocelot_port)
+		return 0;
+
+	priv = container_of(ocelot_port, struct ocelot_port_private, port);
+	dlp = &priv->devlink_port;
+
+	memcpy(attrs.switch_id.id, &ocelot->base_mac, id_len);
+	attrs.switch_id.id_len = id_len;
+	attrs.phys.port_number = port;
+
+	if (priv->dev)
+		attrs.flavour = DEVLINK_PORT_FLAVOUR_PHYSICAL;
+	else
+		attrs.flavour = DEVLINK_PORT_FLAVOUR_UNUSED;
+
+	devlink_port_attrs_set(dlp, &attrs);
+
+	err = devlink_port_register(dl, dlp, port);
+	if (err)
+		return err;
+
+	if (priv->dev)
+		devlink_port_type_eth_set(dlp, priv->dev);
+
+	return 0;
+}
+
+static void ocelot_port_devlink_teardown(struct ocelot *ocelot, int port)
+{
+	struct ocelot_port *ocelot_port = ocelot->ports[port];
+	struct ocelot_port_private *priv;
+	struct devlink_port *dlp;
+
+	if (!ocelot_port)
+		return;
+
+	priv = container_of(ocelot_port, struct ocelot_port_private, port);
+	dlp = &priv->devlink_port;
+
+	devlink_port_unregister(dlp);
+}
+
+int ocelot_devlink_init(struct ocelot *ocelot)
+{
+	struct ocelot_devlink_private *dl_priv;
+	int port, err;
+
+	ocelot->devlink = devlink_alloc(&ocelot_devlink_ops, sizeof(*dl_priv));
+	if (!ocelot->devlink)
+		return -ENOMEM;
+	dl_priv = devlink_priv(ocelot->devlink);
+	dl_priv->ocelot = ocelot;
+
+	err = devlink_register(ocelot->devlink, ocelot->dev);
+	if (err)
+		goto free_devlink;
+
+	for (port = 0; port < ocelot->num_phys_ports; port++) {
+		err = ocelot_port_devlink_init(ocelot, port);
+		if (err) {
+			while (port-- > 0)
+				ocelot_port_devlink_teardown(ocelot, port);
+			goto unregister_devlink;
+		}
+	}
+
+	return 0;
+
+unregister_devlink:
+	devlink_unregister(ocelot->devlink);
+free_devlink:
+	devlink_free(ocelot->devlink);
+	return err;
+}
+
+void ocelot_devlink_teardown(struct ocelot *ocelot)
+{
+	int port;
+
+	for (port = 0; port < ocelot->num_phys_ports; port++)
+		ocelot_port_devlink_teardown(ocelot, port);
+
+	devlink_unregister(ocelot->devlink);
+	devlink_free(ocelot->devlink);
+}
+
+static struct devlink_port *ocelot_get_devlink_port(struct net_device *dev)
+{
+	struct ocelot_port_private *priv = netdev_priv(dev);
+
+	return &priv->devlink_port;
+}
+
 int ocelot_setup_tc_cls_flower(struct ocelot_port_private *priv,
 			       struct flow_cls_offload *f,
 			       bool ingress)
@@ -525,20 +635,6 @@ static void ocelot_set_rx_mode(struct net_device *dev)
 	__dev_mc_sync(dev, ocelot_mc_sync, ocelot_mc_unsync);
 }
 
-static int ocelot_port_get_phys_port_name(struct net_device *dev,
-					  char *buf, size_t len)
-{
-	struct ocelot_port_private *priv = netdev_priv(dev);
-	int port = priv->chip_port;
-	int ret;
-
-	ret = snprintf(buf, len, "p%d", port);
-	if (ret >= len)
-		return -EINVAL;
-
-	return 0;
-}
-
 static int ocelot_port_set_mac_address(struct net_device *dev, void *p)
 {
 	struct ocelot_port_private *priv = netdev_priv(dev);
@@ -689,18 +785,6 @@ static int ocelot_set_features(struct net_device *dev,
 	return 0;
 }
 
-static int ocelot_get_port_parent_id(struct net_device *dev,
-				     struct netdev_phys_item_id *ppid)
-{
-	struct ocelot_port_private *priv = netdev_priv(dev);
-	struct ocelot *ocelot = priv->port.ocelot;
-
-	ppid->id_len = sizeof(ocelot->base_mac);
-	memcpy(&ppid->id, &ocelot->base_mac, ppid->id_len);
-
-	return 0;
-}
-
 static int ocelot_ioctl(struct net_device *dev, struct ifreq *ifr, int cmd)
 {
 	struct ocelot_port_private *priv = netdev_priv(dev);
@@ -727,7 +811,6 @@ static const struct net_device_ops ocelot_port_netdev_ops = {
 	.ndo_stop			= ocelot_port_stop,
 	.ndo_start_xmit			= ocelot_port_xmit,
 	.ndo_set_rx_mode		= ocelot_set_rx_mode,
-	.ndo_get_phys_port_name		= ocelot_port_get_phys_port_name,
 	.ndo_set_mac_address		= ocelot_port_set_mac_address,
 	.ndo_get_stats64		= ocelot_get_stats64,
 	.ndo_fdb_add			= ocelot_port_fdb_add,
@@ -736,9 +819,9 @@ static const struct net_device_ops ocelot_port_netdev_ops = {
 	.ndo_vlan_rx_add_vid		= ocelot_vlan_rx_add_vid,
 	.ndo_vlan_rx_kill_vid		= ocelot_vlan_rx_kill_vid,
 	.ndo_set_features		= ocelot_set_features,
-	.ndo_get_port_parent_id		= ocelot_get_port_parent_id,
 	.ndo_setup_tc			= ocelot_setup_tc,
 	.ndo_do_ioctl			= ocelot_ioctl,
+	.ndo_get_devlink_port		= ocelot_get_devlink_port,
 };
 
 struct net_device *ocelot_port_to_netdev(struct ocelot *ocelot, int port)
