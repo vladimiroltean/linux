@@ -309,7 +309,7 @@ static void felix_port_qos_map_init(struct ocelot *ocelot, int port)
 		       ANA_PORT_QOS_CFG,
 		       port);
 
-	for (i = 0; i < FELIX_NUM_TC * 2; i++) {
+	for (i = 0; i < OCELOT_NUM_TC * 2; i++) {
 		ocelot_rmw_ix(ocelot,
 			      (ANA_PORT_PCP_DEI_MAP_DP_PCP_DEI_VAL & i) |
 			      ANA_PORT_PCP_DEI_MAP_QOS_PCP_DEI_VAL(i),
@@ -608,7 +608,7 @@ static int felix_setup(struct dsa_switch *ds)
 			 ANA_PGID_PGID_PGID(GENMASK(ocelot->num_phys_ports, 0)),
 			 ANA_PGID_PGID, PGID_UC);
 	/* Setup the per-traffic class flooding PGIDs */
-	for (tc = 0; tc < FELIX_NUM_TC; tc++)
+	for (tc = 0; tc < OCELOT_NUM_TC; tc++)
 		ocelot_write_rix(ocelot, ANA_FLOODING_FLD_MULTICAST(PGID_MC) |
 				 ANA_FLOODING_FLD_BROADCAST(PGID_MC) |
 				 ANA_FLOODING_FLD_UNICAST(PGID_UC),
