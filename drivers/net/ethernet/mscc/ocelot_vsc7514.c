@@ -1173,6 +1173,29 @@ static int mscc_ocelot_init_ports(struct platform_device *pdev,
 	return 0;
 }
 
+static int mscc_ocelot_devlink_setup(struct ocelot *ocelot)
+{
+	int err;
+
+	err = ocelot_devlink_init(ocelot);
+	if (err)
+		return err;
+
+	err = ocelot_devlink_sb_register(ocelot);
+	if (err) {
+		ocelot_devlink_teardown(ocelot);
+		return err;
+	}
+
+	return 0;
+}
+
+static void mscc_ocelot_devlink_cleanup(struct ocelot *ocelot)
+{
+	ocelot_devlink_sb_unregister(ocelot);
+	ocelot_devlink_teardown(ocelot);
+}
+
 static int mscc_ocelot_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
@@ -1292,7 +1315,7 @@ static int mscc_ocelot_probe(struct platform_device *pdev)
 		}
 	}
 
-	err = ocelot_devlink_init(ocelot);
+	err = mscc_ocelot_devlink_setup(ocelot);
 	if (err) {
 		mscc_ocelot_release_ports(ocelot);
 		goto out_put_ports;
@@ -1313,7 +1336,7 @@ static int mscc_ocelot_remove(struct platform_device *pdev)
 {
 	struct ocelot *ocelot = platform_get_drvdata(pdev);
 
-	ocelot_devlink_teardown(ocelot);
+	mscc_ocelot_devlink_cleanup(ocelot);
 	ocelot_deinit_timestamp(ocelot);
 	mscc_ocelot_release_ports(ocelot);
 	ocelot_deinit(ocelot);

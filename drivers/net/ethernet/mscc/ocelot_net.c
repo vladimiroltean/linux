@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: (GPL-2.0 OR MIT)
 /* Microsemi Ocelot Switch driver
  *
+ * This contains glue logic between the switchdev driver operations and the
+ * mscc_ocelot_switch_lib.
+ *
  * Copyright (c) 2017, 2019 Microsemi Corporation
+ * Copyright 2020 NXP Semiconductors
  */
 
 #include <linux/if_bridge.h>
@@ -12,7 +16,146 @@ struct ocelot_devlink_private {
 	struct ocelot *ocelot;
 };
 
+static struct ocelot_port_private *
+devlink_to_ocelot_port_priv(struct devlink_port *dlp)
+{
+	return container_of(dlp, struct ocelot_port_private, devlink_port);
+}
+
+static int ocelot_devlink_sb_pool_get(struct devlink *dl,
+				      unsigned int sb_index, u16 pool_index,
+				      struct devlink_sb_pool_info *pool_info)
+{
+	struct ocelot_devlink_private *dl_priv = devlink_priv(dl);
+	struct ocelot *ocelot = dl_priv->ocelot;
+
+	return ocelot_sb_pool_get(ocelot, sb_index, pool_index, pool_info);
+}
+
+static int ocelot_devlink_sb_pool_set(struct devlink *dl, unsigned int sb_index,
+				      u16 pool_index, u32 size,
+				      enum devlink_sb_threshold_type threshold_type,
+				      struct netlink_ext_ack *extack)
+{
+	struct ocelot_devlink_private *dl_priv = devlink_priv(dl);
+	struct ocelot *ocelot = dl_priv->ocelot;
+
+	return ocelot_sb_pool_set(ocelot, sb_index, pool_index, size,
+				  threshold_type, extack);
+}
+
+static int ocelot_devlink_sb_port_pool_get(struct devlink_port *dlp,
+					   unsigned int sb_index, u16 pool_index,
+					   u32 *p_threshold)
+{
+	struct ocelot_devlink_private *dl_priv = devlink_priv(dlp->devlink);
+	struct ocelot_port_private *priv = devlink_to_ocelot_port_priv(dlp);
+	struct ocelot *ocelot = dl_priv->ocelot;
+
+	return ocelot_sb_port_pool_get(ocelot, priv->chip_port, sb_index,
+				       pool_index, p_threshold);
+}
+
+static int ocelot_devlink_sb_port_pool_set(struct devlink_port *dlp,
+					   unsigned int sb_index, u16 pool_index,
+					   u32 threshold,
+					   struct netlink_ext_ack *extack)
+{
+	struct ocelot_devlink_private *dl_priv = devlink_priv(dlp->devlink);
+	struct ocelot_port_private *priv = devlink_to_ocelot_port_priv(dlp);
+	struct ocelot *ocelot = dl_priv->ocelot;
+
+	return ocelot_sb_port_pool_set(ocelot, priv->chip_port, sb_index,
+				       pool_index, threshold, extack);
+}
+
+static int
+ocelot_devlink_sb_tc_pool_bind_get(struct devlink_port *dlp,
+				   unsigned int sb_index, u16 tc_index,
+				   enum devlink_sb_pool_type pool_type,
+				   u16 *p_pool_index, u32 *p_threshold)
+{
+	struct ocelot_devlink_private *dl_priv = devlink_priv(dlp->devlink);
+	struct ocelot_port_private *priv = devlink_to_ocelot_port_priv(dlp);
+	struct ocelot *ocelot = dl_priv->ocelot;
+
+	return ocelot_sb_tc_pool_bind_get(ocelot, priv->chip_port, sb_index,
+					  tc_index, pool_type, p_pool_index,
+					  p_threshold);
+}
+
+static int
+ocelot_devlink_sb_tc_pool_bind_set(struct devlink_port *dlp,
+				   unsigned int sb_index, u16 tc_index,
+				   enum devlink_sb_pool_type pool_type,
+				   u16 pool_index, u32 threshold,
+				   struct netlink_ext_ack *extack)
+{
+	struct ocelot_devlink_private *dl_priv = devlink_priv(dlp->devlink);
+	struct ocelot_port_private *priv = devlink_to_ocelot_port_priv(dlp);
+	struct ocelot *ocelot = dl_priv->ocelot;
+
+	return ocelot_sb_tc_pool_bind_set(ocelot, priv->chip_port, sb_index,
+					  tc_index, pool_type, pool_index,
+					  threshold, extack);
+}
+
+static int ocelot_devlink_sb_occ_snapshot(struct devlink *dl,
+					  unsigned int sb_index)
+{
+	struct ocelot_devlink_private *dl_priv = devlink_priv(dl);
+	struct ocelot *ocelot = dl_priv->ocelot;
+
+	return ocelot_sb_occ_snapshot(ocelot, sb_index);
+}
+
+static int ocelot_devlink_sb_occ_max_clear(struct devlink *dl,
+					   unsigned int sb_index)
+{
+	struct ocelot_devlink_private *dl_priv = devlink_priv(dl);
+	struct ocelot *ocelot = dl_priv->ocelot;
+
+	return ocelot_sb_occ_max_clear(ocelot, sb_index);
+}
+
+static int ocelot_devlink_sb_occ_port_pool_get(struct devlink_port *dlp,
+					       unsigned int sb_index,
+					       u16 pool_index, u32 *p_cur,
+					       u32 *p_max)
+{
+	struct ocelot_devlink_private *dl_priv = devlink_priv(dlp->devlink);
+	struct ocelot_port_private *priv = devlink_to_ocelot_port_priv(dlp);
+	struct ocelot *ocelot = dl_priv->ocelot;
+
+	return ocelot_sb_occ_port_pool_get(ocelot, priv->chip_port, sb_index,
+						     pool_index, p_cur, p_max);
+}
+
+static int
+ocelot_devlink_sb_occ_tc_port_bind_get(struct devlink_port *dlp,
+				       unsigned int sb_index, u16 tc_index,
+				       enum devlink_sb_pool_type pool_type,
+				       u32 *p_cur, u32 *p_max)
+{
+	struct ocelot_devlink_private *dl_priv = devlink_priv(dlp->devlink);
+	struct ocelot_port_private *priv = devlink_to_ocelot_port_priv(dlp);
+	struct ocelot *ocelot = dl_priv->ocelot;
+
+	return ocelot_sb_occ_tc_port_bind_get(ocelot, priv->chip_port, sb_index,
+					      tc_index, pool_type, p_cur, p_max);
+}
+
 static const struct devlink_ops ocelot_devlink_ops = {
+	.sb_pool_get			= ocelot_devlink_sb_pool_get,
+	.sb_pool_set			= ocelot_devlink_sb_pool_set,
+	.sb_port_pool_get		= ocelot_devlink_sb_port_pool_get,
+	.sb_port_pool_set		= ocelot_devlink_sb_port_pool_set,
+	.sb_tc_pool_bind_get		= ocelot_devlink_sb_tc_pool_bind_get,
+	.sb_tc_pool_bind_set		= ocelot_devlink_sb_tc_pool_bind_set,
+	.sb_occ_snapshot		= ocelot_devlink_sb_occ_snapshot,
+	.sb_occ_max_clear		= ocelot_devlink_sb_occ_max_clear,
+	.sb_occ_port_pool_get		= ocelot_devlink_sb_occ_port_pool_get,
+	.sb_occ_tc_port_bind_get	= ocelot_devlink_sb_occ_tc_port_bind_get,
 };
 
 static int ocelot_port_devlink_init(struct ocelot *ocelot, int port)
