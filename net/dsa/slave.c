@@ -366,6 +366,79 @@ static int dsa_slave_vlan_add(struct net_device *dev,
 	return vlan_vid_add(master, htons(ETH_P_8021Q), vlan.vid);
 }
 
+static struct dsa_host_addr *
+dsa_host_addr_find(struct list_head *addr_list,
+		   const struct switchdev_obj_port_mdb *mdb)
+{
+	struct dsa_host_addr *a;
+
+	list_for_each_entry(a, addr_list, list)
+		if (ether_addr_equal(a->addr, mdb->addr) && a->vid == mdb->vid)
+			return a;
+
+	return NULL;
+}
+
+/* DSA can directly translate this to a normal MDB add, but on the CPU port.
+ * But because multiple user ports can join the same multicast group and the
+ * bridge will emit a notification for each port, we need to add/delete the
+ * entry towards the host only once, so we reference count it.
+ */
+static int dsa_host_mdb_add(struct dsa_port *dp,
+			    const struct switchdev_obj_port_mdb *mdb)
+{
+	struct dsa_port *cpu_dp = dp->cpu_dp;
+	struct dsa_switch *ds = dp->ds;
+	struct dsa_host_addr *a;
+	int err;
+
+	a = dsa_host_addr_find(&ds->host_mdb, mdb);
+	if (a) {
+		refcount_inc(&a->refcount);
+		return 0;
+	}
+
+	a = kzalloc(sizeof(*a), GFP_KERNEL);
+	if (!a)
+		return -ENOMEM;
+
+	err = dsa_port_mdb_add(cpu_dp, mdb);
+	if (err)
+		return err;
+
+	ether_addr_copy(a->addr, mdb->addr);
+	a->vid = mdb->vid;
+	refcount_set(&a->refcount, 1);
+	list_add_tail(&a->list, &ds->host_mdb);
+
+	return 0;
+}
+
+static int dsa_host_mdb_del(struct dsa_port *dp,
+			    const struct switchdev_obj_port_mdb *mdb)
+{
+	struct dsa_port *cpu_dp = dp->cpu_dp;
+	struct dsa_switch *ds = dp->ds;
+	struct dsa_host_addr *a;
+	int err;
+
+	a = dsa_host_addr_find(&ds->host_mdb, mdb);
+	if (!a)
+		return -ENOENT;
+
+	if (!refcount_dec_and_test(&a->refcount))
+		return 0;
+
+	err = dsa_port_mdb_del(cpu_dp, mdb);
+	if (err)
+		return err;
+
+	list_del(&a->list);
+	kfree(a);
+
+	return 0;
+}
+
 static int dsa_slave_port_obj_add(struct net_device *dev,
 				  const struct switchdev_obj *obj,
 				  struct netlink_ext_ack *extack)
@@ -380,10 +453,7 @@ static int dsa_slave_port_obj_add(struct net_device *dev,
 		err = dsa_port_mdb_add(dp, SWITCHDEV_OBJ_PORT_MDB(obj));
 		break;
 	case SWITCHDEV_OBJ_ID_HOST_MDB:
-		/* DSA can directly translate this to a normal MDB add,
-		 * but on the CPU port.
-		 */
-		err = dsa_port_mdb_add(dp->cpu_dp, SWITCHDEV_OBJ_PORT_MDB(obj));
+		err = dsa_host_mdb_add(dp, SWITCHDEV_OBJ_PORT_MDB(obj));
 		break;
 	case SWITCHDEV_OBJ_ID_PORT_VLAN:
 		err = dsa_slave_vlan_add(dev, obj);
@@ -437,10 +507,7 @@ static int dsa_slave_port_obj_del(struct net_device *dev,
 		err = dsa_port_mdb_del(dp, SWITCHDEV_OBJ_PORT_MDB(obj));
 		break;
 	case SWITCHDEV_OBJ_ID_HOST_MDB:
-		/* DSA can directly translate this to a normal MDB add,
-		 * but on the CPU port.
-		 */
-		err = dsa_port_mdb_del(dp->cpu_dp, SWITCHDEV_OBJ_PORT_MDB(obj));
+		err = dsa_host_mdb_del(dp, SWITCHDEV_OBJ_PORT_MDB(obj));
 		break;
 	case SWITCHDEV_OBJ_ID_PORT_VLAN:
 		err = dsa_slave_vlan_del(dev, obj);

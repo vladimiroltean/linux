@@ -253,6 +253,13 @@ struct dsa_link {
 	struct list_head list;
 };
 
+struct dsa_host_addr {
+	unsigned char addr[ETH_ALEN];
+	u16 vid;
+	refcount_t refcount;
+	struct list_head list;
+};
+
 struct dsa_switch {
 	bool setup;
 
@@ -334,6 +341,8 @@ struct dsa_switch {
 	 * interfaces is needed.
 	 */
 	bool			mtu_enforcement_ingress;
+
+	struct list_head	host_mdb;
 
 	size_t num_ports;
 };
