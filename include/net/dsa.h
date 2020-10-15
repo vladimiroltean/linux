@@ -290,6 +290,11 @@ struct dsa_port {
 	 */
 	const struct dsa_netdevice_ops *netdev_ops;
 
+	/* List of MAC addresses that must be extracted from the fabric
+	 * through this CPU port. Valid only for DSA_PORT_TYPE_CPU.
+	 */
+	struct list_head	host_mdb;
+
 	bool setup;
 };
 
@@ -301,6 +306,13 @@ struct dsa_port {
 struct dsa_link {
 	struct dsa_port *dp;
 	struct dsa_port *link_dp;
+	struct list_head list;
+};
+
+struct dsa_host_addr {
+	unsigned char addr[ETH_ALEN];
+	u16 vid;
+	refcount_t refcount;
 	struct list_head list;
 };
 
@@ -479,6 +491,28 @@ static inline unsigned int dsa_upstream_port(struct dsa_switch *ds, int port)
 		return port;
 
 	return dsa_towards_port(ds, cpu_dp->ds->index, cpu_dp->index);
+}
+
+static inline bool dsa_is_upstream_port(struct dsa_switch *ds, int port)
+{
+	if (dsa_is_unused_port(ds, port))
+		return false;
+
+	return port == dsa_upstream_port(ds, port);
+}
+
+/* Return true if @upstream_ds is an upstream switch of @downstream_ds. */
+static inline bool dsa_switch_is_upstream_of(struct dsa_switch *upstream_ds,
+					     struct dsa_switch *downstream_ds)
+{
+	int routing_port;
+
+	if (upstream_ds == downstream_ds)
+		return true;
+
+	routing_port = dsa_routing_port(downstream_ds, upstream_ds->index);
+
+	return dsa_is_upstream_port(downstream_ds, routing_port);
 }
 
 static inline bool dsa_port_is_vlan_filtering(const struct dsa_port *dp)

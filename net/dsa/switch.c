@@ -148,6 +148,25 @@ static int dsa_switch_bridge_leave(struct dsa_switch *ds,
 	return 0;
 }
 
+/* Matches for all upstream-facing ports (the CPU port and all upstream-facing
+ * DSA links) that sit between the port that emitted the notification and the
+ * DSA master.
+ */
+static bool dsa_switch_host_address_match(struct dsa_switch *ds, int port,
+					  int info_sw_index, int info_port)
+{
+	struct dsa_switch *downstream_ds;
+
+	downstream_ds = dsa_switch_find(ds->dst->index, info_sw_index);
+	if (WARN_ON(!downstream_ds))
+		return false;
+
+	if (dsa_switch_is_upstream_of(ds, downstream_ds))
+		return dsa_is_upstream_port(ds, port);
+
+	return false;
+}
+
 static int dsa_switch_fdb_add(struct dsa_switch *ds,
 			      struct dsa_notifier_fdb_info *info)
 {
@@ -229,20 +248,30 @@ static int dsa_switch_lag_leave(struct dsa_switch *ds,
 	return 0;
 }
 
-static bool dsa_switch_mdb_match(struct dsa_switch *ds, int port,
-				 struct dsa_notifier_mdb_info *info)
-{
-	if (ds->index == info->sw_index && port == info->port)
-		return true;
-
-	if (dsa_is_dsa_port(ds, port))
-		return true;
-
-	return false;
-}
-
 static int dsa_switch_mdb_add(struct dsa_switch *ds,
 			      struct dsa_notifier_mdb_info *info)
+{
+	int port = dsa_towards_port(ds, info->sw_index, info->port);
+
+	if (!ds->ops->port_mdb_add)
+		return -EOPNOTSUPP;
+
+	return ds->ops->port_mdb_add(ds, port, info->mdb);
+}
+
+static int dsa_switch_mdb_del(struct dsa_switch *ds,
+			      struct dsa_notifier_mdb_info *info)
+{
+	int port = dsa_towards_port(ds, info->sw_index, info->port);
+
+	if (!ds->ops->port_mdb_del)
+		return -EOPNOTSUPP;
+
+	return ds->ops->port_mdb_del(ds, port, info->mdb);
+}
+
+static int dsa_switch_host_mdb_add(struct dsa_switch *ds,
+				   struct dsa_notifier_mdb_info *info)
 {
 	int err = 0;
 	int port;
@@ -251,7 +280,8 @@ static int dsa_switch_mdb_add(struct dsa_switch *ds,
 		return -EOPNOTSUPP;
 
 	for (port = 0; port < ds->num_ports; port++) {
-		if (dsa_switch_mdb_match(ds, port, info)) {
+		if (dsa_switch_host_address_match(ds, port, info->sw_index,
+						  info->port)) {
 			err = ds->ops->port_mdb_add(ds, port, info->mdb);
 			if (err)
 				break;
@@ -261,16 +291,25 @@ static int dsa_switch_mdb_add(struct dsa_switch *ds,
 	return err;
 }
 
-static int dsa_switch_mdb_del(struct dsa_switch *ds,
-			      struct dsa_notifier_mdb_info *info)
+static int dsa_switch_host_mdb_del(struct dsa_switch *ds,
+				   struct dsa_notifier_mdb_info *info)
 {
+	int err = 0;
+	int port;
+
 	if (!ds->ops->port_mdb_del)
 		return -EOPNOTSUPP;
 
-	if (ds->index == info->sw_index)
-		return ds->ops->port_mdb_del(ds, info->port, info->mdb);
+	for (port = 0; port < ds->num_ports; port++) {
+		if (dsa_switch_host_address_match(ds, port, info->sw_index,
+						  info->port)) {
+			err = ds->ops->port_mdb_del(ds, info->port, info->mdb);
+			if (err)
+				break;
+		}
+	}
 
-	return 0;
+	return err;
 }
 
 static bool dsa_switch_vlan_match(struct dsa_switch *ds, int port,
@@ -507,6 +546,12 @@ static int dsa_switch_event(struct notifier_block *nb,
 		break;
 	case DSA_NOTIFIER_MDB_DEL:
 		err = dsa_switch_mdb_del(ds, info);
+		break;
+	case DSA_NOTIFIER_HOST_MDB_ADD:
+		err = dsa_switch_host_mdb_add(ds, info);
+		break;
+	case DSA_NOTIFIER_HOST_MDB_DEL:
+		err = dsa_switch_host_mdb_del(ds, info);
 		break;
 	case DSA_NOTIFIER_VLAN_ADD:
 		err = dsa_switch_vlan_add(ds, info);
