@@ -326,6 +326,11 @@ static struct dsa_port *dsa_tree_find_first_cpu(struct dsa_switch_tree *dst)
 	return NULL;
 }
 
+static void dsa_setup_cpu_port(struct dsa_port *cpu_dp)
+{
+	INIT_LIST_HEAD(&cpu_dp->host_mdb);
+}
+
 static int dsa_tree_setup_default_cpu(struct dsa_switch_tree *dst)
 {
 	struct dsa_port *cpu_dp, *dp;
@@ -336,6 +341,8 @@ static int dsa_tree_setup_default_cpu(struct dsa_switch_tree *dst)
 		return -EINVAL;
 	}
 
+	dsa_setup_cpu_port(cpu_dp);
+
 	/* Assign the default CPU port to all ports of the fabric */
 	list_for_each_entry(dp, &dst->ports, list)
 		if (dsa_port_is_user(dp) || dsa_port_is_dsa(dp))
@@ -344,13 +351,26 @@ static int dsa_tree_setup_default_cpu(struct dsa_switch_tree *dst)
 	return 0;
 }
 
+static void dsa_teardown_cpu_port(struct dsa_port *cpu_dp)
+{
+	struct dsa_host_addr *a, *tmp;
+
+	list_for_each_entry_safe(a, tmp, &cpu_dp->host_mdb, list) {
+		list_del(&a->list);
+		kfree(a);
+	}
+}
+
 static void dsa_tree_teardown_default_cpu(struct dsa_switch_tree *dst)
 {
 	struct dsa_port *dp;
 
-	list_for_each_entry(dp, &dst->ports, list)
-		if (dsa_port_is_user(dp) || dsa_port_is_dsa(dp))
+	list_for_each_entry(dp, &dst->ports, list) {
+		if (dsa_port_is_user(dp) || dsa_port_is_dsa(dp)) {
+			dsa_teardown_cpu_port(dp->cpu_dp);
 			dp->cpu_dp = NULL;
+		}
+	}
 }
 
 static int dsa_port_setup(struct dsa_port *dp)
