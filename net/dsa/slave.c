@@ -548,6 +548,43 @@ netdev_tx_t dsa_enqueue_skb(struct sk_buff *skb, struct net_device *dev)
 }
 EXPORT_SYMBOL_GPL(dsa_enqueue_skb);
 
+static int dsa_realloc_skb(struct sk_buff *skb, struct net_device *dev)
+{
+	struct dsa_slave_priv *p = netdev_priv(dev);
+	struct dsa_slave_stats *e;
+	int needed_headroom;
+	int needed_tailroom;
+	int padlen = 0, err;
+
+	needed_headroom = dev->needed_headroom;
+	needed_tailroom = dev->needed_tailroom;
+	/* For tail taggers, we need to pad short frames ourselves, to ensure
+	 * that the tail tag does not fail at its role of being at the end of
+	 * the packet, once the master interface pads the frame.
+	 */
+	if (unlikely(needed_tailroom && skb->len < ETH_ZLEN))
+		padlen = ETH_ZLEN - skb->len;
+	needed_tailroom += padlen;
+	needed_headroom = max(needed_headroom - skb_headroom(skb), 0);
+	needed_tailroom = max(needed_tailroom - skb_tailroom(skb), 0);
+
+	if (likely(!needed_headroom && !needed_tailroom && !skb_cloned(skb)))
+		/* No reallocation needed, yay! */
+		return 0;
+
+	e = this_cpu_ptr(p->extra_stats);
+	u64_stats_update_begin(&e->syncp);
+	e->tx_reallocs++;
+	u64_stats_update_end(&e->syncp);
+
+	err = pskb_expand_head(skb, needed_headroom, needed_tailroom,
+			       GFP_ATOMIC);
+	if (err < 0)
+		return err;
+
+	return padlen ? __skb_put_padto(skb, ETH_ZLEN, false) : 0;
+}
+
 static netdev_tx_t dsa_slave_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	struct dsa_slave_priv *p = netdev_priv(dev);
@@ -566,6 +603,11 @@ static netdev_tx_t dsa_slave_xmit(struct sk_buff *skb, struct net_device *dev)
 	 * switch driver
 	 */
 	dsa_skb_tx_timestamp(p, skb);
+
+	if (dsa_realloc_skb(skb, dev)) {
+		kfree_skb(skb);
+		return NETDEV_TX_OK;
+	}
 
 	/* Transmit function may have to reallocate the original SKB,
 	 * in which case it must have freed it. Only free it here on error.
@@ -1802,6 +1844,16 @@ int dsa_slave_create(struct dsa_port *port)
 	slave_dev->netdev_ops = &dsa_slave_netdev_ops;
 	if (ds->ops->port_max_mtu)
 		slave_dev->max_mtu = ds->ops->port_max_mtu(ds, port->index);
+	if (cpu_dp->tag_ops->tail_tag)
+		slave_dev->needed_tailroom = cpu_dp->tag_ops->overhead;
+	else
+		slave_dev->needed_headroom = cpu_dp->tag_ops->overhead;
+	/* Try to save one extra realloc later in the TX path (in the master)
+	 * by also inheriting the master's needed headroom and tailroom.
+	 * The 8021q driver also does this.
+	 */
+	slave_dev->needed_headroom += master->needed_headroom;
+	slave_dev->needed_tailroom += master->needed_tailroom;
 	SET_NETDEV_DEVTYPE(slave_dev, &dsa_type);
 
 	netdev_for_each_tx_queue(slave_dev, dsa_slave_set_lockdep_class_one,
