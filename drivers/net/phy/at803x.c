@@ -614,16 +614,21 @@ static int at803x_config_intr(struct phy_device *phydev)
 	value = phy_read(phydev, AT803X_INTR_ENABLE);
 
 	if (phydev->interrupts == PHY_INTERRUPT_ENABLED) {
+		err = phy_read(phydev, AT803X_INTR_STATUS);
+		if (err < 0)
+			return err;
+
 		value |= AT803X_INTR_ENABLE_AUTONEG_ERR;
 		value |= AT803X_INTR_ENABLE_SPEED_CHANGED;
 		value |= AT803X_INTR_ENABLE_DUPLEX_CHANGED;
 		value |= AT803X_INTR_ENABLE_LINK_FAIL;
 		value |= AT803X_INTR_ENABLE_LINK_SUCCESS;
 
-		err = phy_write(phydev, AT803X_INTR_ENABLE, value);
+		return phy_write(phydev, AT803X_INTR_ENABLE, value);
 	}
-	else
-		err = phy_write(phydev, AT803X_INTR_ENABLE, 0);
+
+	err = phy_write(phydev, AT803X_INTR_ENABLE, 0);
+	phy_read(phydev, AT803X_INTR_STATUS);
 
 	return err;
 }
