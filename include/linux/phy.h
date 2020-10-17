@@ -1631,6 +1631,8 @@ int phy_package_join(struct phy_device *phydev, int addr, size_t priv_size);
 void phy_package_leave(struct phy_device *phydev);
 int devm_phy_package_join(struct device *dev, struct phy_device *phydev,
 			  int addr, size_t priv_size);
+void phy_trigger_machine(struct phy_device *phydev);
+void phy_error(struct phy_device *phydev);
 
 #if IS_ENABLED(CONFIG_PHYLIB)
 int __init mdio_bus_init(void);
