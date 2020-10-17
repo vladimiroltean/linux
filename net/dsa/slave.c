@@ -668,9 +668,10 @@ static void dsa_slave_get_strings(struct net_device *dev,
 		strncpy(data + len, "tx_bytes", len);
 		strncpy(data + 2 * len, "rx_packets", len);
 		strncpy(data + 3 * len, "rx_bytes", len);
+		strncpy(data + 4 * len, "tx_reallocs", len);
 		if (ds->ops->get_strings)
 			ds->ops->get_strings(ds, dp->index, stringset,
-					     data + 4 * len);
+					     data + 5 * len);
 	}
 }
 
@@ -682,11 +683,13 @@ static void dsa_slave_get_ethtool_stats(struct net_device *dev,
 	struct dsa_slave_priv *p = netdev_priv(dev);
 	struct dsa_switch *ds = dp->ds;
 	struct pcpu_sw_netstats *s;
+	struct dsa_slave_stats *e;
 	unsigned int start;
 	int i;
 
 	for_each_possible_cpu(i) {
 		u64 tx_packets, tx_bytes, rx_packets, rx_bytes;
+		u64 tx_reallocs;
 
 		s = per_cpu_ptr(p->stats64, i);
 		do {
@@ -696,13 +699,21 @@ static void dsa_slave_get_ethtool_stats(struct net_device *dev,
 			rx_packets = s->rx_packets;
 			rx_bytes = s->rx_bytes;
 		} while (u64_stats_fetch_retry_irq(&s->syncp, start));
+
+		e = per_cpu_ptr(p->extra_stats, i);
+		do {
+			start = u64_stats_fetch_begin_irq(&e->syncp);
+			tx_reallocs	= e->tx_reallocs;
+		} while (u64_stats_fetch_retry_irq(&e->syncp, start));
+
 		data[0] += tx_packets;
 		data[1] += tx_bytes;
 		data[2] += rx_packets;
 		data[3] += rx_bytes;
+		data[4] += tx_reallocs;
 	}
 	if (ds->ops->get_ethtool_stats)
-		ds->ops->get_ethtool_stats(ds, dp->index, data + 4);
+		ds->ops->get_ethtool_stats(ds, dp->index, data + 5);
 }
 
 static int dsa_slave_get_sset_count(struct net_device *dev, int sset)
@@ -713,7 +724,7 @@ static int dsa_slave_get_sset_count(struct net_device *dev, int sset)
 	if (sset == ETH_SS_STATS) {
 		int count;
 
-		count = 4;
+		count = 5;
 		if (ds->ops->get_sset_count)
 			count += ds->ops->get_sset_count(ds, dp->index, sset);
 
@@ -1806,6 +1817,12 @@ int dsa_slave_create(struct dsa_port *port)
 		free_netdev(slave_dev);
 		return -ENOMEM;
 	}
+	p->extra_stats = netdev_alloc_pcpu_stats(struct dsa_slave_stats);
+	if (!p->extra_stats) {
+		free_percpu(p->stats64);
+		free_netdev(slave_dev);
+		return -ENOMEM;
+	}
 
 	ret = gro_cells_init(&p->gcells, slave_dev);
 	if (ret)
@@ -1864,6 +1881,7 @@ out_phy:
 out_gcells:
 	gro_cells_destroy(&p->gcells);
 out_free:
+	free_percpu(p->extra_stats);
 	free_percpu(p->stats64);
 	free_netdev(slave_dev);
 	port->slave = NULL;
@@ -1886,6 +1904,7 @@ void dsa_slave_destroy(struct net_device *slave_dev)
 	dsa_slave_notify(slave_dev, DSA_PORT_UNREGISTER);
 	phylink_destroy(dp->pl);
 	gro_cells_destroy(&p->gcells);
+	free_percpu(p->extra_stats);
 	free_percpu(p->stats64);
 	free_netdev(slave_dev);
 }

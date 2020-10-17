@@ -73,12 +73,21 @@ struct dsa_notifier_mtu_info {
 	int mtu;
 };
 
+/* Driver statistics, other than those in struct rtnl_link_stats64.
+ * These are collected per-CPU and aggregated by ethtool.
+ */
+struct dsa_slave_stats {
+	u64			tx_reallocs;
+	struct u64_stats_sync	syncp;
+} __aligned(1 * sizeof(u64));
+
 struct dsa_slave_priv {
 	/* Copy of CPU port xmit for faster access in slave transmit hot path */
 	struct sk_buff *	(*xmit)(struct sk_buff *skb,
 					struct net_device *dev);
 
 	struct pcpu_sw_netstats	__percpu *stats64;
+	struct dsa_slave_stats	__percpu *extra_stats;
 
 	struct gro_cells	gcells;
 
