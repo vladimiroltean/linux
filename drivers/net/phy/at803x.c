@@ -597,13 +597,21 @@ static int at803x_config_init(struct phy_device *phydev)
 	return 0;
 }
 
-static int at803x_ack_interrupt(struct phy_device *phydev)
+static irqreturn_t at803x_handle_interrupt(struct phy_device *phydev)
 {
 	int err;
 
 	err = phy_read(phydev, AT803X_INTR_STATUS);
+	if (err < 0) {
+		phy_error(phydev);
+		return IRQ_NONE;
+	}
+	if (err == 0)
+		return IRQ_NONE;
 
-	return (err < 0) ? err : 0;
+	phy_trigger_machine(phydev);
+
+	return IRQ_HANDLED;
 }
 
 static int at803x_config_intr(struct phy_device *phydev)
@@ -1067,7 +1075,7 @@ static struct phy_driver at803x_driver[] = {
 	.resume			= at803x_resume,
 	/* PHY_GBIT_FEATURES */
 	.read_status		= at803x_read_status,
-	.ack_interrupt		= at803x_ack_interrupt,
+	.handle_interrupt	= at803x_handle_interrupt,
 	.config_intr		= at803x_config_intr,
 	.get_tunable		= at803x_get_tunable,
 	.set_tunable		= at803x_set_tunable,
@@ -1087,7 +1095,7 @@ static struct phy_driver at803x_driver[] = {
 	.suspend		= at803x_suspend,
 	.resume			= at803x_resume,
 	/* PHY_BASIC_FEATURES */
-	.ack_interrupt		= at803x_ack_interrupt,
+	.handle_interrupt	= at803x_handle_interrupt,
 	.config_intr		= at803x_config_intr,
 }, {
 	/* Qualcomm Atheros AR8031/AR8033 */
@@ -1105,7 +1113,7 @@ static struct phy_driver at803x_driver[] = {
 	/* PHY_GBIT_FEATURES */
 	.read_status		= at803x_read_status,
 	.aneg_done		= at803x_aneg_done,
-	.ack_interrupt		= &at803x_ack_interrupt,
+	.handle_interrupt	= at803x_handle_interrupt,
 	.config_intr		= &at803x_config_intr,
 	.get_tunable		= at803x_get_tunable,
 	.set_tunable		= at803x_set_tunable,
@@ -1125,7 +1133,7 @@ static struct phy_driver at803x_driver[] = {
 	.suspend		= at803x_suspend,
 	.resume			= at803x_resume,
 	/* PHY_BASIC_FEATURES */
-	.ack_interrupt		= at803x_ack_interrupt,
+	.handle_interrupt	= at803x_handle_interrupt,
 	.config_intr		= at803x_config_intr,
 	.cable_test_start	= at803x_cable_test_start,
 	.cable_test_get_status	= at803x_cable_test_get_status,
@@ -1137,7 +1145,7 @@ static struct phy_driver at803x_driver[] = {
 	.resume			= at803x_resume,
 	.flags			= PHY_POLL_CABLE_TEST,
 	/* PHY_BASIC_FEATURES */
-	.ack_interrupt		= &at803x_ack_interrupt,
+	.handle_interrupt	= at803x_handle_interrupt,
 	.config_intr		= &at803x_config_intr,
 	.cable_test_start	= at803x_cable_test_start,
 	.cable_test_get_status	= at803x_cable_test_get_status,
