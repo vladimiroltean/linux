@@ -184,7 +184,8 @@ static struct sk_buff *ksz9477_defer_xmit(struct dsa_port *dp,
 
 	/* Use cached PTP msg type from ksz9477_ptp_port_txtstamp().  */
 	ptp_msg_type = KSZ9477_SKB_CB(clone)->ptp_msg_type;
-	if (ptp_msg_type != PTP_MSGTYPE_PDELAY_REQ)
+	if (ptp_msg_type != PTP_MSGTYPE_DELAY_REQ &&
+	    ptp_msg_type != PTP_MSGTYPE_PDELAY_REQ)
 		goto out_free_clone;  /* only PDelay_Req is deferred */
 
 	/* Increase refcount so the kfree_skb in dsa_slave_xmit

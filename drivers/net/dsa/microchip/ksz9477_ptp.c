@@ -885,6 +885,20 @@ enum ksz9477_ptp_tcmode {
 	KSZ9477_PTP_TCMODE_P2P,
 };
 
+static int ksz9477_ptp_tcmode_get(struct ksz_device *dev, enum ksz9477_ptp_tcmode *tcmode)
+{
+	u16 data;
+	int ret;
+
+	ret = ksz_read16(dev, REG_PTP_MSG_CONF1, &data);
+	if (ret)
+		return ret;
+
+	*tcmode = (data & PTP_TC_P2P) ? KSZ9477_PTP_TCMODE_P2P : KSZ9477_PTP_TCMODE_E2E;
+
+	return 0;
+}
+
 static int ksz9477_ptp_tcmode_set(struct ksz_device *dev,
 				  enum ksz9477_ptp_tcmode tcmode)
 {
@@ -903,10 +917,55 @@ static int ksz9477_ptp_tcmode_set(struct ksz_device *dev,
 	return ksz_write16(dev, REG_PTP_MSG_CONF1, data);
 }
 
+static ssize_t tcmode_show(struct device *dev, struct device_attribute *attr __always_unused,
+			   char *buf)
+{
+	struct ksz_device *ksz = dev_get_drvdata(dev);
+	enum ksz9477_ptp_tcmode tcmode;
+	int ret = ksz9477_ptp_tcmode_get(ksz, &tcmode);
+
+	if (ret)
+		return ret;
+
+	return sprintf(buf, "%s\n", tcmode == KSZ9477_PTP_TCMODE_P2P ? "P2P" : "E2E");
+}
+
+static ssize_t tcmode_store(struct device *dev, struct device_attribute *attr __always_unused,
+			    char const *buf, size_t count)
+{
+	struct ksz_device *ksz = dev_get_drvdata(dev);
+	int ret;
+
+	if (strcasecmp(buf, "E2E") == 0)
+		ret = ksz9477_ptp_tcmode_set(ksz, KSZ9477_PTP_TCMODE_E2E);
+	else if (strcasecmp(buf, "P2P") == 0)
+		ret = ksz9477_ptp_tcmode_set(ksz, KSZ9477_PTP_TCMODE_P2P);
+	else
+		return -EINVAL;
+
+	return ret ? ret : (ssize_t)count;
+}
+
+static DEVICE_ATTR_RW(tcmode);
+
 enum ksz9477_ptp_ocmode {
 	KSZ9477_PTP_OCMODE_SLAVE,
 	KSZ9477_PTP_OCMODE_MASTER,
 };
+
+static int ksz9477_ptp_ocmode_get(struct ksz_device *dev, enum ksz9477_ptp_ocmode *ocmode)
+{
+	u16 data;
+	int ret;
+
+	ret = ksz_read16(dev, REG_PTP_MSG_CONF1, &data);
+	if (ret)
+		return ret;
+
+	*ocmode = (data & PTP_MASTER) ? KSZ9477_PTP_OCMODE_MASTER : KSZ9477_PTP_OCMODE_SLAVE;
+
+	return 0;
+}
 
 static int ksz9477_ptp_ocmode_set(struct ksz_device *dev,
 				  enum ksz9477_ptp_ocmode ocmode)
@@ -925,6 +984,47 @@ static int ksz9477_ptp_ocmode_set(struct ksz_device *dev,
 
 	return ksz_write16(dev, REG_PTP_MSG_CONF1, data);
 }
+
+static ssize_t ocmode_show(struct device *dev, struct device_attribute *attr __always_unused,
+			   char *buf)
+{
+	struct ksz_device *ksz = dev_get_drvdata(dev);
+	enum ksz9477_ptp_ocmode ocmode;
+	int ret = ksz9477_ptp_ocmode_get(ksz, &ocmode);
+
+	if (ret)
+		return ret;
+
+	return sprintf(buf, "%s\n", ocmode == KSZ9477_PTP_OCMODE_MASTER ? "master" : "slave");
+}
+
+static ssize_t ocmode_store(struct device *dev, struct device_attribute *attr __always_unused,
+			    char const *buf, size_t count)
+{
+	struct ksz_device *ksz = dev_get_drvdata(dev);
+	int ret;
+
+	if (strcasecmp(buf, "master") == 0)
+		ret = ksz9477_ptp_ocmode_set(ksz, KSZ9477_PTP_OCMODE_MASTER);
+	else if (strcasecmp(buf, "slave") == 0)
+		ret = ksz9477_ptp_ocmode_set(ksz, KSZ9477_PTP_OCMODE_SLAVE);
+	else
+		return -EINVAL;
+
+	return ret ? ret : (ssize_t)count;
+}
+
+static DEVICE_ATTR_RW(ocmode);
+
+static struct attribute *ksz9477_ptp_attrs[] = {
+	&dev_attr_tcmode.attr,
+	&dev_attr_ocmode.attr,
+	NULL,
+};
+
+static struct attribute_group ksz9477_ptp_attrgrp = {
+	.attrs = ksz9477_ptp_attrs,
+};
 
 int ksz9477_ptp_init(struct ksz_device *dev)
 {
@@ -970,24 +1070,15 @@ int ksz9477_ptp_init(struct ksz_device *dev)
 	if (ret)
 		goto error_unregister_clock;
 
-	/* Currently, only P2P delay measurement is supported.  Setting ocmode
-	 * to slave will work independently of actually being master or slave.
-	 * For E2E delay measurement, switching between master and slave would
-	 * be required, as the KSZ devices filters out PTP messages depending on
-	 * the ocmode setting:
-	 * - in slave mode, DelayReq messages are filtered out
-	 * - in master mode, Sync messages are filtered out
-	 * Currently (and probably also in future) there is no interface in the
-	 * kernel which allows switching between master and slave mode.  For
-	 * this reason, E2E cannot be supported. See patchwork for full
-	 * discussion:
-	 * https://patchwork.ozlabs.org/project/netdev/patch/20201019172435.4416-8-ceggers@arri.de/
-	 */
-	ksz9477_ptp_tcmode_set(dev, KSZ9477_PTP_TCMODE_P2P);
-	ksz9477_ptp_ocmode_set(dev, KSZ9477_PTP_OCMODE_SLAVE);
+	/* Init attributes */
+	ret = sysfs_create_group(&dev->dev->kobj, &ksz9477_ptp_attrgrp);
+	if (ret)
+		goto error_ports_deinit;
 
 	return 0;
 
+error_ports_deinit:
+	ksz9477_ptp_ports_deinit(dev);
 error_unregister_clock:
 	ptp_clock_unregister(dev->ptp_clock);
 error_stop_clock:
@@ -997,6 +1088,7 @@ error_stop_clock:
 
 void ksz9477_ptp_deinit(struct ksz_device *dev)
 {
+	sysfs_remove_group(&dev->dev->kobj, &ksz9477_ptp_attrgrp);
 	ksz9477_ptp_ports_deinit(dev);
 	ksz9477_ptp_enable_mode(dev, false);
 	ptp_clock_unregister(dev->ptp_clock);
@@ -1096,14 +1188,17 @@ static int ksz9477_set_hwtstamp_config(struct ksz_device *dev, int port,
 		break;
 	case HWTSTAMP_FILTER_PTP_V2_L4_EVENT:
 	case HWTSTAMP_FILTER_PTP_V2_L4_SYNC:
+	case HWTSTAMP_FILTER_PTP_V2_L4_DELAY_REQ:
 		config->rx_filter = HWTSTAMP_FILTER_PTP_V2_L4_EVENT;
 		break;
 	case HWTSTAMP_FILTER_PTP_V2_L2_EVENT:
 	case HWTSTAMP_FILTER_PTP_V2_L2_SYNC:
+	case HWTSTAMP_FILTER_PTP_V2_L2_DELAY_REQ:
 		config->rx_filter = HWTSTAMP_FILTER_PTP_V2_L2_EVENT;
 		break;
 	case HWTSTAMP_FILTER_PTP_V2_EVENT:
 	case HWTSTAMP_FILTER_PTP_V2_SYNC:
+	case HWTSTAMP_FILTER_PTP_V2_DELAY_REQ:
 		config->rx_filter = HWTSTAMP_FILTER_PTP_V2_EVENT;
 		break;
 	default:
@@ -1192,13 +1287,12 @@ bool ksz9477_ptp_port_txtstamp(struct dsa_switch *ds, int port,
 	ptp_msg_type = ptp_get_msgtype(hdr, type);
 	switch (ptp_msg_type) {
 	/* As the KSZ9563 always performs one step time stamping, only the time
-	 * stamp for Pdelay_Req is reported to the application via socket error
-	 * queue.  Time stamps for Sync and Pdelay_resp will be applied directly
-	 * to the outgoing message (e.g. correction field), but will NOT be
-	 * reported to the socket.
-	 * Delay_Req is not time stamped as E2E is currently not supported by
-	 * this driver.  See ksz9477_ptp_init() for details.
+	 * stamp for Delay_Req and Pdelay_Req are reported to the application
+	 * via socket error queue. Time stamps for Sync and Pdelay_resp will be
+	 * applied directly to the outgoing message (e.g. correction field), but
+	 * will NOT be reported to the socket.
 	 */
+	case PTP_MSGTYPE_DELAY_REQ:
 	case PTP_MSGTYPE_PDELAY_REQ:
 	case PTP_MSGTYPE_PDELAY_RESP:
 		break;
