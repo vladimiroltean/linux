@@ -780,5 +780,11 @@ int ocelot_port_mdb_add(struct ocelot *ocelot, int port,
 			const struct switchdev_obj_port_mdb *mdb);
 int ocelot_port_mdb_del(struct ocelot *ocelot, int port,
 			const struct switchdev_obj_port_mdb *mdb);
+int ocelot_port_lag_join(struct ocelot *ocelot, int port,
+			 struct net_device *bond,
+			 struct netdev_lag_upper_info *info);
+int ocelot_port_lag_leave(struct ocelot *ocelot, int port,
+			  struct net_device *bond);
+int ocelot_port_lag_change(struct ocelot *ocelot, int port, bool lag_tx_active);
 
 #endif

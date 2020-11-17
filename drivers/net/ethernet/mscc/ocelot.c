@@ -1380,6 +1380,7 @@ int ocelot_port_lag_change(struct ocelot *ocelot, int port, bool lag_tx_active)
 	/* Rebalance the LAGs */
 	return ocelot_set_aggr_pgids(ocelot);
 }
+EXPORT_SYMBOL(ocelot_port_lag_change);
 
 /* Configure the maximum SDU (L2 payload) on RX to the value specified in @sdu.
  * The length of VLAN tags is accounted for automatically via DEV_MAC_TAGS_CFG.
