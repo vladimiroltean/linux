@@ -597,6 +597,8 @@ struct ocelot_port {
 	phy_interface_t			phy_mode;
 
 	u8				*xmit_template;
+
+	struct net_device		*bond;
 };
 
 struct ocelot {
