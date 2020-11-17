@@ -112,6 +112,30 @@ static void felix_bridge_leave(struct dsa_switch *ds, int port,
 	ocelot_port_bridge_leave(ocelot, port, br);
 }
 
+static int felix_lag_join(struct dsa_switch *ds, int port,
+			  struct net_device *lag_dev)
+{
+	struct ocelot *ocelot = ds->priv;
+
+	return ocelot_port_lag_join(ocelot, port, lag_dev);
+}
+
+static void felix_lag_leave(struct dsa_switch *ds, int port,
+			    struct net_device *lag_dev)
+{
+	struct ocelot *ocelot = ds->priv;
+
+	ocelot_port_lag_leave(ocelot, port, lag_dev);
+}
+
+static int felix_lag_change(struct dsa_switch *ds, int port,
+			    struct netdev_lag_lower_state_info *linfo)
+{
+	struct ocelot *ocelot = ds->priv;
+
+	return ocelot_port_lag_change(ocelot, port, linfo);
+}
+
 static int felix_vlan_prepare(struct dsa_switch *ds, int port,
 			      const struct switchdev_obj_port_vlan *vlan)
 {
@@ -803,6 +827,9 @@ const struct dsa_switch_ops felix_switch_ops = {
 	.port_mdb_del		= felix_mdb_del,
 	.port_bridge_join	= felix_bridge_join,
 	.port_bridge_leave	= felix_bridge_leave,
+	.port_lag_join		= felix_lag_join,
+	.port_lag_leave		= felix_lag_leave,
+	.port_lag_change	= felix_lag_change,
 	.port_stp_state_set	= felix_bridge_stp_state_set,
 	.port_vlan_prepare	= felix_vlan_prepare,
 	.port_vlan_filtering	= felix_vlan_filtering,
