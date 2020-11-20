@@ -1011,7 +1011,7 @@
 					mscc_felix_port5: port@5 {
 						reg = <5>;
 						phy-mode = "internal";
-						status = "disabled";
+						status = "okay";
 
 						fixed-link {
 							speed = <1000>;
@@ -1025,7 +1025,7 @@
 				compatible = "fsl,enetc";
 				reg = <0x000600 0 0 0 0>;
 				phy-mode = "internal";
-				status = "disabled";
+				status = "okay";
 
 				fixed-link {
 					speed = <1000>;
