@@ -477,8 +477,10 @@ struct dsa_switch_ops {
 	void	(*phylink_fixed_state)(struct dsa_switch *ds, int port,
 				       struct phylink_link_state *state);
 	/*
-	 * ethtool hardware statistics.
+	 * Hardware statistics
 	 */
+	int	(*port_get_stats64)(struct dsa_switch *ds, int port,
+				    struct rtnl_link_stats64 *s);
 	void	(*get_strings)(struct dsa_switch *ds, int port,
 			       u32 stringset, uint8_t *data);
 	void	(*get_ethtool_stats)(struct dsa_switch *ds,
