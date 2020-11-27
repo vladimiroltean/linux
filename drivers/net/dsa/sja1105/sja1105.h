@@ -318,6 +318,8 @@ void sja1105_get_ethtool_stats(struct dsa_switch *ds, int port, u64 *data);
 void sja1105_get_strings(struct dsa_switch *ds, int port,
 			 u32 stringset, u8 *data);
 int sja1105_get_sset_count(struct dsa_switch *ds, int port, int sset);
+int sja1105_port_get_stats64(struct dsa_switch *ds, int port,
+			     struct rtnl_link_stats64 *stats);
 
 /* From sja1105_dynamic_config.c */
 int sja1105_dynamic_config_read(struct sja1105_private *priv,
