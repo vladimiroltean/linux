@@ -812,3 +812,75 @@ int sja1105_get_sset_count(struct dsa_switch *ds, int port, int sset)
 
 	return sset_count;
 }
+
+int sja1105_port_get_stats64(struct dsa_switch *ds, int port,
+			     struct rtnl_link_stats64 *stats)
+{
+	u64 alignerr, egr_disabled, not_reach, qfull, unreleased;
+	u64 vlanerr, polerr, part_drop, crcerr, sizeerr;
+	u64 rxfrm, txfrm, rxbyte, txbyte, rx_mcast;
+	struct sja1105_private *priv = ds->priv;
+	int rc;
+
+	rc = sja1105_port_counter_read(priv, port, N_RXFRM, &rxfrm);
+	if (rc)
+		return rc;
+	rc = sja1105_port_counter_read(priv, port, N_TXFRM, &txfrm);
+	if (rc)
+		return rc;
+	rc = sja1105_port_counter_read(priv, port, N_RXBYTE, &rxbyte);
+	if (rc)
+		return rc;
+	rc = sja1105_port_counter_read(priv, port, N_TXBYTE, &txbyte);
+	if (rc)
+		return rc;
+	rc = sja1105_port_counter_read(priv, port, N_POLERR, &polerr);
+	if (rc)
+		return rc;
+	rc = sja1105_port_counter_read(priv, port, N_PART_DROP, &part_drop);
+	if (rc)
+		return rc;
+	rc = sja1105_port_counter_read(priv, port, N_CRCERR, &crcerr);
+	if (rc)
+		return rc;
+	rc = sja1105_port_counter_read(priv, port, N_SIZEERR, &sizeerr);
+	if (rc)
+		return rc;
+	rc = sja1105_port_counter_read(priv, port, N_RX_MCAST, &rx_mcast);
+	if (rc)
+		return rc;
+	rc = sja1105_port_counter_read(priv, port, N_ALIGNERR, &alignerr);
+	if (rc)
+		return rc;
+	rc = sja1105_port_counter_read(priv, port, N_NOT_REACH, &not_reach);
+	if (rc)
+		return rc;
+	rc = sja1105_port_counter_read(priv, port, N_UNRELEASED, &unreleased);
+	if (rc)
+		return rc;
+	rc = sja1105_port_counter_read(priv, port, N_QFULL, &qfull);
+	if (rc)
+		return rc;
+	rc = sja1105_port_counter_read(priv, port, N_EGR_DISABLED,
+				       &egr_disabled);
+	if (rc)
+		return rc;
+
+	/* detailed rx_errors: */
+	stats->rx_length_errors = sizeerr;
+	stats->rx_over_errors = sizeerr;
+	stats->rx_crc_errors = crcerr;
+	stats->rx_frame_errors = alignerr;
+	stats->rx_missed_errors = part_drop;
+
+	stats->rx_packets = rxfrm;
+	stats->tx_packets = txfrm;
+	stats->rx_bytes = rxbyte;
+	stats->tx_bytes = txbyte;
+	stats->rx_dropped = vlanerr + polerr + part_drop + crcerr + sizeerr;
+	stats->tx_dropped = egr_disabled + not_reach + qfull + unreleased;
+	stats->rx_errors = crcerr;
+	stats->multicast = rx_mcast;
+
+	return 0;
+}
