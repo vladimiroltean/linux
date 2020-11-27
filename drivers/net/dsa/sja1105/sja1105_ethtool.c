@@ -552,3 +552,41 @@ int sja1105_get_sset_count(struct dsa_switch *ds, int port, int sset)
 
 	return count;
 }
+
+void sja1105_port_get_stats64(struct dsa_switch *ds, int port,
+			      struct rtnl_link_stats64 *stats)
+{
+	struct sja1105_private *priv = ds->priv;
+	struct sja1105_port_status *status;
+	int rc;
+
+	msleep(2000);
+
+	status = kzalloc(sizeof(*status), GFP_KERNEL);
+	if (!status)
+		return;
+
+	rc = sja1105_port_status_get(priv, status, port);
+	if (rc < 0) {
+		dev_err(ds->dev, "Failed to read port %d counters: %d\n",
+			port, rc);
+		kfree(status);
+		return;
+	}
+
+	stats->rx_packets = status->hl1.n_rxfrm;
+	stats->tx_packets = status->hl1.n_txfrm;
+	stats->rx_bytes = status->hl1.n_rxbyte;
+	stats->tx_bytes = status->hl1.n_txbyte;
+	stats->rx_dropped = status->hl1.n_vlanerr + status->hl1.n_polerr + status->hl2.n_part_drop + status->hl1.n_crcerr + status->hl1.n_sizeerr;
+	stats->tx_dropped = status->hl2.n_egr_disabled + status->hl2.n_not_reach + status->hl2.n_qfull + status->hl1.n_unreleased;
+	stats->rx_errors = status->hl1.n_crcerr;
+	stats->multicast = status->ether.n_tx_mcast;
+
+	stats->rx_length_errors = status->hl1.n_sizeerr;
+	stats->rx_over_errors;
+	stats->rx_crc_errors = status->hl1.n_crcerr;
+	stats->rx_frame_errors = stats->rx_errors;
+
+	kfree(status);
+}
