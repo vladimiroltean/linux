@@ -58,16 +58,15 @@ struct appldata_net_sum_data {
  */
 static void appldata_get_net_sum_data(void *data)
 {
-	int i;
 	struct appldata_net_sum_data *net_data;
-	struct net_device *dev;
+	struct net_device **dev_array;
 	unsigned long rx_packets, tx_packets, rx_bytes, tx_bytes, rx_errors,
 			tx_errors, rx_dropped, tx_dropped, collisions;
+	int dev_count, ret, i;
 
 	net_data = data;
 	net_data->sync_count_1++;
 
-	i = 0;
 	rx_packets = 0;
 	tx_packets = 0;
 	rx_bytes   = 0;
@@ -78,12 +77,17 @@ static void appldata_get_net_sum_data(void *data)
 	tx_dropped = 0;
 	collisions = 0;
 
-	rcu_read_lock();
-	for_each_netdev_rcu(&init_net, dev) {
+	ret = net_get_dev_array(&init_net, &dev_array, &dev_count);
+	if (ret) {
+		pr_err("failed to allocate memory for network interface array\n");
+		return;
+	}
+
+	for (i = 0; i < dev_count; i++) {
 		const struct rtnl_link_stats64 *stats;
 		struct rtnl_link_stats64 temp;
 
-		stats = dev_get_stats(dev, &temp);
+		stats = dev_get_stats(dev_array[i], &temp);
 		rx_packets += stats->rx_packets;
 		tx_packets += stats->tx_packets;
 		rx_bytes   += stats->rx_bytes;
@@ -93,11 +97,11 @@ static void appldata_get_net_sum_data(void *data)
 		rx_dropped += stats->rx_dropped;
 		tx_dropped += stats->tx_dropped;
 		collisions += stats->collisions;
-		i++;
 	}
-	rcu_read_unlock();
 
-	net_data->nr_interfaces = i;
+	net_put_dev_array(dev_array, dev_count);
+
+	net_data->nr_interfaces = dev_count;
 	net_data->rx_packets = rx_packets;
 	net_data->tx_packets = tx_packets;
 	net_data->rx_bytes   = rx_bytes;
