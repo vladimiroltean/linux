@@ -578,6 +578,47 @@ static void dsa_tree_teardown_master(struct dsa_switch_tree *dst)
 			dsa_master_teardown(dp->master);
 }
 
+static int dsa_tree_setup_lags(struct dsa_switch_tree *dst)
+{
+	struct dsa_port *dp;
+	unsigned int num;
+
+	list_for_each_entry(dp, &dst->ports, list)
+		num = dp->ds->num_lags;
+
+	list_for_each_entry(dp, &dst->ports, list)
+		num = min(num, dp->ds->num_lags);
+
+	if (num == 0)
+		return 0;
+
+	dst->lags.pool = kcalloc(num, sizeof(*dst->lags.pool), GFP_KERNEL);
+	if (!dst->lags.pool)
+		goto err;
+
+	dst->lags.busy = bitmap_zalloc(num, GFP_KERNEL);
+	if (!dst->lags.busy)
+		goto err_free_pool;
+
+	dst->lags.num = num;
+	return 0;
+
+err_free_pool:
+	kfree(dst->lags.pool);
+err:
+	return -ENOMEM;
+}
+
+static void dsa_tree_teardown_lags(struct dsa_switch_tree *dst)
+{
+	if (dst->lags.num == 0)
+		return;
+
+	kfree(dst->lags.busy);
+	kfree(dst->lags.pool);
+	dst->lags.num = 0;
+}
+
 static int dsa_tree_setup(struct dsa_switch_tree *dst)
 {
 	bool complete;
@@ -605,12 +646,18 @@ static int dsa_tree_setup(struct dsa_switch_tree *dst)
 	if (err)
 		goto teardown_switches;
 
+	err = dsa_tree_setup_lags(dst);
+	if (err)
+		goto teardown_master;
+
 	dst->setup = true;
 
 	pr_info("DSA: tree %d setup\n", dst->index);
 
 	return 0;
 
+teardown_master:
+	dsa_tree_teardown_master(dst);
 teardown_switches:
 	dsa_tree_teardown_switches(dst);
 teardown_default_cpu:
@@ -625,6 +672,8 @@ static void dsa_tree_teardown(struct dsa_switch_tree *dst)
 
 	if (!dst->setup)
 		return;
+
+	dsa_tree_teardown_lags(dst);
 
 	dsa_tree_teardown_master(dst);
 
@@ -659,6 +708,8 @@ static struct dsa_port *dsa_port_touch(struct dsa_switch *ds, int index)
 	dp->index = index;
 
 	INIT_LIST_HEAD(&dp->list);
+	INIT_LIST_HEAD(&dp->lag_list);
+	INIT_LIST_HEAD(&dp->lag_tx_list);
 	list_add_tail(&dp->list, &dst->ports);
 
 	return dp;

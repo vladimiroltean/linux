@@ -334,7 +334,7 @@ static int dsa_slave_vlan_add(struct net_device *dev,
 	struct switchdev_obj_port_vlan vlan;
 	int vid, err;
 
-	if (obj->orig_dev != dev)
+	if (!dsa_port_can_offload(dp, obj->orig_dev))
 		return -EOPNOTSUPP;
 
 	if (dsa_port_skip_vlan_configuration(dp))
@@ -391,7 +391,7 @@ static int dsa_slave_port_obj_add(struct net_device *dev,
 
 	switch (obj->id) {
 	case SWITCHDEV_OBJ_ID_PORT_MDB:
-		if (obj->orig_dev != dev)
+		if (!dsa_port_can_offload(dp, obj->orig_dev))
 			return -EOPNOTSUPP;
 		err = dsa_port_mdb_add(dp, SWITCHDEV_OBJ_PORT_MDB(obj), trans);
 		break;
@@ -421,7 +421,7 @@ static int dsa_slave_vlan_del(struct net_device *dev,
 	struct switchdev_obj_port_vlan *vlan;
 	int vid, err;
 
-	if (obj->orig_dev != dev)
+	if (!dsa_port_can_offload(dp, obj->orig_dev))
 		return -EOPNOTSUPP;
 
 	if (dsa_port_skip_vlan_configuration(dp))
@@ -450,7 +450,7 @@ static int dsa_slave_port_obj_del(struct net_device *dev,
 
 	switch (obj->id) {
 	case SWITCHDEV_OBJ_ID_PORT_MDB:
-		if (obj->orig_dev != dev)
+		if (!dsa_port_can_offload(dp, obj->orig_dev))
 			return -EOPNOTSUPP;
 		err = dsa_port_mdb_del(dp, SWITCHDEV_OBJ_PORT_MDB(obj));
 		break;
@@ -1941,6 +1941,40 @@ static int dsa_slave_changeupper(struct net_device *dev,
 			dsa_port_bridge_leave(dp, info->upper_dev);
 			err = NOTIFY_OK;
 		}
+	} else if (netif_is_lag_master(info->upper_dev) &&
+		   dsa_lag_offloading(dp->ds->dst)) {
+		if (info->linking) {
+			err = dsa_port_lag_join(dp, info->upper_dev);
+			err = notifier_from_errno(err);
+		} else {
+			dsa_port_lag_leave(dp, info->upper_dev);
+			err = NOTIFY_OK;
+		}
+	}
+
+	return err;
+}
+
+static int
+dsa_slave_lag_changeupper(struct net_device *dev,
+			  struct netdev_notifier_changeupper_info *info)
+{
+	struct net_device *lower;
+	struct list_head *iter;
+	int err = NOTIFY_DONE;
+	struct dsa_port *dp;
+
+	netdev_for_each_lower_dev(dev, lower, iter) {
+		if (!dsa_slave_dev_check(lower))
+			continue;
+
+		dp = dsa_slave_to_port(lower);
+		if (!dsa_lag_offloading(dp->ds->dst))
+			break;
+
+		err = dsa_slave_changeupper(lower, info);
+		if (notifier_to_errno(err))
+			break;
 	}
 
 	return err;
@@ -2009,6 +2043,23 @@ dsa_slave_check_8021q_upper(struct net_device *dev,
 	return NOTIFY_DONE;
 }
 
+static int dsa_slave_check_lag_upper(struct net_device *dev)
+{
+	struct dsa_port *dp = dsa_slave_to_port(dev);
+	struct dsa_switch_tree *dst = dp->ds->dst;
+
+	if (!dsa_lag_offloading(dst))
+		return NOTIFY_DONE;
+
+	if (dsa_lag_by_dev(dst, dev))
+		return NOTIFY_OK;
+
+	if (!dsa_lag_available(dst))
+		return notifier_from_errno(-EBUSY);
+
+	return NOTIFY_OK;
+}
+
 static int dsa_slave_netdevice_event(struct notifier_block *nb,
 				     unsigned long event, void *ptr)
 {
@@ -2035,13 +2086,33 @@ static int dsa_slave_netdevice_event(struct notifier_block *nb,
 
 		if (is_vlan_dev(info->upper_dev))
 			return dsa_slave_check_8021q_upper(dev, ptr);
+
+		if (netif_is_lag_master(info->upper_dev))
+			return dsa_slave_check_lag_upper(dev);
+
 		break;
 	}
 	case NETDEV_CHANGEUPPER:
-		if (!dsa_slave_dev_check(dev))
-			return NOTIFY_DONE;
+		if (dsa_slave_dev_check(dev))
+			return dsa_slave_changeupper(dev, ptr);
 
-		return dsa_slave_changeupper(dev, ptr);
+		if (netif_is_lag_master(dev))
+			return dsa_slave_lag_changeupper(dev, ptr);
+
+		break;
+	case NETDEV_CHANGELOWERSTATE: {
+		struct netdev_notifier_changelowerstate_info *info = ptr;
+		struct dsa_port *dp;
+		int err;
+
+		if (!dsa_slave_dev_check(dev))
+			break;
+
+		dp = dsa_slave_to_port(dev);
+
+		err = dsa_port_lag_change(dp, info->lower_state_info);
+		return notifier_from_errno(err);
+	}
 	}
 
 	return NOTIFY_DONE;

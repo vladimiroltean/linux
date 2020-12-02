@@ -7,6 +7,7 @@
 #ifndef __LINUX_NET_DSA_H
 #define __LINUX_NET_DSA_H
 
+#include <linux/bitmap.h>
 #include <linux/if.h>
 #include <linux/if_ether.h>
 #include <linux/list.h>
@@ -71,6 +72,7 @@ enum dsa_tag_protocol {
 
 struct packet_type;
 struct dsa_switch;
+struct dsa_lag;
 
 struct dsa_device_ops {
 	struct sk_buff *(*xmit)(struct sk_buff *skb, struct net_device *dev);
@@ -149,6 +151,13 @@ struct dsa_switch_tree {
 
 	/* List of DSA links composing the routing table */
 	struct list_head rtable;
+
+	/* Link aggregates */
+	struct {
+		struct dsa_lag *pool;
+		unsigned long *busy;
+		unsigned int num;
+	} lags;
 };
 
 /* TC matchall action types */
@@ -180,6 +189,69 @@ struct dsa_mall_tc_entry {
 	};
 };
 
+struct dsa_lag {
+	struct net_device *dev;
+	int id;
+
+	struct list_head ports;
+
+	/* For multichip systems, we must ensure that each hash bucket
+	 * is only enabled on a single egress port throughout the
+	 * whole tree, lest we send duplicates. Therefore we must
+	 * maintain a global list of active tx ports, so that each
+	 * switch can figure out which buckets to enable on which
+	 * ports.
+	 */
+	struct list_head tx_ports;
+	int num_tx;
+
+	refcount_t refcount;
+};
+
+#define dsa_lag_foreach(_id, _dst) \
+	for_each_set_bit(_id, (_dst)->lags.busy, (_dst)->lags.num)
+
+static inline bool dsa_lag_offloading(struct dsa_switch_tree *dst)
+{
+	return dst->lags.num > 0;
+}
+
+static inline bool dsa_lag_available(struct dsa_switch_tree *dst)
+{
+	return !bitmap_full(dst->lags.busy, dst->lags.num);
+}
+
+static inline struct dsa_lag *dsa_lag_by_id(struct dsa_switch_tree *dst, int id)
+{
+	if (!test_bit(id, dst->lags.busy))
+		return NULL;
+
+	return &dst->lags.pool[id];
+}
+
+static inline struct net_device *dsa_lag_dev_by_id(struct dsa_switch_tree *dst,
+						   int id)
+{
+	struct dsa_lag *lag = dsa_lag_by_id(dst, id);
+
+	return lag ? READ_ONCE(lag->dev) : NULL;
+}
+
+static inline struct dsa_lag *dsa_lag_by_dev(struct dsa_switch_tree *dst,
+					     struct net_device *dev)
+{
+	struct dsa_lag *lag;
+	int id;
+
+	dsa_lag_foreach(id, dst) {
+		lag = dsa_lag_by_id(dst, id);
+
+		if (lag->dev == dev)
+			return lag;
+	}
+
+	return NULL;
+}
 
 struct dsa_port {
 	/* A CPU port is physically connected to a master device.
@@ -220,6 +292,9 @@ struct dsa_port {
 	bool			devlink_port_setup;
 	struct phylink		*pl;
 	struct phylink_config	pl_config;
+	struct dsa_lag		*lag;
+	struct list_head	lag_list;
+	struct list_head	lag_tx_list;
 
 	struct list_head list;
 
@@ -334,6 +409,11 @@ struct dsa_switch {
 	 * interfaces is needed.
 	 */
 	bool			mtu_enforcement_ingress;
+
+	/* The maximum number of LAGs that can be configured. A value of zero
+	 * is used to indicate that LAG offloading is not supported.
+	 */
+	unsigned int		num_lags;
 
 	size_t num_ports;
 };
@@ -624,6 +704,13 @@ struct dsa_switch_ops {
 	void	(*crosschip_bridge_leave)(struct dsa_switch *ds, int tree_index,
 					  int sw_index, int port,
 					  struct net_device *br);
+	int	(*crosschip_lag_change)(struct dsa_switch *ds, int sw_index,
+					int port, struct net_device *lag_dev,
+					struct netdev_lag_lower_state_info *info);
+	int	(*crosschip_lag_join)(struct dsa_switch *ds, int sw_index,
+				      int port, struct net_device *lag_dev);
+	void	(*crosschip_lag_leave)(struct dsa_switch *ds, int sw_index,
+				       int port, struct net_device *lag_dev);
 
 	/*
 	 * PTP functionality
@@ -655,6 +742,16 @@ struct dsa_switch_ops {
 	int	(*port_change_mtu)(struct dsa_switch *ds, int port,
 				   int new_mtu);
 	int	(*port_max_mtu)(struct dsa_switch *ds, int port);
+
+	/*
+	 * LAG integration
+	 */
+	int	(*port_lag_change)(struct dsa_switch *ds, int port,
+				   struct netdev_lag_lower_state_info *info);
+	int	(*port_lag_join)(struct dsa_switch *ds, int port,
+				 struct net_device *lag_dev);
+	void	(*port_lag_leave)(struct dsa_switch *ds, int port,
+				  struct net_device *lag_dev);
 };
 
 #define DSA_DEVLINK_PARAM_DRIVER(_id, _name, _type, _cmodes)		\
