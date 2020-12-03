@@ -48,6 +48,8 @@ static int ksz9477_spi_probe(struct spi_device *spi)
 	if (spi->dev.platform_data)
 		dev->pdata = spi->dev.platform_data;
 
+	dev->irq = spi->irq;
+
 	/* setup spi */
 	spi->mode = SPI_MODE_3;
 	ret = spi_setup(spi);
