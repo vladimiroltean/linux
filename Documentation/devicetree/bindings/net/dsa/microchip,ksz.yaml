@@ -35,6 +35,11 @@ properties:
       Should be a gpio specifier for a reset line.
     maxItems: 1
 
+  interrupts:
+    description:
+      Interrupt specifier for the INTRP_N line from the device.
+    maxItems: 1
+
   microchip,synclko-125:
     $ref: /schemas/types.yaml#/definitions/flag
     description:
@@ -49,6 +54,7 @@ unevaluatedProperties: false
 examples:
   - |
     #include <dt-bindings/gpio/gpio.h>
+    #include <dt-bindings/interrupt-controller/irq.h>
 
     // Ethernet switch connected via SPI to the host, CPU port wired to eth0:
     eth0 {
@@ -70,6 +76,7 @@ examples:
             compatible = "microchip,ksz9477";
             reg = <0>;
             reset-gpios = <&gpio5 0 GPIO_ACTIVE_LOW>;
+            interrupts-extended = <&gpio5 1 IRQ_TYPE_LEVEL_LOW>;  /* INTRP_N line */
 
             spi-max-frequency = <44000000>;
 
