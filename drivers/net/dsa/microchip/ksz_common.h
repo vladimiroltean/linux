@@ -52,6 +52,11 @@ struct ksz_port {
 #endif
 };
 
+enum ksz_ptp_tou_mode {
+	KSZ_PTP_TOU_IDLE,
+	KSZ_PTP_TOU_PEROUT,
+};
+
 struct ksz_device {
 	struct dsa_switch *ds;
 	struct ksz_platform_data *pdata;
@@ -109,6 +114,11 @@ struct ksz_device {
 	struct hwtstamp_config tstamp_config;
 	struct mutex ptp_mutex;		/* protects PTP related hardware */
 	struct ksz_device_ptp_shared ptp_shared;
+	enum ksz_ptp_tou_mode ptp_tou_mode;
+	struct timespec64 ptp_perout_target_time_first;  /* start of first perout pulse */
+	struct timespec64 ptp_perout_period;
+	u32 ptp_perout_pulse_width_ns;
+	u16 ptp_perout_cycle_count;
 #endif
 };
 
