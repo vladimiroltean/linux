@@ -5,9 +5,12 @@
  * Copyright (C) 2017-2019 Microchip Technology Inc.
  */
 
+#include <linux/bits.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/interrupt.h>
 #include <linux/iopoll.h>
+#include <linux/irq.h>
 #include <linux/platform_data/microchip-ksz.h>
 #include <linux/phy.h>
 #include <linux/if_bridge.h>
@@ -1528,6 +1531,54 @@ static const struct ksz_chip_data ksz9477_switch_chips[] = {
 	},
 };
 
+static irqreturn_t ksz9477_switch_irq_thread(int irq, void *dev_id)
+{
+	struct ksz_device *dev = dev_id;
+	u32 data;
+	int port;
+	int ret;
+
+	/* Read global port interrupt status register */
+	ret = ksz_read32(dev, REG_SW_PORT_INT_STATUS__4, &data);
+	if (ret)
+		return IRQ_NONE;
+
+	for (port = 0; port < dev->port_cnt; port++) {
+		u8 data8;
+
+		if (!(data & BIT(port)))
+			continue;
+
+		/* Read port interrupt status register */
+		ret = ksz_read8(dev, PORT_CTRL_ADDR(port, REG_PORT_INT_STATUS),
+				&data8);
+		if (ret)
+			return IRQ_NONE;
+
+		/* ToDo: Add specific handling of port interrupts */
+	}
+
+	return IRQ_NONE;
+}
+
+static int ksz9477_enable_port_interrupts(struct ksz_device *dev, bool enable)
+{
+	u32 data, mask = GENMASK(dev->port_cnt - 1, 0);
+	int ret;
+
+	ret = ksz_read32(dev, REG_SW_PORT_INT_MASK__4, &data);
+	if (ret)
+		return ret;
+
+	/* bits in REG_SW_PORT_INT_MASK__4 are active low */
+	if (enable)
+		data &= ~mask;
+	else
+		data |= mask;
+
+	return ksz_write32(dev, REG_SW_PORT_INT_MASK__4, data);
+}
+
 static int ksz9477_switch_init(struct ksz_device *dev)
 {
 	int i, ret;
@@ -1583,12 +1634,29 @@ static int ksz9477_switch_init(struct ksz_device *dev)
 
 	/* set the real number of ports */
 	dev->ds->num_ports = dev->port_cnt;
+	if (dev->irq > 0) {
+		ret = devm_request_threaded_irq(dev->dev, dev->irq, NULL,
+						ksz9477_switch_irq_thread,
+						IRQF_ONESHOT | IRQF_SHARED,
+						dev_name(dev->dev),
+						dev);
+		if (ret) {
+			dev_err(dev->dev, "failed to request IRQ.\n");
+			return ret;
+		}
+
+		ret = ksz9477_enable_port_interrupts(dev, true);
+		if (ret)
+			return ret;
+	}
 
 	return 0;
 }
 
 static void ksz9477_switch_exit(struct ksz_device *dev)
 {
+	if (dev->irq > 0)
+		ksz9477_enable_port_interrupts(dev, false);
 	ksz9477_reset_switch(dev);
 }
 
