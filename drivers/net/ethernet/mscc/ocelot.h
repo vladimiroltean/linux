@@ -116,6 +116,8 @@ int ocelot_port_lag_join(struct ocelot *ocelot, int port,
 			 struct net_device *bond);
 int ocelot_port_lag_leave(struct ocelot *ocelot, int port,
 			  struct net_device *bond);
+int ocelot_port_lag_change(struct ocelot *ocelot, int port,
+			   struct netdev_lag_lower_state_info *info);
 struct net_device *ocelot_port_to_netdev(struct ocelot *ocelot, int port);
 int ocelot_netdev_to_port(struct net_device *dev);
 
