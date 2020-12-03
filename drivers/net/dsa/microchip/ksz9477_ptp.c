@@ -218,6 +218,18 @@ static int ksz9477_ptp_enable(struct ptp_clock_info *ptp,
 	return -EOPNOTSUPP;
 }
 
+static long ksz9477_ptp_do_aux_work(struct ptp_clock_info *ptp)
+{
+	struct ksz_device *dev = container_of(ptp, struct ksz_device, ptp_caps);
+	struct timespec64 ts;
+
+	mutex_lock(&dev->ptp_mutex);
+	_ksz9477_ptp_gettime(dev, &ts);
+	mutex_unlock(&dev->ptp_mutex);
+
+	return HZ;  /* reschedule in 1 second */
+}
+
 static int ksz9477_ptp_start_clock(struct ksz_device *dev)
 {
 	u16 data;
@@ -257,6 +269,54 @@ static int ksz9477_ptp_stop_clock(struct ksz_device *dev)
 	return ksz_write16(dev, REG_PTP_CLK_CTRL, data);
 }
 
+/* device attributes */
+
+enum ksz9477_ptp_tcmode {
+	KSZ9477_PTP_TCMODE_E2E,
+	KSZ9477_PTP_TCMODE_P2P,
+};
+
+static int ksz9477_ptp_tcmode_set(struct ksz_device *dev,
+				  enum ksz9477_ptp_tcmode tcmode)
+{
+	u16 data;
+	int ret;
+
+	ret = ksz_read16(dev, REG_PTP_MSG_CONF1, &data);
+	if (ret)
+		return ret;
+
+	if (tcmode == KSZ9477_PTP_TCMODE_P2P)
+		data |= PTP_TC_P2P;
+	else
+		data &= ~PTP_TC_P2P;
+
+	return ksz_write16(dev, REG_PTP_MSG_CONF1, data);
+}
+
+enum ksz9477_ptp_ocmode {
+	KSZ9477_PTP_OCMODE_SLAVE,
+	KSZ9477_PTP_OCMODE_MASTER,
+};
+
+static int ksz9477_ptp_ocmode_set(struct ksz_device *dev,
+				  enum ksz9477_ptp_ocmode ocmode)
+{
+	u16 data;
+	int ret;
+
+	ret = ksz_read16(dev, REG_PTP_MSG_CONF1, &data);
+	if (ret)
+		return ret;
+
+	if (ocmode == KSZ9477_PTP_OCMODE_MASTER)
+		data |= PTP_MASTER;
+	else
+		data &= ~PTP_MASTER;
+
+	return ksz_write16(dev, REG_PTP_MSG_CONF1, data);
+}
+
 int ksz9477_ptp_init(struct ksz_device *dev)
 {
 	int ret;
@@ -282,6 +342,7 @@ int ksz9477_ptp_init(struct ksz_device *dev)
 	dev->ptp_caps.gettime64   = ksz9477_ptp_gettime;
 	dev->ptp_caps.settime64   = ksz9477_ptp_settime;
 	dev->ptp_caps.enable      = ksz9477_ptp_enable;
+	dev->ptp_caps.do_aux_work = ksz9477_ptp_do_aux_work;
 
 	/* Start hardware counter (will overflow after 136 years) */
 	ret = ksz9477_ptp_start_clock(dev);
@@ -294,8 +355,31 @@ int ksz9477_ptp_init(struct ksz_device *dev)
 		goto error_stop_clock;
 	}
 
+	/* Currently, only P2P delay measurement is supported.  Setting ocmode
+	 * to slave will work independently of actually being master or slave.
+	 * For E2E delay measurement, switching between master and slave would
+	 * be required, as the KSZ devices filters out PTP messages depending on
+	 * the ocmode setting:
+	 * - in slave mode, DelayReq messages are filtered out
+	 * - in master mode, Sync messages are filtered out
+	 * Currently (and probably also in future) there is no interface in the
+	 * kernel which allows switching between master and slave mode.  For
+	 * this reason, E2E cannot be supported. See patchwork for full
+	 * discussion:
+	 * https://patchwork.ozlabs.org/project/netdev/patch/20201019172435.4416-8-ceggers@arri.de/
+	 */
+	ksz9477_ptp_tcmode_set(dev, KSZ9477_PTP_TCMODE_P2P);
+	ksz9477_ptp_ocmode_set(dev, KSZ9477_PTP_OCMODE_SLAVE);
+
+	/* Schedule cyclic call of ksz_ptp_do_aux_work() */
+	ret = ptp_schedule_worker(dev->ptp_clock, 0);
+	if (ret)
+		goto error_unregister_clock;
+
 	return 0;
 
+error_unregister_clock:
+	ptp_clock_unregister(dev->ptp_clock);
 error_stop_clock:
 	ksz9477_ptp_stop_clock(dev);
 	return ret;
@@ -305,4 +389,106 @@ void ksz9477_ptp_deinit(struct ksz_device *dev)
 {
 	ptp_clock_unregister(dev->ptp_clock);
 	ksz9477_ptp_stop_clock(dev);
+}
+
+/* DSA PTP operations */
+
+int ksz9477_ptp_get_ts_info(struct dsa_switch *ds, int port,
+			    struct ethtool_ts_info *ts)
+{
+	struct ksz_device *dev = ds->priv;
+
+	ts->so_timestamping = SOF_TIMESTAMPING_TX_HARDWARE |
+			      SOF_TIMESTAMPING_RX_HARDWARE |
+			      SOF_TIMESTAMPING_RAW_HARDWARE;
+
+	ts->phc_index = ptp_clock_index(dev->ptp_clock);
+
+	ts->tx_types = BIT(HWTSTAMP_TX_OFF) |
+		       BIT(HWTSTAMP_TX_ONESTEP_P2P);
+
+	ts->rx_filters = BIT(HWTSTAMP_FILTER_NONE) |
+			 BIT(HWTSTAMP_FILTER_PTP_V2_L4_EVENT) |
+			 BIT(HWTSTAMP_FILTER_PTP_V2_L2_EVENT) |
+			 BIT(HWTSTAMP_FILTER_PTP_V2_EVENT);
+
+	return 0;
+}
+
+static int ksz9477_set_hwtstamp_config(struct ksz_device *dev, int port,
+				       struct hwtstamp_config *config)
+{
+	struct ksz_port *prt = &dev->ports[port];
+
+	/* reserved for future extensions */
+	if (config->flags)
+		return -EINVAL;
+
+	switch (config->tx_type) {
+	case HWTSTAMP_TX_OFF:
+		prt->hwts_tx_en = false;
+		break;
+	case HWTSTAMP_TX_ONESTEP_P2P:
+		prt->hwts_tx_en = true;
+		break;
+	default:
+		return -ERANGE;
+	}
+
+	switch (config->rx_filter) {
+	case HWTSTAMP_FILTER_NONE:
+		break;
+	case HWTSTAMP_FILTER_PTP_V2_L4_EVENT:
+	case HWTSTAMP_FILTER_PTP_V2_L4_SYNC:
+		config->rx_filter = HWTSTAMP_FILTER_PTP_V2_L4_EVENT;
+		break;
+	case HWTSTAMP_FILTER_PTP_V2_L2_EVENT:
+	case HWTSTAMP_FILTER_PTP_V2_L2_SYNC:
+		config->rx_filter = HWTSTAMP_FILTER_PTP_V2_L2_EVENT;
+		break;
+	case HWTSTAMP_FILTER_PTP_V2_EVENT:
+	case HWTSTAMP_FILTER_PTP_V2_SYNC:
+		config->rx_filter = HWTSTAMP_FILTER_PTP_V2_EVENT;
+		break;
+	default:
+		config->rx_filter = HWTSTAMP_FILTER_NONE;
+		return -ERANGE;
+	}
+
+	return 0;
+}
+
+int ksz9477_ptp_port_hwtstamp_get(struct dsa_switch *ds, int port,
+				  struct ifreq *ifr)
+{
+	struct ksz_device *dev = ds->priv;
+	unsigned long bytes_copied;
+
+	bytes_copied = copy_to_user(ifr->ifr_data,
+				    &dev->ports[port].tstamp_config,
+				    sizeof(dev->ports[port].tstamp_config));
+
+	return bytes_copied ? -EFAULT : 0;
+}
+
+int ksz9477_ptp_port_hwtstamp_set(struct dsa_switch *ds, int port,
+				  struct ifreq *ifr)
+{
+	struct ksz_device *dev = ds->priv;
+	struct hwtstamp_config config;
+	unsigned long bytes_copied;
+	int err;
+
+	if (copy_from_user(&config, ifr->ifr_data, sizeof(config)))
+		return -EFAULT;
+
+	err = ksz9477_set_hwtstamp_config(dev, port, &config);
+	if (err)
+		return err;
+
+	/* Save the chosen configuration to be returned later. */
+	memcpy(&dev->ports[port].tstamp_config, &config, sizeof(config));
+	bytes_copied = copy_to_user(ifr->ifr_data, &config, sizeof(config));
+
+	return bytes_copied ? -EFAULT : 0;
 }
