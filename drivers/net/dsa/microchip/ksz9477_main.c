@@ -1345,18 +1345,11 @@ static void ksz9477_config_cpu_port(struct dsa_switch *ds)
 static int ksz9477_setup(struct dsa_switch *ds)
 {
 	struct ksz_device *dev = ds->priv;
-	int ret = 0;
 
 	dev->vlan_cache = devm_kcalloc(dev->dev, sizeof(struct vlan_table),
 				       dev->num_vlans, GFP_KERNEL);
 	if (!dev->vlan_cache)
 		return -ENOMEM;
-
-	ret = ksz9477_reset_switch(dev);
-	if (ret) {
-		dev_err(ds->dev, "failed to reset switch\n");
-		return ret;
-	}
 
 	/* Required for port partitioning. */
 	ksz9477_cfg32(dev, REG_SW_QM_CTRL__4, UNICAST_VLAN_BOUNDARY,
@@ -1537,9 +1530,15 @@ static const struct ksz_chip_data ksz9477_switch_chips[] = {
 
 static int ksz9477_switch_init(struct ksz_device *dev)
 {
-	int i;
+	int i, ret;
 
 	dev->ds->ops = &ksz9477_switch_ops;
+
+	ret = ksz9477_reset_switch(dev);
+	if (ret) {
+		dev_err(dev->dev, "failed to reset switch\n");
+		return ret;
+	}
 
 	for (i = 0; i < ARRAY_SIZE(ksz9477_switch_chips); i++) {
 		const struct ksz_chip_data *chip = &ksz9477_switch_chips[i];
