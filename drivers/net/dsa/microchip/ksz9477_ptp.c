@@ -19,6 +19,140 @@
 #define KSZ_PTP_INC_NS 40  /* HW clock is incremented every 40 ns (by 40) */
 #define KSZ_PTP_SUBNS_BITS 32  /* Number of bits in sub-nanoseconds counter */
 
+/* Shared register access routines (Trigger Output Unit) */
+
+static int ksz9477_ptp_tou_reset(struct ksz_device *dev, unsigned int unit)
+{
+	u32 ctrl_stat, data;
+	int ret;
+
+	/* Reset trigger unit (clears TRIGGER_EN, but not GPIOSTATx) */
+	ret = ksz_read32(dev, REG_PTP_CTRL_STAT__4, &ctrl_stat);
+	if (ret)
+		return ret;
+
+	ctrl_stat |= TRIG_RESET;
+
+	ret = ksz_write32(dev, REG_PTP_CTRL_STAT__4, ctrl_stat);
+	if (ret)
+		return ret;
+
+	/* Clear DONE */
+	data = 1 << (unit + TRIG_DONE_S);
+	ret = ksz_write32(dev, REG_PTP_TRIG_STATUS__4, data);
+	if (ret)
+		return ret;
+
+	/* Clear IRQ */
+	data = 1 << (unit + TRIG_INT_S);
+	ret = ksz_write32(dev, REG_PTP_INT_STATUS__4, data);
+	if (ret)
+		return ret;
+
+	/* Clear reset and set GPIO direction */
+	ctrl_stat &= ~TRIG_ENABLE;  /* clear cached bit :-) */
+	ctrl_stat &= ~TRIG_RESET;
+
+	ret = ksz_write32(dev, REG_PTP_CTRL_STAT__4, ctrl_stat);
+	if (ret)
+		return ret;
+
+	return 0;
+}
+
+static int ksz9477_ptp_tou_cycle_width_set(struct ksz_device *dev, u32 width_ns)
+{
+	int ret;
+
+	ret = ksz_write32(dev, REG_TRIG_CYCLE_WIDTH, width_ns);
+	if (ret)
+		return ret;
+
+	return 0;
+}
+
+static int ksz9477_ptp_tou_cycle_count_set(struct ksz_device *dev, u16 count)
+{
+	u32 data;
+	int ret;
+
+	ret = ksz_read32(dev, REG_TRIG_CYCLE_CNT, &data);
+	if (ret)
+		return ret;
+
+	data &= ~(TRIG_CYCLE_CNT_M << TRIG_CYCLE_CNT_S);
+	data |= (count & TRIG_CYCLE_CNT_M) << TRIG_CYCLE_CNT_S;
+
+	ret = ksz_write32(dev, REG_TRIG_CYCLE_CNT, data);
+	if (ret)
+		return ret;
+
+	return 0;
+}
+
+static int ksz9477_ptp_tou_pulse_verify(u64 pulse_ns)
+{
+	u32 data;
+
+	if (pulse_ns & 0x3)
+		return -EINVAL;
+
+	data = (pulse_ns / 8);
+	if (data != (data & TRIG_PULSE_WIDTH_M))
+		return -ERANGE;
+
+	return 0;
+}
+
+static int ksz9477_ptp_tou_pulse_set(struct ksz_device *dev, u32 pulse_ns)
+{
+	u32 data;
+
+	data = (pulse_ns / 8);
+
+	return ksz_write32(dev, REG_TRIG_PULSE_WIDTH__4, data);
+}
+
+static int ksz9477_ptp_tou_target_time_set(struct ksz_device *dev, struct timespec64 const *ts)
+{
+	int ret;
+
+	/* Hardware has only 32 bit */
+	if ((ts->tv_sec & 0xffffffff) != ts->tv_sec)
+		return -EINVAL;
+
+	ret = ksz_write32(dev, REG_TRIG_TARGET_NANOSEC, ts->tv_nsec);
+	if (ret)
+		return ret;
+
+	ret = ksz_write32(dev, REG_TRIG_TARGET_SEC, ts->tv_sec);
+	if (ret)
+		return ret;
+
+	return 0;
+}
+
+static int ksz9477_ptp_tou_start(struct ksz_device *dev, u32 *ctrl_stat_)
+{
+	u32 ctrl_stat;
+	int ret;
+
+	ret = ksz_read32(dev, REG_PTP_CTRL_STAT__4, &ctrl_stat);
+	if (ret)
+		return ret;
+
+	ctrl_stat |= TRIG_ENABLE;
+
+	ret = ksz_write32(dev, REG_PTP_CTRL_STAT__4, ctrl_stat);
+	if (ret)
+		return ret;
+
+	if (ctrl_stat_)
+		*ctrl_stat_ = ctrl_stat;
+
+	return 0;
+}
+
 /* Posix clock support */
 
 static int ksz9477_ptp_adjfine(struct ptp_clock_info *ptp, long scaled_ppm)
@@ -76,6 +210,8 @@ error_return:
 	return ret;
 }
 
+static int ksz9477_ptp_restart_perout(struct ksz_device *dev);
+
 static int ksz9477_ptp_adjtime(struct ptp_clock_info *ptp, s64 delta)
 {
 	struct ksz_device *dev = container_of(ptp, struct ksz_device, ptp_caps);
@@ -114,6 +250,20 @@ static int ksz9477_ptp_adjtime(struct ptp_clock_info *ptp, s64 delta)
 	ret = ksz_write16(dev, REG_PTP_CLK_CTRL, data16);
 	if (ret)
 		goto error_return;
+
+	switch (dev->ptp_tou_mode) {
+	case KSZ_PTP_TOU_IDLE:
+		break;
+
+	case KSZ_PTP_TOU_PEROUT:
+		dev_info(dev->dev, "Restarting periodic output signal\n");
+
+		ret = ksz9477_ptp_restart_perout(dev);
+		if (ret)
+			goto error_return;
+
+		break;
+	}
 
 	spin_lock_bh(&ptp_shared->ptp_clock_lock);
 	ptp_shared->ptp_clock_time = timespec64_add(ptp_shared->ptp_clock_time,
@@ -218,6 +368,20 @@ static int ksz9477_ptp_settime(struct ptp_clock_info *ptp,
 	if (ret)
 		goto error_return;
 
+	switch (dev->ptp_tou_mode) {
+	case KSZ_PTP_TOU_IDLE:
+		break;
+
+	case KSZ_PTP_TOU_PEROUT:
+		dev_info(dev->dev, "Restarting periodic output signal\n");
+
+		ret = ksz9477_ptp_restart_perout(dev);
+		if (ret)
+			goto error_return;
+
+		break;
+	}
+
 	spin_lock_bh(&ptp_shared->ptp_clock_lock);
 	ptp_shared->ptp_clock_time = *ts;
 	spin_unlock_bh(&ptp_shared->ptp_clock_lock);
@@ -227,10 +391,199 @@ error_return:
 	return ret;
 }
 
+static int ksz9477_ptp_configure_perout(struct ksz_device *dev,
+					u32 cycle_width_ns, u16 cycle_count,
+					u32 pulse_width_ns,
+					struct timespec64 const *target_time)
+{
+	u32 trig_ctrl;
+	int ret;
+
+	/* Enable notify, set rising edge, set periodic pattern */
+	trig_ctrl = TRIG_NOTIFY | (TRIG_POS_PERIOD << TRIG_PATTERN_S);
+	ret = ksz_write32(dev, REG_TRIG_CTRL__4, trig_ctrl);
+	if (ret)
+		return ret;
+
+	ret = ksz9477_ptp_tou_cycle_width_set(dev, cycle_width_ns);
+	if (ret)
+		return ret;
+
+	ksz9477_ptp_tou_cycle_count_set(dev,  cycle_count);
+	if (ret)
+		return ret;
+
+	ret = ksz9477_ptp_tou_pulse_set(dev, pulse_width_ns);
+	if (ret)
+		return ret;
+
+	ret = ksz9477_ptp_tou_target_time_set(dev, target_time);
+	if (ret)
+		return ret;
+
+	return 0;
+}
+
+#define KSZ9477_PEROUT_VALID_FLAGS ( \
+	PTP_PEROUT_DUTY_CYCLE \
+)
+
+static int ksz9477_ptp_enable_perout(struct ksz_device *dev,
+				     struct ptp_perout_request const *perout_request,
+				     int on)
+{
+	u64 cycle_width_ns;
+	u64 pulse_width_ns;
+	u32 gpio_stat0;
+	int ret;
+
+	if (perout_request->flags & ~KSZ9477_PEROUT_VALID_FLAGS)
+		return -EINVAL;
+
+	if (dev->ptp_tou_mode != KSZ_PTP_TOU_PEROUT &&
+	    dev->ptp_tou_mode != KSZ_PTP_TOU_IDLE)
+		return -EBUSY;
+
+	ret = ksz9477_ptp_tou_reset(dev, 0);
+	if (ret)
+		return ret;
+
+	if (!on) {
+		dev->ptp_tou_mode = KSZ_PTP_TOU_IDLE;
+		return 0;  /* success */
+	}
+
+	dev->ptp_perout_target_time_first.tv_sec  = perout_request->start.sec;
+	dev->ptp_perout_target_time_first.tv_nsec = perout_request->start.nsec;
+
+	dev->ptp_perout_period.tv_sec = perout_request->period.sec;
+	dev->ptp_perout_period.tv_nsec = perout_request->period.nsec;
+
+	cycle_width_ns = timespec64_to_ns(&dev->ptp_perout_period);
+	if ((cycle_width_ns & GENMASK(31, 0)) != cycle_width_ns)
+		return -EINVAL;
+
+	if (perout_request->flags & PTP_PEROUT_DUTY_CYCLE)
+		pulse_width_ns = perout_request->on.sec * NSEC_PER_SEC +
+				 perout_request->on.nsec;
+
+	else
+		/* Use a duty cycle of 50%. Maximum pulse width supported by the
+		 * hardware is a little bit more than 125 ms.
+		 */
+		pulse_width_ns = min_t(u64,
+				       (perout_request->period.sec * NSEC_PER_SEC
+					+ perout_request->period.nsec) / 2
+				       / 8 * 8,
+				       125000000LL);
+
+	ret = ksz9477_ptp_tou_pulse_verify(pulse_width_ns);
+	if (ret)
+		return ret;
+
+	dev->ptp_perout_pulse_width_ns = pulse_width_ns;
+
+	ret = ksz9477_ptp_configure_perout(dev, cycle_width_ns,
+					   dev->ptp_perout_cycle_count,
+					   dev->ptp_perout_pulse_width_ns,
+					   &dev->ptp_perout_target_time_first);
+	if (ret)
+		return ret;
+
+	/* Activate trigger unit */
+	ret = ksz9477_ptp_tou_start(dev, NULL);
+	if (ret)
+		return ret;
+
+	/* Check error flag:
+	 * - the ACTIVE flag is NOT cleared an error!
+	 */
+	ret = ksz_read32(dev, REG_PTP_TRIG_STATUS__4, &gpio_stat0);
+	if (ret)
+		return ret;
+
+	if (gpio_stat0 & (1 << (0 + TRIG_ERROR_S))) {
+		dev_err(dev->dev, "%s: Trigger unit0 error!\n", __func__);
+		ret = -EIO;
+		/* Unit will be reset on next access */
+		return ret;
+	}
+
+	dev->ptp_tou_mode = KSZ_PTP_TOU_PEROUT;
+	return 0;
+}
+
+static int ksz9477_ptp_restart_perout(struct ksz_device *dev)
+{
+	s64 now_ns, first_ns, period_ns, next_ns;
+	struct timespec64 now;
+	unsigned int count;
+	int ret;
+
+	ret = _ksz9477_ptp_gettime(dev, &now);
+	if (ret)
+		return ret;
+
+	now_ns = timespec64_to_ns(&now);
+	first_ns = timespec64_to_ns(&dev->ptp_perout_target_time_first);
+
+	/* Calculate next perout event based on start time and period */
+	period_ns = timespec64_to_ns(&dev->ptp_perout_period);
+
+	if (first_ns < now_ns) {
+		count = div_u64(now_ns - first_ns, period_ns);
+		next_ns = first_ns + count * period_ns;
+	} else {
+		next_ns = first_ns;
+	}
+
+	/* Ensure 100 ms guard time prior next event */
+	while (next_ns < now_ns + 100000000)
+		next_ns += period_ns;
+
+	/* Restart periodic output signal */
+	{
+		struct timespec64 next = ns_to_timespec64(next_ns);
+		struct ptp_perout_request perout_request = {
+			.start = {
+				.sec  = next.tv_sec,
+				.nsec = next.tv_nsec
+			},
+			.period = {
+				.sec  = dev->ptp_perout_period.tv_sec,
+				.nsec = dev->ptp_perout_period.tv_nsec
+			},
+			.index = 0,
+			.flags = 0,  /* keep current values */
+		};
+		ret = ksz9477_ptp_enable_perout(dev, &perout_request, 1);
+		if (ret)
+			return ret;
+	}
+
+	return 0;
+}
+
 static int ksz9477_ptp_enable(struct ptp_clock_info *ptp,
 			      struct ptp_clock_request *req, int on)
 {
-	return -EOPNOTSUPP;
+	struct ksz_device *dev = container_of(ptp, struct ksz_device, ptp_caps);
+	int ret;
+
+	switch (req->type) {
+	case PTP_CLK_REQ_PEROUT: {
+		struct ptp_perout_request const *perout_request = &req->perout;
+
+		mutex_lock(&dev->ptp_mutex);
+		ret = ksz9477_ptp_enable_perout(dev, perout_request, on);
+		mutex_unlock(&dev->ptp_mutex);
+		return ret;
+	}
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
 }
 
 static long ksz9477_ptp_do_aux_work(struct ptp_clock_info *ptp)
@@ -592,7 +945,7 @@ int ksz9477_ptp_init(struct ksz_device *dev)
 	dev->ptp_caps.max_adj     = 6249999;
 	dev->ptp_caps.n_alarm     = 0;
 	dev->ptp_caps.n_ext_ts    = 0;  /* currently not implemented */
-	dev->ptp_caps.n_per_out   = 0;
+	dev->ptp_caps.n_per_out   = 1;
 	dev->ptp_caps.pps         = 0;
 	dev->ptp_caps.adjfine     = ksz9477_ptp_adjfine;
 	dev->ptp_caps.adjtime     = ksz9477_ptp_adjtime;

@@ -20,6 +20,7 @@
 int ksz9477_ptp_init(struct ksz_device *dev);
 void ksz9477_ptp_deinit(struct ksz_device *dev);
 
+irqreturn_t ksz9477_ptp_interrupt(struct ksz_device *dev);
 irqreturn_t ksz9477_ptp_port_interrupt(struct ksz_device *dev, int port);
 
 int ksz9477_ptp_get_ts_info(struct dsa_switch *ds, int port,
@@ -35,6 +36,9 @@ bool ksz9477_ptp_port_txtstamp(struct dsa_switch *ds, int port,
 
 static inline int ksz9477_ptp_init(struct ksz_device *dev) { return 0; }
 static inline void ksz9477_ptp_deinit(struct ksz_device *dev) {}
+
+static inline irqreturn_t ksz9477_ptp_interrupt(struct ksz_device *dev)
+{ return IRQ_NONE; }
 
 static inline irqreturn_t ksz9477_ptp_port_interrupt(struct ksz_device *dev,
 						     int port)
