@@ -11,6 +11,7 @@
 #include <linux/kernel.h>
 #include <linux/mutex.h>
 #include <linux/phy.h>
+#include <linux/ptp_clock_kernel.h>
 #include <linux/regmap.h>
 #include <net/dsa.h>
 
@@ -92,6 +93,12 @@ struct ksz_device {
 	u32 overrides;			/* chip functions set by user */
 	u16 host_mask;
 	u16 port_mask;
+
+#if IS_ENABLED(CONFIG_NET_DSA_MICROCHIP_KSZ9477_PTP)
+	struct ptp_clock *ptp_clock;
+	struct ptp_clock_info ptp_caps;
+	struct mutex ptp_mutex;		/* protects PTP related hardware */
+#endif
 };
 
 struct alu_struct {
@@ -147,6 +154,7 @@ void ksz_switch_remove(struct ksz_device *dev);
 
 int ksz8795_switch_register(struct ksz_device *dev);
 int ksz9477_switch_register(struct ksz_device *dev);
+void ksz9477_switch_remove(struct ksz_device *dev);
 
 void ksz_update_port_member(struct ksz_device *dev, int port);
 void ksz_init_mib_timer(struct ksz_device *dev);

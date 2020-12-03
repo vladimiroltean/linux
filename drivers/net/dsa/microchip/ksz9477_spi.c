@@ -72,7 +72,7 @@ static int ksz9477_spi_remove(struct spi_device *spi)
 	struct ksz_device *dev = spi_get_drvdata(spi);
 
 	if (dev)
-		ksz_switch_remove(dev);
+		ksz9477_switch_remove(dev);
 
 	return 0;
 }
