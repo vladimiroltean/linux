@@ -1412,7 +1412,7 @@ static const struct dsa_switch_ops ksz9477_switch_ops = {
 	.port_mirror_del	= ksz9477_port_mirror_del,
 	.port_hwtstamp_get      = ksz9477_ptp_port_hwtstamp_get,
 	.port_hwtstamp_set      = ksz9477_ptp_port_hwtstamp_set,
-	.port_txtstamp          = NULL,
+	.port_txtstamp          = ksz9477_ptp_port_txtstamp,
 	/* never defer rx delivery, tstamping is done via tail tagging */
 	.port_rxtstamp          = NULL,
 };
@@ -1541,6 +1541,7 @@ static const struct ksz_chip_data ksz9477_switch_chips[] = {
 static irqreturn_t ksz9477_switch_irq_thread(int irq, void *dev_id)
 {
 	struct ksz_device *dev = dev_id;
+	irqreturn_t result = IRQ_NONE;
 	u32 data;
 	int port;
 	int ret;
@@ -1560,12 +1561,15 @@ static irqreturn_t ksz9477_switch_irq_thread(int irq, void *dev_id)
 		ret = ksz_read8(dev, PORT_CTRL_ADDR(port, REG_PORT_INT_STATUS),
 				&data8);
 		if (ret)
-			return IRQ_NONE;
+			return result;
 
-		/* ToDo: Add specific handling of port interrupts */
+		if (data8 & PORT_PTP_INT) {
+			if (ksz9477_ptp_port_interrupt(dev, port) != IRQ_NONE)
+				result = IRQ_HANDLED;
+		}
 	}
 
-	return IRQ_NONE;
+	return result;
 }
 
 static int ksz9477_enable_port_interrupts(struct ksz_device *dev, bool enable)

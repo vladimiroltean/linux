@@ -6,7 +6,10 @@
  * Copyright (c) 2020 ARRI Lighting
  */
 
+#include <linux/net_tstamp.h>
+#include <linux/ptp_classify.h>
 #include <linux/ptp_clock_kernel.h>
+#include <linux/sysfs.h>
 
 #include "ksz_common.h"
 #include "ksz9477_reg.h"
@@ -76,6 +79,8 @@ error_return:
 static int ksz9477_ptp_adjtime(struct ptp_clock_info *ptp, s64 delta)
 {
 	struct ksz_device *dev = container_of(ptp, struct ksz_device, ptp_caps);
+	struct ksz_device_ptp_shared *ptp_shared = &dev->ptp_shared;
+	struct timespec64 delta64 = ns_to_timespec64(delta);
 	s32 sec, nsec;
 	u16 data16;
 	int ret;
@@ -109,6 +114,11 @@ static int ksz9477_ptp_adjtime(struct ptp_clock_info *ptp, s64 delta)
 	ret = ksz_write16(dev, REG_PTP_CLK_CTRL, data16);
 	if (ret)
 		goto error_return;
+
+	spin_lock_bh(&ptp_shared->ptp_clock_lock);
+	ptp_shared->ptp_clock_time = timespec64_add(ptp_shared->ptp_clock_time,
+						    delta64);
+	spin_unlock_bh(&ptp_shared->ptp_clock_lock);
 
 error_return:
 	mutex_unlock(&dev->ptp_mutex);
@@ -168,6 +178,7 @@ static int ksz9477_ptp_settime(struct ptp_clock_info *ptp,
 			       struct timespec64 const *ts)
 {
 	struct ksz_device *dev = container_of(ptp, struct ksz_device, ptp_caps);
+	struct ksz_device_ptp_shared *ptp_shared = &dev->ptp_shared;
 	u16 data16;
 	int ret;
 
@@ -207,6 +218,10 @@ static int ksz9477_ptp_settime(struct ptp_clock_info *ptp,
 	if (ret)
 		goto error_return;
 
+	spin_lock_bh(&ptp_shared->ptp_clock_lock);
+	ptp_shared->ptp_clock_time = *ts;
+	spin_unlock_bh(&ptp_shared->ptp_clock_lock);
+
 error_return:
 	mutex_unlock(&dev->ptp_mutex);
 	return ret;
@@ -221,17 +236,23 @@ static int ksz9477_ptp_enable(struct ptp_clock_info *ptp,
 static long ksz9477_ptp_do_aux_work(struct ptp_clock_info *ptp)
 {
 	struct ksz_device *dev = container_of(ptp, struct ksz_device, ptp_caps);
+	struct ksz_device_ptp_shared *ptp_shared = &dev->ptp_shared;
 	struct timespec64 ts;
 
 	mutex_lock(&dev->ptp_mutex);
 	_ksz9477_ptp_gettime(dev, &ts);
 	mutex_unlock(&dev->ptp_mutex);
 
+	spin_lock_bh(&ptp_shared->ptp_clock_lock);
+	ptp_shared->ptp_clock_time = ts;
+	spin_unlock_bh(&ptp_shared->ptp_clock_lock);
+
 	return HZ;  /* reschedule in 1 second */
 }
 
 static int ksz9477_ptp_start_clock(struct ksz_device *dev)
 {
+	struct ksz_device_ptp_shared *ptp_shared = &dev->ptp_shared;
 	u16 data;
 	int ret;
 
@@ -252,6 +273,11 @@ static int ksz9477_ptp_start_clock(struct ksz_device *dev)
 	if (ret)
 		return ret;
 
+	spin_lock_bh(&ptp_shared->ptp_clock_lock);
+	ptp_shared->ptp_clock_time.tv_sec = 0;
+	ptp_shared->ptp_clock_time.tv_nsec = 0;
+	spin_unlock_bh(&ptp_shared->ptp_clock_lock);
+
 	return 0;
 }
 
@@ -267,6 +293,236 @@ static int ksz9477_ptp_stop_clock(struct ksz_device *dev)
 	/* Disable PTP clock */
 	data &= ~PTP_CLK_ENABLE;
 	return ksz_write16(dev, REG_PTP_CLK_CTRL, data);
+}
+
+/* Time stamping support */
+
+static int ksz9477_ptp_enable_mode(struct ksz_device *dev, bool enable)
+{
+	u16 data;
+	int ret;
+
+	ret = ksz_read16(dev, REG_PTP_MSG_CONF1, &data);
+	if (ret)
+		return ret;
+
+	/* Setting the PTP_802_1AS bit disables forwarding of PDelay_Req and
+	 * PDelay_Resp messages. These messages must not be forwarded in
+	 * Boundary Clock mode.
+	 */
+	if (enable)
+		data |= PTP_ENABLE | PTP_802_1AS;
+	else
+		data &= ~PTP_ENABLE;
+
+	ret = ksz_write16(dev, REG_PTP_MSG_CONF1, data);
+	if (ret)
+		return ret;
+
+	if (enable) {
+		/* Schedule cyclic call of ksz_ptp_do_aux_work() */
+		ret = ptp_schedule_worker(dev->ptp_clock, 0);
+		if (ret)
+			goto error_disable_mode;
+	} else {
+		ptp_cancel_worker_sync(dev->ptp_clock);
+	}
+
+	return 0;
+
+error_disable_mode:
+	ksz_write16(dev, REG_PTP_MSG_CONF1, data & ~PTP_ENABLE);
+	return ret;
+}
+
+static int ksz9477_ptp_enable_port_ptp_interrupts(struct ksz_device *dev,
+						  int port, bool enable)
+{
+	u32 addr = PORT_CTRL_ADDR(port, REG_PORT_INT_MASK);
+	u8 data;
+	int ret;
+
+	ret = ksz_read8(dev, addr, &data);
+	if (ret)
+		return ret;
+
+	/* PORT_PTP_INT bit is active low */
+	if (enable)
+		data &= ~PORT_PTP_INT;
+	else
+		data |= PORT_PTP_INT;
+
+	return ksz_write8(dev, addr, data);
+}
+
+static int ksz9477_ptp_enable_port_egress_interrupts(struct ksz_device *dev,
+						     int port, bool enable)
+{
+	u32 addr = PORT_CTRL_ADDR(port, REG_PTP_PORT_TX_INT_ENABLE__2);
+	u16 data;
+	int ret;
+
+	ret = ksz_read16(dev, addr, &data);
+	if (ret)
+		return ret;
+
+	/* PTP_PORT_XDELAY_REQ_INT is high active */
+	if (enable)
+		data |= PTP_PORT_XDELAY_REQ_INT;
+	else
+		data &= PTP_PORT_XDELAY_REQ_INT;
+
+	return ksz_write16(dev, addr, data);
+}
+
+static void ksz9477_ptp_txtstamp_skb(struct ksz_device *dev,
+				     struct ksz_port *prt, struct sk_buff *skb)
+{
+	struct skb_shared_hwtstamps hwtstamps = {};
+	int ret;
+
+	skb_shinfo(skb)->tx_flags |= SKBTX_IN_PROGRESS;
+
+	/* timeout must include tstamp latency, IRQ latency and time for
+	 * reading the time stamp via I2C.
+	 */
+	ret = wait_for_completion_timeout(&prt->tstamp_completion,
+					  msecs_to_jiffies(100));
+	if (!ret) {
+		dev_err(dev->dev, "timeout waiting for time stamp\n");
+		return;
+	}
+	hwtstamps.hwtstamp = prt->tstamp_xdelay;
+	skb_complete_tx_timestamp(skb, &hwtstamps);
+}
+
+#define work_to_port(work) \
+		container_of((work), struct ksz_port_ptp_shared, xmit_work)
+#define ptp_shared_to_ksz_port(t) \
+		container_of((t), struct ksz_port, ptp_shared)
+#define ptp_shared_to_ksz_device(t) \
+		container_of((t), struct ksz_device, ptp_shared)
+
+/* Deferred work is necessary for time stamped PDelay_Req messages. This cannot
+ * be done from atomic context as we have to wait for the hardware interrupt.
+ */
+static void ksz9477_port_deferred_xmit(struct kthread_work *work)
+{
+	struct ksz_port_ptp_shared *prt_ptp_shared = work_to_port(work);
+	struct ksz_port *prt = ptp_shared_to_ksz_port(prt_ptp_shared);
+	struct ksz_device_ptp_shared *ptp_shared = prt_ptp_shared->dev;
+	struct ksz_device *dev = ptp_shared_to_ksz_device(ptp_shared);
+	int port = prt - dev->ports;
+	struct sk_buff *skb;
+
+	while ((skb = skb_dequeue(&prt_ptp_shared->xmit_queue)) != NULL) {
+		struct sk_buff *clone = DSA_SKB_CB(skb)->clone;
+
+		reinit_completion(&prt->tstamp_completion);
+
+		/* Transfer skb to the host port. */
+		dsa_enqueue_skb(skb, dsa_to_port(dev->ds, port)->slave);
+
+		ksz9477_ptp_txtstamp_skb(dev, prt, clone);
+	}
+}
+
+static int ksz9477_ptp_port_init(struct ksz_device *dev, int port)
+{
+	struct ksz_port *prt = &dev->ports[port];
+	struct ksz_port_ptp_shared *ptp_shared = &prt->ptp_shared;
+	struct dsa_port *dp = dsa_to_port(dev->ds, port);
+	int ret;
+
+	if (port == dev->cpu_port)
+		return 0;
+
+	/* Set rx and tx latency to 0 (will be handled by user space) */
+	ret = ksz_write16(dev, PORT_CTRL_ADDR(port, REG_PTP_PORT_RX_DELAY__2),
+			  0);
+	if (ret)
+		return ret;
+
+	ret = ksz_write16(dev, PORT_CTRL_ADDR(port, REG_PTP_PORT_TX_DELAY__2),
+			  0);
+	if (ret)
+		return ret;
+
+	ret = ksz9477_ptp_enable_port_ptp_interrupts(dev, port, true);
+	if (ret)
+		return ret;
+
+	ret = ksz9477_ptp_enable_port_egress_interrupts(dev, port, true);
+	if (ret)
+		goto error_disable_port_ptp_interrupts;
+
+	/* ksz_port::ptp_shared is used in tagging driver */
+	ptp_shared->dev = &dev->ptp_shared;
+	dp->priv = ptp_shared;
+
+	/* PDelay_Req messages require deferred transmit as the time
+	 * stamp unit provides no sequenceId or similar.  So we must
+	 * wait for the time stamp interrupt.
+	 */
+	init_completion(&prt->tstamp_completion);
+	kthread_init_work(&ptp_shared->xmit_work,
+			  ksz9477_port_deferred_xmit);
+	ptp_shared->xmit_worker = kthread_create_worker(0, "%s_xmit",
+							dp->slave->name);
+	if (IS_ERR(ptp_shared->xmit_worker)) {
+		ret = PTR_ERR(ptp_shared->xmit_worker);
+		dev_err(dev->dev,
+			"failed to create deferred xmit thread: %d\n", ret);
+		goto error_disable_port_egress_interrupts;
+	}
+	skb_queue_head_init(&ptp_shared->xmit_queue);
+
+	return 0;
+
+error_disable_port_egress_interrupts:
+	ksz9477_ptp_enable_port_egress_interrupts(dev, port, false);
+error_disable_port_ptp_interrupts:
+	ksz9477_ptp_enable_port_ptp_interrupts(dev, port, false);
+	return ret;
+}
+
+static void ksz9477_ptp_port_deinit(struct ksz_device *dev, int port)
+{
+	struct ksz_port_ptp_shared *ptp_shared = &dev->ports[port].ptp_shared;
+
+	if (port == dev->cpu_port)
+		return;
+
+	kthread_destroy_worker(ptp_shared->xmit_worker);
+	ksz9477_ptp_enable_port_egress_interrupts(dev, port, false);
+	ksz9477_ptp_enable_port_ptp_interrupts(dev, port, false);
+}
+
+static int ksz9477_ptp_ports_init(struct ksz_device *dev)
+{
+	int port;
+	int ret;
+
+	for (port = 0; port < dev->port_cnt; port++) {
+		ret = ksz9477_ptp_port_init(dev, port);
+		if (ret)
+			goto error_deinit;
+	}
+
+	return 0;
+
+error_deinit:
+	while (port-- > 0)
+		ksz9477_ptp_port_deinit(dev, port);
+	return ret;
+}
+
+static void ksz9477_ptp_ports_deinit(struct ksz_device *dev)
+{
+	int port;
+
+	for (port = 0; port < dev->port_cnt; port++)
+		ksz9477_ptp_port_deinit(dev, port);
 }
 
 /* device attributes */
@@ -322,6 +578,7 @@ int ksz9477_ptp_init(struct ksz_device *dev)
 	int ret;
 
 	mutex_init(&dev->ptp_mutex);
+	spin_lock_init(&dev->ptp_shared.ptp_clock_lock);
 
 	/* PTP clock properties */
 
@@ -355,6 +612,11 @@ int ksz9477_ptp_init(struct ksz_device *dev)
 		goto error_stop_clock;
 	}
 
+	/* Init switch ports */
+	ret = ksz9477_ptp_ports_init(dev);
+	if (ret)
+		goto error_unregister_clock;
+
 	/* Currently, only P2P delay measurement is supported.  Setting ocmode
 	 * to slave will work independently of actually being master or slave.
 	 * For E2E delay measurement, switching between master and slave would
@@ -371,11 +633,6 @@ int ksz9477_ptp_init(struct ksz_device *dev)
 	ksz9477_ptp_tcmode_set(dev, KSZ9477_PTP_TCMODE_P2P);
 	ksz9477_ptp_ocmode_set(dev, KSZ9477_PTP_OCMODE_SLAVE);
 
-	/* Schedule cyclic call of ksz_ptp_do_aux_work() */
-	ret = ptp_schedule_worker(dev->ptp_clock, 0);
-	if (ret)
-		goto error_unregister_clock;
-
 	return 0;
 
 error_unregister_clock:
@@ -387,8 +644,51 @@ error_stop_clock:
 
 void ksz9477_ptp_deinit(struct ksz_device *dev)
 {
+	ksz9477_ptp_ports_deinit(dev);
+	ksz9477_ptp_enable_mode(dev, false);
 	ptp_clock_unregister(dev->ptp_clock);
 	ksz9477_ptp_stop_clock(dev);
+}
+
+irqreturn_t ksz9477_ptp_port_interrupt(struct ksz_device *dev, int port)
+{
+	u32 addr = PORT_CTRL_ADDR(port, REG_PTP_PORT_TX_INT_STATUS__2);
+	struct ksz_port *prt = &dev->ports[port];
+	u16 data;
+	int ret;
+
+	ret = ksz_read16(dev, addr, &data);
+	if (ret)
+		return IRQ_NONE;
+
+	if (data & PTP_PORT_XDELAY_REQ_INT) {
+		/* Timestamp for Pdelay_Req / Delay_Req */
+		struct ksz_device_ptp_shared *ptp_shared = &dev->ptp_shared;
+		u32 tstamp_raw;
+		ktime_t tstamp;
+
+		/* In contrast to the KSZ9563R data sheet, the format of the
+		 * port time stamp registers is also 2 bit seconds + 30 bit
+		 * nanoseconds (same as in the tail tags).
+		 */
+		ret = ksz_read32(dev,
+				 PORT_CTRL_ADDR(port, REG_PTP_PORT_XDELAY_TS),
+				 &tstamp_raw);
+		if (ret)
+			return IRQ_NONE;
+
+		tstamp = ksz9477_decode_tstamp(tstamp_raw);
+		prt->tstamp_xdelay = ksz9477_tstamp_reconstruct(ptp_shared,
+								tstamp);
+		complete(&prt->tstamp_completion);
+	}
+
+	/* Clear interrupt(s) (W1C) */
+	ret = ksz_write16(dev, addr, data);
+	if (ret)
+		return IRQ_NONE;
+
+	return IRQ_HANDLED;
 }
 
 /* DSA PTP operations */
@@ -418,7 +718,9 @@ int ksz9477_ptp_get_ts_info(struct dsa_switch *ds, int port,
 static int ksz9477_set_hwtstamp_config(struct ksz_device *dev, int port,
 				       struct hwtstamp_config *config)
 {
+	struct ksz_device_ptp_shared *ptp_shared = &dev->ptp_shared;
 	struct ksz_port *prt = &dev->ports[port];
+	bool on = true;
 
 	/* reserved for future extensions */
 	if (config->flags)
@@ -437,6 +739,7 @@ static int ksz9477_set_hwtstamp_config(struct ksz_device *dev, int port,
 
 	switch (config->rx_filter) {
 	case HWTSTAMP_FILTER_NONE:
+		on = false;
 		break;
 	case HWTSTAMP_FILTER_PTP_V2_L4_EVENT:
 	case HWTSTAMP_FILTER_PTP_V2_L4_SYNC:
@@ -452,7 +755,23 @@ static int ksz9477_set_hwtstamp_config(struct ksz_device *dev, int port,
 		break;
 	default:
 		config->rx_filter = HWTSTAMP_FILTER_NONE;
+		on = false;
 		return -ERANGE;
+	}
+
+	if (on != test_bit(KSZ9477_HWTS_EN, &ptp_shared->state)) {
+		int ret = 0;
+
+		clear_bit(KSZ9477_HWTS_EN, &ptp_shared->state);
+
+		ret = ksz9477_ptp_enable_mode(dev, on);
+		if (ret) {
+			dev_err(dev->dev,
+				"Failed to change timestamping: %d\n", ret);
+			return ret;
+		}
+		if (on)
+			set_bit(KSZ9477_HWTS_EN, &ptp_shared->state);
 	}
 
 	return 0;
@@ -464,9 +783,8 @@ int ksz9477_ptp_port_hwtstamp_get(struct dsa_switch *ds, int port,
 	struct ksz_device *dev = ds->priv;
 	unsigned long bytes_copied;
 
-	bytes_copied = copy_to_user(ifr->ifr_data,
-				    &dev->ports[port].tstamp_config,
-				    sizeof(dev->ports[port].tstamp_config));
+	bytes_copied = copy_to_user(ifr->ifr_data, &dev->tstamp_config,
+				    sizeof(dev->tstamp_config));
 
 	return bytes_copied ? -EFAULT : 0;
 }
@@ -482,13 +800,66 @@ int ksz9477_ptp_port_hwtstamp_set(struct dsa_switch *ds, int port,
 	if (copy_from_user(&config, ifr->ifr_data, sizeof(config)))
 		return -EFAULT;
 
+	mutex_lock(&dev->ptp_mutex);
+
 	err = ksz9477_set_hwtstamp_config(dev, port, &config);
-	if (err)
+	if (err) {
+		mutex_unlock(&dev->ptp_mutex);
 		return err;
+	}
 
 	/* Save the chosen configuration to be returned later. */
-	memcpy(&dev->ports[port].tstamp_config, &config, sizeof(config));
+	memcpy(&dev->tstamp_config, &config, sizeof(config));
 	bytes_copied = copy_to_user(ifr->ifr_data, &config, sizeof(config));
 
+	mutex_unlock(&dev->ptp_mutex);
+
 	return bytes_copied ? -EFAULT : 0;
+}
+
+bool ksz9477_ptp_port_txtstamp(struct dsa_switch *ds, int port,
+			       struct sk_buff *clone, unsigned int type)
+{
+	struct ksz_device *dev = ds->priv;
+	struct ksz_port *prt = &dev->ports[port];
+	struct ptp_header *hdr;
+	u8 ptp_msg_type;
+
+	/* Should already been tested in dsa_skb_tx_timestamp()? */
+	if (!(skb_shinfo(clone)->tx_flags & SKBTX_HW_TSTAMP))
+		return false;
+
+	if (!prt->hwts_tx_en)
+		return false;
+
+	hdr = ptp_parse_header(clone, type);
+	if (!hdr)
+		return false;
+
+	ptp_msg_type = ptp_get_msgtype(hdr, type);
+	switch (ptp_msg_type) {
+	/* As the KSZ9563 always performs one step time stamping, only the time
+	 * stamp for Pdelay_Req is reported to the application via socket error
+	 * queue.  Time stamps for Sync and Pdelay_resp will be applied directly
+	 * to the outgoing message (e.g. correction field), but will NOT be
+	 * reported to the socket.
+	 * Delay_Req is not time stamped as E2E is currently not supported by
+	 * this driver.  See ksz9477_ptp_init() for details.
+	 */
+	case PTP_MSGTYPE_PDELAY_REQ:
+	case PTP_MSGTYPE_PDELAY_RESP:
+		break;
+	default:
+		return false;
+	}
+
+	/* ptp_type will be reused in ksz9477_xmit_timestamp(). ptp_msg_type
+	 * will be reused in ksz9477_defer_xmit(). For PDelay_Resp, the cloned
+	 * skb will not be passed to skb_complete_tx_timestamp() and has to be
+	 * freed manually in ksz9477_defer_xmit().
+	 */
+	KSZ9477_SKB_CB(clone)->ptp_type = type;
+	KSZ9477_SKB_CB(clone)->ptp_msg_type = ptp_msg_type;
+
+	return true;  /* keep cloned skb */
 }
