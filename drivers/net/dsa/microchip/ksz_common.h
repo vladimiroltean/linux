@@ -7,8 +7,11 @@
 #ifndef __KSZ_COMMON_H
 #define __KSZ_COMMON_H
 
+#include <linux/completion.h>
+#include <linux/dsa/ksz_common.h>
 #include <linux/etherdevice.h>
 #include <linux/kernel.h>
+#include <linux/ktime.h>
 #include <linux/mutex.h>
 #include <linux/phy.h>
 #include <linux/ptp_clock_kernel.h>
@@ -42,7 +45,9 @@ struct ksz_port {
 	struct ksz_port_mib mib;
 	phy_interface_t interface;
 #if IS_ENABLED(CONFIG_NET_DSA_MICROCHIP_KSZ9477_PTP)
-	struct hwtstamp_config tstamp_config;
+	struct ksz_port_ptp_shared ptp_shared;
+	ktime_t tstamp_xdelay;
+	struct completion tstamp_completion;
 	bool hwts_tx_en;
 #endif
 };
@@ -101,7 +106,9 @@ struct ksz_device {
 #if IS_ENABLED(CONFIG_NET_DSA_MICROCHIP_KSZ9477_PTP)
 	struct ptp_clock *ptp_clock;
 	struct ptp_clock_info ptp_caps;
+	struct hwtstamp_config tstamp_config;
 	struct mutex ptp_mutex;		/* protects PTP related hardware */
+	struct ksz_device_ptp_shared ptp_shared;
 #endif
 };
 

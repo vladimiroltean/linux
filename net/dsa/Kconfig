@@ -93,6 +93,7 @@ config NET_DSA_TAG_MTK
 
 config NET_DSA_TAG_KSZ
 	tristate "Tag driver for Microchip 8795/9477/9893 families of switches"
+	select NET_PTP_CLASSIFY
 	help
 	  Say Y if you want to enable support for tagging frames for the
 	  Microchip 8795/9477/9893 families of switches.
