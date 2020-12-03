@@ -881,7 +881,8 @@ int ocelot_get_ts_info(struct ocelot *ocelot, int port,
 }
 EXPORT_SYMBOL(ocelot_get_ts_info);
 
-static u32 ocelot_get_bond_mask(struct ocelot *ocelot, struct net_device *bond)
+static u32 ocelot_get_bond_mask(struct ocelot *ocelot, struct net_device *bond,
+				bool just_active_ports)
 {
 	u32 bond_mask = 0;
 	int port;
@@ -892,8 +893,12 @@ static u32 ocelot_get_bond_mask(struct ocelot *ocelot, struct net_device *bond)
 		if (!ocelot_port)
 			continue;
 
-		if (ocelot_port->bond == bond)
+		if (ocelot_port->bond == bond) {
+			if (just_active_ports && !ocelot_port->lag_tx_active)
+				continue;
+
 			bond_mask |= BIT(port);
+		}
 	}
 
 	return bond_mask;
@@ -919,7 +924,7 @@ static void ocelot_apply_bridge_fwd_mask(struct ocelot *ocelot)
 			struct net_device *bond = ocelot_port->bond;
 
 			if (bond)
-				mask &= ~ocelot_get_bond_mask(ocelot, bond);
+				mask &= ~ocelot_get_bond_mask(ocelot, bond, false);
 
 			ocelot_write_rix(ocelot, mask,
 					 ANA_PGID_PGID, PGID_SRC + port);
@@ -1261,22 +1266,22 @@ static int ocelot_set_aggr_pgids(struct ocelot *ocelot)
 		bonds[port] = ocelot_port->bond;
 	}
 
-	/* Now, set PGIDs for each LAG */
+	/* Now, set PGIDs for each active LAG */
 	for (lag = 0; lag < ocelot->num_phys_ports; lag++) {
-		int num_ports_in_lag = 0;
+		int num_active_ports = 0;
 		unsigned long bond_mask;
 		u8 aggr_idx[16];
 
 		if (!bonds[lag])
 			continue;
 
-		bond_mask = ocelot_get_bond_mask(ocelot, bonds[lag]);
+		bond_mask = ocelot_get_bond_mask(ocelot, bonds[lag], true);
 
 		for_each_set_bit(port, &bond_mask, ocelot->num_phys_ports) {
 			// Destination mask
 			ocelot_write_rix(ocelot, bond_mask,
 					 ANA_PGID_PGID, port);
-			aggr_idx[num_ports_in_lag++] = port;
+			aggr_idx[num_active_ports++] = port;
 		}
 
 		for_each_aggr_pgid(ocelot, i) {
@@ -1284,7 +1289,11 @@ static int ocelot_set_aggr_pgids(struct ocelot *ocelot)
 
 			ac = ocelot_read_rix(ocelot, ANA_PGID_PGID, i);
 			ac &= ~bond_mask;
-			ac |= BIT(aggr_idx[i % num_ports_in_lag]);
+			/* Don't do division by zero if there was no active
+			 * port. Just make all aggregation codes zero.
+			 */
+			if (num_active_ports)
+				ac |= BIT(aggr_idx[i % num_active_ports]);
 			ocelot_write_rix(ocelot, ac, ANA_PGID_PGID, i);
 		}
 
@@ -1320,7 +1329,8 @@ static void ocelot_setup_logical_port_ids(struct ocelot *ocelot)
 
 		bond = ocelot_port->bond;
 		if (bond) {
-			int lag = __ffs(ocelot_get_bond_mask(ocelot, bond));
+			int lag = __ffs(ocelot_get_bond_mask(ocelot, bond,
+							     false));
 
 			ocelot_rmw_gix(ocelot,
 				       ANA_PORT_PORT_CFG_PORTID_VAL(lag),
@@ -1360,6 +1370,16 @@ int ocelot_port_lag_leave(struct ocelot *ocelot, int port,
 	return ocelot_set_aggr_pgids(ocelot);
 }
 EXPORT_SYMBOL(ocelot_port_lag_leave);
+
+int ocelot_port_lag_change(struct ocelot *ocelot, int port, bool lag_tx_active)
+{
+	struct ocelot_port *ocelot_port = ocelot->ports[port];
+
+	ocelot_port->lag_tx_active = lag_tx_active;
+
+	/* Rebalance the LAGs */
+	return ocelot_set_aggr_pgids(ocelot);
+}
 
 /* Configure the maximum SDU (L2 payload) on RX to the value specified in @sdu.
  * The length of VLAN tags is accounted for automatically via DEV_MAC_TAGS_CFG.

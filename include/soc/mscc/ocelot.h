@@ -599,6 +599,7 @@ struct ocelot_port {
 	u8				*xmit_template;
 
 	struct net_device		*bond;
+	bool				lag_tx_active;
 };
 
 struct ocelot {
