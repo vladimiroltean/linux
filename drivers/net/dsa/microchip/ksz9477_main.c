@@ -1389,6 +1389,7 @@ static const struct dsa_switch_ops ksz9477_switch_ops = {
 	.phy_read		= ksz9477_phy_read16,
 	.phy_write		= ksz9477_phy_write16,
 	.phylink_mac_link_down	= ksz_mac_link_down,
+	.get_ts_info		= ksz9477_ptp_get_ts_info,
 	.port_enable		= ksz_enable_port,
 	.get_strings		= ksz9477_get_strings,
 	.get_ethtool_stats	= ksz_get_ethtool_stats,
@@ -1409,6 +1410,11 @@ static const struct dsa_switch_ops ksz9477_switch_ops = {
 	.port_mdb_del           = ksz9477_port_mdb_del,
 	.port_mirror_add	= ksz9477_port_mirror_add,
 	.port_mirror_del	= ksz9477_port_mirror_del,
+	.port_hwtstamp_get      = ksz9477_ptp_port_hwtstamp_get,
+	.port_hwtstamp_set      = ksz9477_ptp_port_hwtstamp_set,
+	.port_txtstamp          = NULL,
+	/* never defer rx delivery, tstamping is done via tail tagging */
+	.port_rxtstamp          = NULL,
 };
 
 static u32 ksz9477_get_port_addr(int port, int offset)
