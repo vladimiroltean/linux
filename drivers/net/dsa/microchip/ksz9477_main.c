@@ -19,6 +19,7 @@
 
 #include "ksz9477_reg.h"
 #include "ksz_common.h"
+#include "ksz9477_ptp.h"
 
 /* Used with variable features to indicate capabilities. */
 #define GBIT_SUPPORT			BIT(0)
@@ -1699,9 +1700,25 @@ int ksz9477_switch_register(struct ksz_device *dev)
 			phy_remove_link_mode(phydev,
 					     ETHTOOL_LINK_MODE_1000baseT_Full_BIT);
 	}
+
+	ret = ksz9477_ptp_init(dev);
+	if (ret)
+		goto error_switch_unregister;
+
+	return 0;
+
+error_switch_unregister:
+	ksz_switch_remove(dev);
 	return ret;
 }
 EXPORT_SYMBOL(ksz9477_switch_register);
+
+void ksz9477_switch_remove(struct ksz_device *dev)
+{
+	ksz9477_ptp_deinit(dev);
+	ksz_switch_remove(dev);
+}
+EXPORT_SYMBOL(ksz9477_switch_remove);
 
 MODULE_AUTHOR("Woojung Huh <Woojung.Huh@microchip.com>");
 MODULE_DESCRIPTION("Microchip KSZ9477 Series Switch DSA Driver");
