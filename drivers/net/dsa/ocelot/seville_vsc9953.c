@@ -726,7 +726,7 @@ static const struct vcap_field vsc9953_vcap_is1_actions[] = {
 	[VCAP_IS1_ACT_HIT_STICKY]		= { 80,  1},
 };
 
-static struct vcap_field vsc9953_vcap_is2_keys[] = {
+static const struct vcap_field vsc9953_vcap_is2_keys[] = {
 	/* Common: 41 bits */
 	[VCAP_IS2_TYPE]				= {  0,   4},
 	[VCAP_IS2_HK_FIRST]			= {  4,   1},
@@ -796,7 +796,7 @@ static struct vcap_field vsc9953_vcap_is2_keys[] = {
 	[VCAP_IS2_HK_IP6_L3_PROTO]		= {174,   8},
 };
 
-static struct vcap_field vsc9953_vcap_is2_actions[] = {
+static const struct vcap_field vsc9953_vcap_is2_actions[] = {
 	[VCAP_IS2_ACT_HIT_ME_ONCE]		= {  0,  1},
 	[VCAP_IS2_ACT_CPU_COPY_ENA]		= {  1,  1},
 	[VCAP_IS2_ACT_CPU_QU_NUM]		= {  2,  3},
