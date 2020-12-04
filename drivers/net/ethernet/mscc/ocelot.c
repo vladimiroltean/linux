@@ -903,7 +903,7 @@ void ocelot_bridge_stp_state_set(struct ocelot *ocelot, int port, u8 state)
 {
 	struct ocelot_port *ocelot_port = ocelot->ports[port];
 	u32 port_cfg;
-	int p, i;
+	int p;
 
 	if (!(BIT(port) & ocelot->bridge_mask))
 		return;
@@ -928,14 +928,17 @@ void ocelot_bridge_stp_state_set(struct ocelot *ocelot, int port, u8 state)
 	ocelot_write_gix(ocelot, port_cfg, ANA_PORT_PORT_CFG, port);
 
 	/* Apply FWD mask. The loop is needed to add/remove the current port as
-	 * a source for the other ports.
+	 * a source for the other ports. If the source port is in a bond, then
+	 * all the other ports from that bond need to be removed from this
+	 * source port's forwarding mask.
 	 */
 	for (p = 0; p < ocelot->num_phys_ports; p++) {
 		if (ocelot->bridge_fwd_mask & BIT(p)) {
 			unsigned long mask = ocelot->bridge_fwd_mask & ~BIT(p);
+			int lag;
 
-			for (i = 0; i < ocelot->num_phys_ports; i++) {
-				unsigned long bond_mask = ocelot->lags[i];
+			for (lag = 0; lag < ocelot->num_phys_ports; lag++) {
+				unsigned long bond_mask = ocelot->lags[lag];
 
 				if (!bond_mask)
 					continue;
