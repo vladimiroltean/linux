@@ -19,6 +19,8 @@
 	aliases {
 		spi0 = &spi0;
 		ethernet1 = &eth1;
+		mmc0 = &sdhci1; /* eMMC */
+		mmc1 = &sdhci0; /* SD card */
 	};
 
 	chosen {
