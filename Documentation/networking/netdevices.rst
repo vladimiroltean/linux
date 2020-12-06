@@ -223,8 +223,8 @@ ndo_do_ioctl:
 	Context: process
 
 ndo_get_stats:
-	Synchronization: rtnl_lock() semaphore, dev_base_lock rwlock, or RCU.
-	Context: atomic (can't sleep under rwlock or RCU)
+	Synchronization: none.
+	Context: process
 
 ndo_start_xmit:
 	Synchronization: __netif_tx_lock spinlock.
