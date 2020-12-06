@@ -10408,6 +10408,8 @@ int dev_get_stats(struct net_device *dev, struct rtnl_link_stats64 *storage)
 	const struct net_device_ops *ops = dev->netdev_ops;
 	int err = 0;
 
+	might_sleep();
+
 	if (ops->ndo_get_stats64) {
 		memset(storage, 0, sizeof(*storage));
 		err = ops->ndo_get_stats64(dev, storage);
