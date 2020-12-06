@@ -38,7 +38,6 @@
 #include <linux/ctype.h>
 #include <linux/blkdev.h>
 #include <linux/workqueue.h>
-#include <linux/rcupdate.h>
 #include <asm/io.h>
 #include <asm/processor.h>
 #include <asm/hardware.h>
@@ -350,29 +349,40 @@ static __inline__ int led_get_net_activity(void)
 	return 0;
 #else
 	static u64 rx_total_last, tx_total_last;
+	struct net_device **dev_arary;
+	int retval = 0, dev_count, i;
 	u64 rx_total, tx_total;
-	struct net_device *dev;
-	int retval;
 
 	rx_total = tx_total = 0;
-	
-	/* we are running as a workqueue task, so we can use an RCU lookup */
-	rcu_read_lock();
-	for_each_netdev_rcu(&init_net, dev) {
-	    const struct rtnl_link_stats64 *stats;
-	    struct rtnl_link_stats64 temp;
-	    struct in_device *in_dev = __in_dev_get_rcu(dev);
-	    if (!in_dev || !in_dev->ifa_list)
-		continue;
-	    if (ipv4_is_loopback(in_dev->ifa_list->ifa_local))
-		continue;
-	    stats = dev_get_stats(dev, &temp);
-	    rx_total += stats->rx_packets;
-	    tx_total += stats->tx_packets;
-	}
-	rcu_read_unlock();
 
-	retval = 0;
+	retval = net_get_dev_array(&init_net, &dev_array, &dev_count);
+	if (retval || !dev_count)
+		return retval;
+
+	/* we are running as a workqueue task, so we can sleep */
+	for (i = 0; i < dev_count; i++) {
+		struct net_device *dev = dev_array[i];
+		struct in_device *in_dev = in_dev_get(dev);
+		const struct rtnl_link_stats64 *stats;
+		struct rtnl_link_stats64 temp;
+
+		if (!in_dev)
+			continue;
+
+		if (!in_dev->ifa_list ||
+		    ipv4_is_loopback(in_dev->ifa_list->ifa_local)) {
+			in_dev_put(in_dev);
+			continue;
+		}
+
+		in_dev_put(in_dev);
+
+		stats = dev_get_stats(dev, &temp);
+		rx_total += stats->rx_packets;
+		tx_total += stats->tx_packets;
+	}
+
+	net_put_dev_array(dev_array, dev_count);
 
 	if (rx_total != rx_total_last) {
 		rx_total_last = rx_total;
