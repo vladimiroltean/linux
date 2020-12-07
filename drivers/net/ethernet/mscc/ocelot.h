@@ -102,6 +102,9 @@ struct ocelot_multicast {
 	struct ocelot_pgid *pgid;
 };
 
+void ocelot_port_bridge_flags(struct ocelot *ocelot, int port,
+			      unsigned long flags,
+			      struct switchdev_trans *trans);
 int ocelot_port_fdb_do_dump(const unsigned char *addr, u16 vid,
 			    bool is_static, void *data);
 int ocelot_mact_learn(struct ocelot *ocelot, int port,
