@@ -1035,8 +1035,8 @@ static int ocelot_netdevice_changeupper(struct net_device *dev,
 			err = ocelot_port_lag_join(ocelot, port,
 						   info->upper_dev);
 		else
-			ocelot_port_lag_leave(ocelot, port,
-					      info->upper_dev);
+			err = ocelot_port_lag_leave(ocelot, port,
+						    info->upper_dev);
 	}
 
 	return notifier_from_errno(err);
