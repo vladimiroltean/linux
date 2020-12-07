@@ -639,8 +639,6 @@ struct ocelot {
 	enum ocelot_tag_prefix		inj_prefix;
 	enum ocelot_tag_prefix		xtr_prefix;
 
-	u32				*lags;
-
 	struct list_head		multicast;
 	struct list_head		pgids;
 
