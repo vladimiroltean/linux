@@ -596,6 +596,8 @@ struct ocelot_port {
 
 	struct regmap			*target;
 
+	unsigned long			brport_flags;
+
 	bool				vlan_aware;
 	/* VLAN that untagged frames are classified to, on ingress */
 	struct ocelot_vlan		pvid_vlan;

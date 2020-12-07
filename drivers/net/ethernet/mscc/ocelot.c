@@ -984,6 +984,7 @@ EXPORT_SYMBOL(ocelot_apply_bridge_fwd_mask);
 
 void ocelot_bridge_stp_state_set(struct ocelot *ocelot, int port, u8 state)
 {
+	struct ocelot_port *ocelot_port = ocelot->ports[port];
 	u32 port_cfg;
 
 	if (!(BIT(port) & ocelot->bridge_mask))
@@ -996,7 +997,8 @@ void ocelot_bridge_stp_state_set(struct ocelot *ocelot, int port, u8 state)
 		ocelot->bridge_fwd_mask |= BIT(port);
 		fallthrough;
 	case BR_STATE_LEARNING:
-		port_cfg |= ANA_PORT_PORT_CFG_LEARN_ENA;
+		if (ocelot_port->brport_flags & BR_LEARNING)
+			port_cfg |= ANA_PORT_PORT_CFG_LEARN_ENA;
 		break;
 
 	default:
@@ -1253,6 +1255,7 @@ EXPORT_SYMBOL(ocelot_port_bridge_join);
 int ocelot_port_bridge_leave(struct ocelot *ocelot, int port,
 			     struct net_device *bridge)
 {
+	struct ocelot_port *ocelot_port = ocelot->ports[port];
 	struct ocelot_vlan pvid = {0}, native_vlan = {0};
 	int ret;
 
@@ -1267,6 +1270,10 @@ int ocelot_port_bridge_leave(struct ocelot *ocelot, int port,
 
 	ocelot_port_set_pvid(ocelot, port, pvid);
 	ocelot_port_set_native_vlan(ocelot, port, native_vlan);
+
+	ocelot_port->brport_flags = 0;
+	ocelot_rmw_gix(ocelot, 0, ANA_PORT_PORT_CFG_LEARN_ENA,
+		       ANA_PORT_PORT_CFG, port);
 
 	return 0;
 }
@@ -1479,6 +1486,15 @@ int ocelot_get_max_mtu(struct ocelot *ocelot, int port)
 	return max_mtu;
 }
 EXPORT_SYMBOL(ocelot_get_max_mtu);
+
+void ocelot_port_bridge_flags(struct ocelot *ocelot, int port,
+			      unsigned long flags)
+{
+	struct ocelot_port *ocelot_port = ocelot->ports[port];
+
+	ocelot_port->brport_flags = flags;
+}
+EXPORT_SYMBOL(ocelot_port_bridge_flags);
 
 void ocelot_init_port(struct ocelot *ocelot, int port)
 {
