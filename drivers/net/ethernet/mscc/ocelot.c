@@ -1263,8 +1263,8 @@ static int ocelot_set_aggr_pgids(struct ocelot *ocelot)
 
 	/* Now, set PGIDs for each LAG */
 	for (lag = 0; lag < ocelot->num_phys_ports; lag++) {
+		int num_ports_in_lag = 0;
 		unsigned long bond_mask;
-		int aggr_count = 0;
 		u8 aggr_idx[16];
 
 		if (!bonds[lag])
@@ -1276,8 +1276,7 @@ static int ocelot_set_aggr_pgids(struct ocelot *ocelot)
 			// Destination mask
 			ocelot_write_rix(ocelot, bond_mask,
 					 ANA_PGID_PGID, port);
-			aggr_idx[aggr_count] = port;
-			aggr_count++;
+			aggr_idx[num_ports_in_lag++] = port;
 		}
 
 		for_each_aggr_pgid(ocelot, i) {
@@ -1285,7 +1284,7 @@ static int ocelot_set_aggr_pgids(struct ocelot *ocelot)
 
 			ac = ocelot_read_rix(ocelot, ANA_PGID_PGID, i);
 			ac &= ~bond_mask;
-			ac |= BIT(aggr_idx[i % aggr_count]);
+			ac |= BIT(aggr_idx[i % num_ports_in_lag]);
 			ocelot_write_rix(ocelot, ac, ANA_PGID_PGID, i);
 		}
 
