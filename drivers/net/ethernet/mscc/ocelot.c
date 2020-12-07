@@ -926,9 +926,13 @@ static void ocelot_apply_bridge_fwd_mask(struct ocelot *ocelot)
 			if (bond)
 				mask &= ~ocelot_get_bond_mask(ocelot, bond, false);
 
+			dev_err(ocelot->dev, "port %d bridged, PGID_SRC=0x%lx\n", port, mask);
+
 			ocelot_write_rix(ocelot, mask,
 					 ANA_PGID_PGID, PGID_SRC + port);
 		} else {
+			dev_err(ocelot->dev, "port %d standalone, PGID_SRC=0x%x\n", port, 0);
+
 			ocelot_write_rix(ocelot, 0,
 					 ANA_PGID_PGID, PGID_SRC + port);
 		}
@@ -1295,6 +1299,8 @@ static int ocelot_set_aggr_pgids(struct ocelot *ocelot)
 			if (num_active_ports)
 				ac |= BIT(aggr_idx[i % num_active_ports]);
 			ocelot_write_rix(ocelot, ac, ANA_PGID_PGID, i);
+			dev_err(ocelot->dev, "%s: PGID[%d]=0x%x, aggr_idx %d, num_active_ports=%d\n",
+				__func__, i, ac, aggr_idx[i % num_active_ports], num_active_ports);
 		}
 
 		/* Mark the bonding interface as visited to avoid applying
@@ -1332,11 +1338,15 @@ static void ocelot_setup_logical_port_ids(struct ocelot *ocelot)
 			int lag = __ffs(ocelot_get_bond_mask(ocelot, bond,
 							     false));
 
+			dev_err(ocelot->dev, "%s: port %d bonded, port id %d\n",
+				__func__, port, lag);
 			ocelot_rmw_gix(ocelot,
 				       ANA_PORT_PORT_CFG_PORTID_VAL(lag),
 				       ANA_PORT_PORT_CFG_PORTID_VAL_M,
 				       ANA_PORT_PORT_CFG, port);
 		} else {
+			dev_err(ocelot->dev, "%s: port %d standalone, port id %d\n",
+				__func__, port, port);
 			ocelot_rmw_gix(ocelot,
 				       ANA_PORT_PORT_CFG_PORTID_VAL(port),
 				       ANA_PORT_PORT_CFG_PORTID_VAL_M,
@@ -1372,6 +1382,8 @@ int ocelot_port_lag_change(struct ocelot *ocelot, int port,
 {
 	struct ocelot_port *ocelot_port = ocelot->ports[port];
 	bool is_active = info->link_up && info->tx_enabled;
+
+	dev_err(ocelot->dev, "%s: port %d is_active %d lag_tx_active %d\n", __func__, port, is_active, ocelot_port->lag_tx_active);
 
 	if (ocelot_port->lag_tx_active == is_active)
 		return 0;
