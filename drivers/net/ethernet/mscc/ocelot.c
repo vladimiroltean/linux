@@ -1361,7 +1361,6 @@ int ocelot_port_lag_join(struct ocelot *ocelot, int port,
 	ocelot->ports[port]->bond = bond;
 
 	ocelot_setup_logical_port_ids(ocelot);
-	ocelot_apply_bridge_fwd_mask(ocelot);
 	return ocelot_set_aggr_pgids(ocelot);
 }
 EXPORT_SYMBOL(ocelot_port_lag_join);
@@ -1372,7 +1371,6 @@ int ocelot_port_lag_leave(struct ocelot *ocelot, int port,
 	ocelot->ports[port]->bond = NULL;
 
 	ocelot_setup_logical_port_ids(ocelot);
-	ocelot_apply_bridge_fwd_mask(ocelot);
 	return ocelot_set_aggr_pgids(ocelot);
 }
 EXPORT_SYMBOL(ocelot_port_lag_leave);
