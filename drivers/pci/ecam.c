@@ -28,10 +28,18 @@ struct pci_config_window *pci_ecam_create(struct device *dev,
 		struct resource *cfgres, struct resource *busr,
 		const struct pci_ecam_ops *ops)
 {
+	unsigned int bus_shift = ops->bus_shift;
 	struct pci_config_window *cfg;
 	unsigned int bus_range, bus_range_max, bsz;
 	struct resource *conflict;
 	int i, err;
+
+	/*
+	 * struct pci_ecam_ops may omit specifying bus_shift
+	 * if it is as per spec
+	 */
+	if (!bus_shift)
+		bus_shift = PCIE_ECAM_BUS_SHIFT;
 
 	if (busr->start > busr->end)
 		return ERR_PTR(-EINVAL);
@@ -46,14 +54,14 @@ struct pci_config_window *pci_ecam_create(struct device *dev,
 	cfg->busr.end = busr->end;
 	cfg->busr.flags = IORESOURCE_BUS;
 	bus_range = resource_size(&cfg->busr);
-	bus_range_max = resource_size(cfgres) >> ops->bus_shift;
+	bus_range_max = resource_size(cfgres) >> bus_shift;
 	if (bus_range > bus_range_max) {
 		bus_range = bus_range_max;
 		cfg->busr.end = busr->start + bus_range - 1;
 		dev_warn(dev, "ECAM area %pR can only accommodate %pR (reduced from %pR desired)\n",
 			 cfgres, &cfg->busr, busr);
 	}
-	bsz = 1 << ops->bus_shift;
+	bsz = 1 << bus_shift;
 
 	cfg->res.start = cfgres->start;
 	cfg->res.end = cfgres->end;
