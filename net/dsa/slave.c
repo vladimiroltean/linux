@@ -392,8 +392,12 @@ static int dsa_host_mdb_add(struct dsa_port *dp,
 	struct dsa_host_addr *a;
 	int err;
 
+	dev_err(ds->dev, "%s: port %d mdb addr %pM vid %d\n",
+		__func__, dp->index, mdb->addr, mdb->vid);
+
 	a = dsa_host_addr_find(&ds->host_mdb, mdb);
 	if (a) {
+		dev_err(ds->dev, "%s: %d: refcount %d\n", __func__, __LINE__, refcount_read(&a->refcount));
 		refcount_inc(&a->refcount);
 		return 0;
 	}
@@ -422,12 +426,21 @@ static int dsa_host_mdb_del(struct dsa_port *dp,
 	struct dsa_host_addr *a;
 	int err;
 
+	dev_err(ds->dev, "%s: port %d mdb addr %pM vid %d\n",
+		__func__, dp->index, mdb->addr, mdb->vid);
+
 	a = dsa_host_addr_find(&ds->host_mdb, mdb);
-	if (!a)
+	if (!a) {
+		dev_err(ds->dev, "%s: %d\n", __func__, __LINE__);
 		return -ENOENT;
+	}
+
+	dev_err(ds->dev, "%s: %d: refcount %d\n", __func__, __LINE__, refcount_read(&a->refcount));
 
 	if (!refcount_dec_and_test(&a->refcount))
 		return 0;
+
+	dev_err(ds->dev, "%s: %d\n", __func__, __LINE__);
 
 	err = dsa_port_mdb_del(cpu_dp, mdb);
 	if (err)

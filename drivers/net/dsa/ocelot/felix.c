@@ -70,6 +70,9 @@ static int felix_mdb_add(struct dsa_switch *ds, int port,
 {
 	struct ocelot *ocelot = ds->priv;
 
+	dev_err(ds->dev, "%s: port %d addr %pM vid %d\n",
+		__func__, port, mdb->addr, mdb->vid);
+
 	return ocelot_port_mdb_add(ocelot, port, mdb);
 }
 
