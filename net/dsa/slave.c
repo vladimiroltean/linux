@@ -403,14 +403,19 @@ static int dsa_host_mdb_add(struct dsa_port *dp,
 	struct dsa_host_addr *a;
 	int err;
 
+	dev_err(ds->dev, "%s: port %d mdb addr %pM vid %d commit %d\n",
+		__func__, dp->index, mdb->addr, mdb->vid, switchdev_trans_ph_commit(trans));
+
 	a = dsa_host_addr_find(&ds->host_mdb, mdb);
 	if (a) {
+		dev_err(ds->dev, "%s: %d: refcount %d\n", __func__, __LINE__, refcount_read(&a->refcount));
 		/* Only the commit phase is refcounted */
 		if (switchdev_trans_ph_commit(trans))
 			refcount_inc(&a->refcount);
 		return 0;
 	}
 
+	dev_err(ds->dev, "%s: %d\n", __func__, __LINE__);
 	err = dsa_port_mdb_add(cpu_dp, mdb, trans);
 	if (err)
 		return err;
@@ -418,6 +423,8 @@ static int dsa_host_mdb_add(struct dsa_port *dp,
 	/* Only the commit phase is refcounted, so don't save this just yet */
 	if (switchdev_trans_ph_prepare(trans))
 		return 0;
+
+	dev_err(ds->dev, "%s: %d\n", __func__, __LINE__);
 
 	a = kzalloc(sizeof(*a), GFP_KERNEL);
 	if (!a)
@@ -439,12 +446,21 @@ static int dsa_host_mdb_del(struct dsa_port *dp,
 	struct dsa_host_addr *a;
 	int err;
 
+	dev_err(ds->dev, "%s: port %d mdb addr %pM vid %d\n",
+		__func__, dp->index, mdb->addr, mdb->vid);
+
 	a = dsa_host_addr_find(&ds->host_mdb, mdb);
-	if (!a)
+	if (!a) {
+		dev_err(ds->dev, "%s: %d\n", __func__, __LINE__);
 		return -ENOENT;
+	}
+
+	dev_err(ds->dev, "%s: %d: refcount %d\n", __func__, __LINE__, refcount_read(&a->refcount));
 
 	if (!refcount_dec_and_test(&a->refcount))
 		return 0;
+
+	dev_err(ds->dev, "%s: %d\n", __func__, __LINE__);
 
 	err = dsa_port_mdb_del(cpu_dp, mdb);
 	if (err)

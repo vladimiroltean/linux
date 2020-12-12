@@ -69,6 +69,8 @@ static int felix_fdb_del(struct dsa_switch *ds, int port,
 static int felix_mdb_prepare(struct dsa_switch *ds, int port,
 			     const struct switchdev_obj_port_mdb *mdb)
 {
+	dev_err(ds->dev, "%s: port %d addr %pM vid %d\n",
+		__func__, port, mdb->addr, mdb->vid);
 	return 0;
 }
 
@@ -77,6 +79,8 @@ static void felix_mdb_add(struct dsa_switch *ds, int port,
 {
 	struct ocelot *ocelot = ds->priv;
 
+	dev_err(ds->dev, "%s: port %d addr %pM vid %d\n",
+		__func__, port, mdb->addr, mdb->vid);
 	ocelot_port_mdb_add(ocelot, port, mdb);
 }
 
