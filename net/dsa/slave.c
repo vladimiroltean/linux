@@ -403,6 +403,9 @@ static int dsa_host_mdb_add(struct dsa_port *dp,
 	struct dsa_host_addr *a;
 	int err;
 
+	dev_err(ds->dev, "%s: port %d mdb addr %pM vid %d commit %d\n",
+		__func__, dp->index, mdb->addr, mdb->vid, switchdev_trans_ph_commit(trans));
+
 	/* Complication created by the fact that addition has two phases, but
 	 * deletion only has one phase, and we need reference counting.
 	 * The strategy is to do the memory allocation in the prepare phase,
@@ -436,6 +439,7 @@ static int dsa_host_mdb_add(struct dsa_port *dp,
 		a->vid = mdb->vid;
 		refcount_set(&a->refcount, 0);
 		list_add_tail(&a->list, &ds->host_mdb);
+		dev_err(ds->dev, "%s: %d: allocated new host mdb\n", __func__, __LINE__);
 
 		return 0;
 	}
@@ -452,6 +456,7 @@ static int dsa_host_mdb_add(struct dsa_port *dp,
 	 * refcount 0), or as a complete entry installed for another port.
 	 */
 	if (refcount_read(&a->refcount) > 0) {
+		dev_err(ds->dev, "%s: %d: commit phase, ignoring\n", __func__, __LINE__);
 		refcount_inc(&a->refcount);
 		return 0;
 	}
@@ -476,12 +481,21 @@ static int dsa_host_mdb_del(struct dsa_port *dp,
 	struct dsa_host_addr *a;
 	int err;
 
+	dev_err(ds->dev, "%s: port %d mdb addr %pM vid %d\n",
+		__func__, dp->index, mdb->addr, mdb->vid);
+
 	a = dsa_host_addr_find(&ds->host_mdb, mdb);
-	if (!a)
+	if (!a) {
+		dev_err(ds->dev, "%s: %d\n", __func__, __LINE__);
 		return -ENOENT;
+	}
+
+	dev_err(ds->dev, "%s: %d: refcount %d\n", __func__, __LINE__, refcount_read(&a->refcount));
 
 	if (!refcount_dec_and_test(&a->refcount))
 		return 0;
+
+	dev_err(ds->dev, "%s: %d\n", __func__, __LINE__);
 
 	err = dsa_port_mdb_del(cpu_dp, mdb);
 	if (err)
