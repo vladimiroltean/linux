@@ -557,7 +557,7 @@ struct dsa_switch_ops {
 				     struct net_device *bridge);
 	int	(*port_stp_state_set)(struct dsa_switch *ds, int port,
 				      u8 state);
-	void	(*port_fast_age)(struct dsa_switch *ds, int port);
+	int	(*port_fast_age)(struct dsa_switch *ds, int port);
 	int	(*port_egress_floods)(struct dsa_switch *ds, int port,
 				      bool unicast, bool multicast);
 
