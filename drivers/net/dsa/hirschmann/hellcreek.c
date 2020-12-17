@@ -472,8 +472,8 @@ static int hellcreek_vlan_del(struct dsa_switch *ds, int port,
 	return 0;
 }
 
-static void hellcreek_port_stp_state_set(struct dsa_switch *ds, int port,
-					 u8 state)
+static int hellcreek_port_stp_state_set(struct dsa_switch *ds, int port,
+					u8 state)
 {
 	struct hellcreek *hellcreek = ds->priv;
 	struct hellcreek_port *hellcreek_port;
@@ -523,6 +523,8 @@ static void hellcreek_port_stp_state_set(struct dsa_switch *ds, int port,
 
 	dev_dbg(hellcreek->dev, "Configured STP state for port %d: %s\n",
 		port, new_state);
+
+	return 0;
 }
 
 static void hellcreek_setup_ingressflt(struct hellcreek *hellcreek, int port,

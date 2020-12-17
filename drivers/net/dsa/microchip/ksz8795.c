@@ -675,8 +675,8 @@ static void ksz8795_cfg_port_member(struct ksz_device *dev, int port,
 	dev->ports[port].member = member;
 }
 
-static void ksz8795_port_stp_state_set(struct dsa_switch *ds, int port,
-				       u8 state)
+static int ksz8795_port_stp_state_set(struct dsa_switch *ds, int port,
+				      u8 state)
 {
 	struct ksz_device *dev = ds->priv;
 	int forward = dev->member;
@@ -726,8 +726,7 @@ static void ksz8795_port_stp_state_set(struct dsa_switch *ds, int port,
 			member = dev->host_mask | p->vid_member;
 		break;
 	default:
-		dev_err(ds->dev, "invalid STP state: %d\n", state);
-		return;
+		return -EINVAL;
 	}
 
 	ksz_pwrite8(dev, port, P_STP_CTRL, data);
@@ -747,6 +746,8 @@ static void ksz8795_port_stp_state_set(struct dsa_switch *ds, int port,
 	 */
 	if (forward != dev->member)
 		ksz_update_port_member(dev, port);
+
+	return 0;
 }
 
 static void ksz8795_flush_dyn_mac_table(struct ksz_device *dev, int port)

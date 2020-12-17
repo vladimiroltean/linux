@@ -1239,8 +1239,8 @@ static int mv88e6xxx_port_vlan_map(struct mv88e6xxx_chip *chip, int port)
 	return mv88e6xxx_port_set_vlan_map(chip, port, output_ports);
 }
 
-static void mv88e6xxx_port_stp_state_set(struct dsa_switch *ds, int port,
-					 u8 state)
+static int mv88e6xxx_port_stp_state_set(struct dsa_switch *ds, int port,
+					u8 state)
 {
 	struct mv88e6xxx_chip *chip = ds->priv;
 	int err;
@@ -1249,8 +1249,7 @@ static void mv88e6xxx_port_stp_state_set(struct dsa_switch *ds, int port,
 	err = mv88e6xxx_port_set_state(chip, port, state);
 	mv88e6xxx_reg_unlock(chip);
 
-	if (err)
-		dev_err(ds->dev, "p%d: failed to update state\n", port);
+	return err;
 }
 
 static int mv88e6xxx_pri_setup(struct mv88e6xxx_chip *chip)

@@ -81,12 +81,14 @@ static int felix_mdb_del(struct dsa_switch *ds, int port,
 	return ocelot_port_mdb_del(ocelot, port, mdb);
 }
 
-static void felix_bridge_stp_state_set(struct dsa_switch *ds, int port,
-				       u8 state)
+static int felix_bridge_stp_state_set(struct dsa_switch *ds, int port,
+				      u8 state)
 {
 	struct ocelot *ocelot = ds->priv;
 
-	return ocelot_bridge_stp_state_set(ocelot, port, state);
+	ocelot_bridge_stp_state_set(ocelot, port, state);
+
+	return 0;
 }
 
 static int felix_bridge_join(struct dsa_switch *ds, int port,
