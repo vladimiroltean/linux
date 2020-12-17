@@ -1433,7 +1433,7 @@ static int mv88e6xxx_pvt_setup(struct mv88e6xxx_chip *chip)
 	return 0;
 }
 
-static void mv88e6xxx_port_fast_age(struct dsa_switch *ds, int port)
+static int mv88e6xxx_port_fast_age(struct dsa_switch *ds, int port)
 {
 	struct mv88e6xxx_chip *chip = ds->priv;
 	int err;
@@ -1442,8 +1442,7 @@ static void mv88e6xxx_port_fast_age(struct dsa_switch *ds, int port)
 	err = mv88e6xxx_g1_atu_remove(chip, 0, port, false);
 	mv88e6xxx_reg_unlock(chip);
 
-	if (err)
-		dev_err(ds->dev, "p%d: failed to flush ATU\n", port);
+	return err;
 }
 
 static int mv88e6xxx_vtu_setup(struct mv88e6xxx_chip *chip)

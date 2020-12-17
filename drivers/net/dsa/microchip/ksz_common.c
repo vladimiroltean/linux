@@ -205,11 +205,13 @@ void ksz_port_bridge_leave(struct dsa_switch *ds, int port,
 }
 EXPORT_SYMBOL_GPL(ksz_port_bridge_leave);
 
-void ksz_port_fast_age(struct dsa_switch *ds, int port)
+int ksz_port_fast_age(struct dsa_switch *ds, int port)
 {
 	struct ksz_device *dev = ds->priv;
 
 	dev->dev_ops->flush_dyn_mac_table(dev, port);
+
+	return 0;
 }
 EXPORT_SYMBOL_GPL(ksz_port_fast_age);
 
