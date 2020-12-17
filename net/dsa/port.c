@@ -75,15 +75,6 @@ int dsa_port_set_state(struct dsa_port *dp, u8 state)
 	return 0;
 }
 
-static void dsa_port_set_state_now(struct dsa_port *dp, u8 state)
-{
-	int err;
-
-	err = dsa_port_set_state(dp, state);
-	if (err)
-		pr_err("DSA: failed to set STP state %u (%d)\n", state, err);
-}
-
 int dsa_port_enable_rt(struct dsa_port *dp, struct phy_device *phy)
 {
 	struct dsa_switch *ds = dp->ds;
@@ -96,8 +87,11 @@ int dsa_port_enable_rt(struct dsa_port *dp, struct phy_device *phy)
 			return err;
 	}
 
-	if (!dp->bridge_dev)
-		dsa_port_set_state_now(dp, BR_STATE_FORWARDING);
+	if (!dp->bridge_dev) {
+		err = dsa_port_set_state(dp, BR_STATE_FORWARDING);
+		if (err)
+			return err;
+	}
 
 	if (dp->pl)
 		phylink_start(dp->pl);
@@ -120,12 +114,18 @@ void dsa_port_disable_rt(struct dsa_port *dp)
 {
 	struct dsa_switch *ds = dp->ds;
 	int port = dp->index;
+	int err;
 
 	if (dp->pl)
 		phylink_stop(dp->pl);
 
-	if (!dp->bridge_dev)
-		dsa_port_set_state_now(dp, BR_STATE_DISABLED);
+	if (!dp->bridge_dev) {
+		err = dsa_port_set_state(dp, BR_STATE_DISABLED);
+		if (err) {
+			dev_err(ds->dev, "dsa_port_set_state returned %d\n",
+				err);
+		}
+	}
 
 	if (ds->ops->port_disable)
 		ds->ops->port_disable(ds, port);
@@ -194,7 +194,11 @@ void dsa_port_bridge_leave(struct dsa_port *dp, struct net_device *br)
 	/* Port left the bridge, put in BR_STATE_DISABLED by the bridge layer,
 	 * so allow it to be in BR_STATE_FORWARDING to be kept functional
 	 */
-	dsa_port_set_state_now(dp, BR_STATE_FORWARDING);
+	err = dsa_port_set_state(dp, BR_STATE_FORWARDING);
+	if (err) {
+		dev_err(dp->ds->dev,
+			"dsa_port_set_state returned %d\n", err);
+	}
 }
 
 /* Must be called under rcu_read_lock() */
