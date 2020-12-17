@@ -1210,7 +1210,7 @@ static int gswip_port_vlan_del(struct dsa_switch *ds, int port,
 	return gswip_vlan_remove(priv, bridge, port, vlan->vid, pvid, true);
 }
 
-static void gswip_port_fast_age(struct dsa_switch *ds, int port)
+static int gswip_port_fast_age(struct dsa_switch *ds, int port)
 {
 	struct gswip_priv *priv = ds->priv;
 	struct gswip_pce_table_entry mac_bridge = {0,};
@@ -1225,7 +1225,7 @@ static void gswip_port_fast_age(struct dsa_switch *ds, int port)
 		if (err) {
 			dev_err(priv->dev, "failed to read mac bridge: %d\n",
 				err);
-			return;
+			return err;
 		}
 
 		if (!mac_bridge.valid)
@@ -1242,9 +1242,11 @@ static void gswip_port_fast_age(struct dsa_switch *ds, int port)
 		if (err) {
 			dev_err(priv->dev, "failed to write mac bridge: %d\n",
 				err);
-			return;
+			return err;
 		}
 	}
+
+	return 0;
 }
 
 static int gswip_port_stp_state_set(struct dsa_switch *ds, int port, u8 state)
