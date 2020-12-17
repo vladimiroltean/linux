@@ -44,11 +44,14 @@ int dsa_port_set_state(struct dsa_port *dp, u8 state)
 {
 	struct dsa_switch *ds = dp->ds;
 	int port = dp->index;
+	int err;
 
 	if (!ds->ops->port_stp_state_set)
 		return -EOPNOTSUPP;
 
-	ds->ops->port_stp_state_set(ds, port, state);
+	err = ds->ops->port_stp_state_set(ds, port, state);
+	if (err)
+		return err;
 
 	if (ds->ops->port_fast_age) {
 		/* Fast age FDB entries or flush appropriate forwarding database

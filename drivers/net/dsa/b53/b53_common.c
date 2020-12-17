@@ -1873,7 +1873,7 @@ void b53_br_leave(struct dsa_switch *ds, int port, struct net_device *br)
 }
 EXPORT_SYMBOL(b53_br_leave);
 
-void b53_br_set_stp_state(struct dsa_switch *ds, int port, u8 state)
+int b53_br_set_stp_state(struct dsa_switch *ds, int port, u8 state)
 {
 	struct b53_device *dev = ds->priv;
 	u8 hw_state;
@@ -1896,14 +1896,15 @@ void b53_br_set_stp_state(struct dsa_switch *ds, int port, u8 state)
 		hw_state = PORT_CTRL_BLOCK_STATE;
 		break;
 	default:
-		dev_err(ds->dev, "invalid STP state: %d\n", state);
-		return;
+		return -EINVAL;
 	}
 
 	b53_read8(dev, B53_CTRL_PAGE, B53_PORT_CTRL(port), &reg);
 	reg &= ~PORT_CTRL_STP_STATE_MASK;
 	reg |= hw_state;
 	b53_write8(dev, B53_CTRL_PAGE, B53_PORT_CTRL(port), reg);
+
+	return 0;
 }
 EXPORT_SYMBOL(b53_br_set_stp_state);
 

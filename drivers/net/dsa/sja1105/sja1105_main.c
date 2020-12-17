@@ -1577,8 +1577,8 @@ static int sja1105_bridge_member(struct dsa_switch *ds, int port,
 					    port, &l2_fwd[port], true);
 }
 
-static void sja1105_bridge_stp_state_set(struct dsa_switch *ds, int port,
-					 u8 state)
+static int sja1105_bridge_stp_state_set(struct dsa_switch *ds, int port,
+					u8 state)
 {
 	struct sja1105_private *priv = ds->priv;
 	struct sja1105_mac_config_entry *mac;
@@ -1613,12 +1613,11 @@ static void sja1105_bridge_stp_state_set(struct dsa_switch *ds, int port,
 		mac[port].dyn_learn = true;
 		break;
 	default:
-		dev_err(ds->dev, "invalid STP state: %d\n", state);
-		return;
+		return -EINVAL;
 	}
 
-	sja1105_dynamic_config_write(priv, BLK_IDX_MAC_CONFIG, port,
-				     &mac[port], true);
+	return sja1105_dynamic_config_write(priv, BLK_IDX_MAC_CONFIG, port,
+					    &mac[port], true);
 }
 
 static int sja1105_bridge_join(struct dsa_switch *ds, int port,

@@ -1108,7 +1108,7 @@ mt7530_port_max_mtu(struct dsa_switch *ds, int port)
 	return MT7530_MAX_MTU;
 }
 
-static void
+static int
 mt7530_stp_state_set(struct dsa_switch *ds, int port, u8 state)
 {
 	struct mt7530_priv *priv = ds->priv;
@@ -1134,6 +1134,8 @@ mt7530_stp_state_set(struct dsa_switch *ds, int port, u8 state)
 	}
 
 	mt7530_rmw(priv, MT7530_SSP_P(port), FID_PST_MASK, stp_state);
+
+	return 0;
 }
 
 static int

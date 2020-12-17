@@ -1258,7 +1258,7 @@ static void gswip_port_fast_age(struct dsa_switch *ds, int port)
 	}
 }
 
-static void gswip_port_stp_state_set(struct dsa_switch *ds, int port, u8 state)
+static int gswip_port_stp_state_set(struct dsa_switch *ds, int port, u8 state)
 {
 	struct gswip_priv *priv = ds->priv;
 	u32 stp_state;
@@ -1267,7 +1267,7 @@ static void gswip_port_stp_state_set(struct dsa_switch *ds, int port, u8 state)
 	case BR_STATE_DISABLED:
 		gswip_switch_mask(priv, GSWIP_SDMA_PCTRL_EN, 0,
 				  GSWIP_SDMA_PCTRLp(port));
-		return;
+		return 0;
 	case BR_STATE_BLOCKING:
 	case BR_STATE_LISTENING:
 		stp_state = GSWIP_PCE_PCTRL_0_PSTATE_LISTEN;
@@ -1279,14 +1279,15 @@ static void gswip_port_stp_state_set(struct dsa_switch *ds, int port, u8 state)
 		stp_state = GSWIP_PCE_PCTRL_0_PSTATE_FORWARDING;
 		break;
 	default:
-		dev_err(priv->dev, "invalid STP state: %d\n", state);
-		return;
+		return -EINVAL;
 	}
 
 	gswip_switch_mask(priv, 0, GSWIP_SDMA_PCTRL_EN,
 			  GSWIP_SDMA_PCTRLp(port));
 	gswip_switch_mask(priv, GSWIP_PCE_PCTRL_0_PSTATE_MASK, stp_state,
 			  GSWIP_PCE_PCTRL_0p(port));
+
+	return 0;
 }
 
 static int gswip_port_fdb(struct dsa_switch *ds, int port,
