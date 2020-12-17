@@ -182,11 +182,13 @@ static void dsa_loop_port_bridge_leave(struct dsa_switch *ds, int port,
 		__func__, port, bridge->name);
 }
 
-static void dsa_loop_port_stp_state_set(struct dsa_switch *ds, int port,
-					u8 state)
+static int dsa_loop_port_stp_state_set(struct dsa_switch *ds, int port,
+				       u8 state)
 {
 	dev_dbg(ds->dev, "%s: port: %d, state: %d\n",
 		__func__, port, state);
+
+	return 0;
 }
 
 static int dsa_loop_port_vlan_filtering(struct dsa_switch *ds, int port,
