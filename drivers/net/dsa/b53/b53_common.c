@@ -478,12 +478,15 @@ out:
 	return 0;
 }
 
-static int b53_fast_age_port(struct b53_device *dev, int port)
+int b53_br_fast_age(struct dsa_switch *ds, int port)
 {
+	struct b53_device *dev = ds->priv;
+
 	b53_write8(dev, B53_CTRL_PAGE, B53_FAST_AGE_PORT_CTRL, port);
 
 	return b53_flush_arl(dev, FAST_AGE_PORT);
 }
+EXPORT_SYMBOL(b53_br_fast_age);
 
 static int b53_fast_age_vlan(struct b53_device *dev, u16 vid)
 {
@@ -1907,15 +1910,6 @@ int b53_br_set_stp_state(struct dsa_switch *ds, int port, u8 state)
 	return 0;
 }
 EXPORT_SYMBOL(b53_br_set_stp_state);
-
-void b53_br_fast_age(struct dsa_switch *ds, int port)
-{
-	struct b53_device *dev = ds->priv;
-
-	if (b53_fast_age_port(dev, port))
-		dev_err(ds->dev, "fast ageing failed\n");
-}
-EXPORT_SYMBOL(b53_br_fast_age);
 
 int b53_br_egress_floods(struct dsa_switch *ds, int port,
 			 bool unicast, bool multicast)

@@ -1164,7 +1164,7 @@ static int lan9303_port_stp_state_set(struct dsa_switch *ds, int port,
 	return 0;
 }
 
-static void lan9303_port_fast_age(struct dsa_switch *ds, int port)
+static int lan9303_port_fast_age(struct dsa_switch *ds, int port)
 {
 	struct lan9303 *chip = ds->priv;
 	struct del_port_learned_ctx del_ctx = {
@@ -1173,6 +1173,8 @@ static void lan9303_port_fast_age(struct dsa_switch *ds, int port)
 
 	dev_dbg(chip->dev, "%s(%d)\n", __func__, port);
 	lan9303_alr_loop(chip, alr_loop_cb_del_port_learned, &del_ctx);
+
+	return 0;
 }
 
 static int lan9303_port_fdb_add(struct dsa_switch *ds, int port,
