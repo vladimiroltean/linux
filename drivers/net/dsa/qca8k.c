@@ -1107,7 +1107,7 @@ qca8k_get_mac_eee(struct dsa_switch *ds, int port, struct ethtool_eee *e)
 	return 0;
 }
 
-static void
+static int
 qca8k_port_stp_state_set(struct dsa_switch *ds, int port, u8 state)
 {
 	struct qca8k_priv *priv = (struct qca8k_priv *)ds->priv;
@@ -1134,6 +1134,8 @@ qca8k_port_stp_state_set(struct dsa_switch *ds, int port, u8 state)
 
 	qca8k_rmw(priv, QCA8K_PORT_LOOKUP_CTRL(port),
 		  QCA8K_PORT_LOOKUP_STATE_MASK, stp_state);
+
+	return 0;
 }
 
 static int

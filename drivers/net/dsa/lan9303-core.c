@@ -1122,8 +1122,8 @@ static void lan9303_port_bridge_leave(struct dsa_switch *ds, int port,
 	}
 }
 
-static void lan9303_port_stp_state_set(struct dsa_switch *ds, int port,
-				       u8 state)
+static int lan9303_port_stp_state_set(struct dsa_switch *ds, int port,
+				      u8 state)
 {
 	int portmask, portstate;
 	struct lan9303 *chip = ds->priv;
@@ -1160,6 +1160,8 @@ static void lan9303_port_stp_state_set(struct dsa_switch *ds, int port,
 		lan9303_write_switch_reg(chip, LAN9303_SWE_PORT_STATE,
 					 chip->swe_port_state);
 	/* else: touching SWE_PORT_STATE would break port separation */
+
+	return 0;
 }
 
 static void lan9303_port_fast_age(struct dsa_switch *ds, int port)
