@@ -10,6 +10,7 @@
 #include <linux/if_ether.h>
 #include <linux/if_vlan.h>
 #include <linux/interrupt.h>
+#include <linux/iopoll.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/netdevice.h>
@@ -363,6 +364,50 @@ static u16 ocelot_wm_enc(u16 value)
 	return value;
 }
 
+static inline u32 ocelot_read_eq_avail(struct ocelot *ocelot, int port)
+{
+	return ocelot_read_rix(ocelot, QSYS_SW_STATUS, port);
+}
+
+static int ocelot_port_flush(struct ocelot *ocelot, int port)
+{
+	int err, val;
+
+	/* Disable shaping to speed up flushing of frames */
+	ocelot_rmw_rix(ocelot, QSYS_PORT_MODE_DEQUEUE_DIS,
+		       QSYS_PORT_MODE_DEQUEUE_DIS,
+		       QSYS_PORT_MODE, port);
+
+	/* Wait at least the time it takes to receive a frame of maximum length
+	 * at the port.
+	 * Worst-case delays for 10 kilobyte jumbo frames are:
+	 * 8 ms on a 10M port
+	 * 800 μs on a 100M port
+	 * 80 μs on a 1G port
+	 * 32 μs on a 2.5G port
+	 */
+	usleep_range(8000, 10000);
+
+	/* Flush the queues associated with the port. */
+	ocelot_rmw_gix(ocelot, REW_PORT_CFG_FLUSH_ENA, REW_PORT_CFG_FLUSH_ENA,
+		       REW_PORT_CFG, port);
+
+	/* Enable dequeuing from the egress queues. */
+	ocelot_rmw_rix(ocelot, 0, QSYS_PORT_MODE_DEQUEUE_DIS, QSYS_PORT_MODE,
+		       port);
+
+	/* Wait until flushing is complete. */
+	err = read_poll_timeout(ocelot_read_eq_avail, val, !val,
+				10, 8000, false, ocelot, port);
+	if (err)
+		return err;
+
+	/* Clear flushing again. */
+	ocelot_rmw_gix(ocelot, 0, REW_PORT_CFG_FLUSH_ENA, REW_PORT_CFG, port);
+
+	return 0;
+}
+
 static void ocelot_port_adjust_link(struct net_device *dev)
 {
 	struct ocelot_port *port = netdev_priv(dev);
@@ -451,6 +496,8 @@ static void ocelot_port_adjust_link(struct net_device *dev)
 	ocelot_write_rix(ocelot, ocelot_wm_enc(9 * VLAN_ETH_FRAME_LEN),
 			 SYS_ATOP, p);
 	ocelot_write(ocelot, ocelot_wm_enc(atop_wm), SYS_ATOP_TOT_CFG);
+
+	ocelot_port_flush(ocelot, p);
 }
 
 static int ocelot_port_open(struct net_device *dev)
