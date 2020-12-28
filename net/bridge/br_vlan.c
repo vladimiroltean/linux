@@ -652,22 +652,17 @@ static int br_vlan_add_existing(struct net_bridge *br,
 {
 	int err;
 
-	err = br_switchdev_port_vlan_add(br->dev, vlan->vid, flags, extack);
-	if (err && err != -EOPNOTSUPP)
-		return err;
-
 	if (!br_vlan_is_brentry(vlan)) {
 		/* Trying to change flags of non-existent bridge vlan */
-		if (!(flags & BRIDGE_VLAN_INFO_BRENTRY)) {
-			err = -EINVAL;
-			goto err_flags;
-		}
+		if (!(flags & BRIDGE_VLAN_INFO_BRENTRY))
+			return -EINVAL;
+
 		/* It was only kept for port vlans, now make it real */
 		err = br_fdb_insert(br, NULL, br->dev->dev_addr,
 				    vlan->vid);
 		if (err) {
 			br_err(br, "failed to insert local address into bridge forwarding table\n");
-			goto err_fdb_insert;
+			return err;
 		}
 
 		refcount_inc(&vlan->refcnt);
@@ -679,12 +674,14 @@ static int br_vlan_add_existing(struct net_bridge *br,
 	if (__vlan_add_flags(vlan, flags))
 		*changed = true;
 
-	return 0;
+	if (*changed) {
+		err = br_switchdev_port_vlan_add(br->dev, vlan->vid, flags,
+						 extack);
+		if (err && err != -EOPNOTSUPP)
+			return err;
+	}
 
-err_fdb_insert:
-err_flags:
-	br_switchdev_port_vlan_del(br->dev, vlan->vid);
-	return err;
+	return 0;
 }
 
 /* Must be protected by RTNL.
