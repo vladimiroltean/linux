@@ -2070,10 +2070,15 @@ static int __bond_release_one(struct net_device *bond_dev,
 	struct sockaddr_storage ss;
 	int old_flags = bond_dev->flags;
 	netdev_features_t old_features = bond_dev->features;
+	struct net *net = dev_net(slave_dev);
+	bool is_upper;
+
+	netif_lists_lock(net);
+	is_upper = netdev_has_upper_dev(slave_dev, bond_dev);
+	netif_lists_unlock(net);
 
 	/* slave is not a slave or master is not master of this slave */
-	if (!(slave_dev->flags & IFF_SLAVE) ||
-	    !netdev_has_upper_dev(slave_dev, bond_dev)) {
+	if (!(slave_dev->flags & IFF_SLAVE) || !is_upper) {
 		slave_dbg(bond_dev, slave_dev, "cannot release slave\n");
 		return -EINVAL;
 	}

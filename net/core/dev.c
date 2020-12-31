@@ -6951,7 +6951,7 @@ static int ____netdev_has_upper_dev(struct net_device *upper_dev,
  *
  * Find out if a device is linked to specified upper device and return true
  * in case it is. Note that this checks only immediate upper device,
- * not through a complete stack of devices. The caller must hold the RTNL lock.
+ * not through a complete stack of devices.
  */
 bool netdev_has_upper_dev(struct net_device *dev,
 			  struct net_device *upper_dev)
@@ -6959,8 +6959,9 @@ bool netdev_has_upper_dev(struct net_device *dev,
 	struct netdev_nested_priv priv = {
 		.data = (void *)upper_dev,
 	};
+	struct net *net = dev_net(dev);
 
-	ASSERT_RTNL();
+	lockdep_assert_held(&net->netif_lists_lock);
 
 	return netdev_walk_all_upper_dev_rcu(dev, ____netdev_has_upper_dev,
 					     &priv);

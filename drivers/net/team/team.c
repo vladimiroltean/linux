@@ -1132,8 +1132,10 @@ static int team_port_add(struct team *team, struct net_device *port_dev,
 			 struct netlink_ext_ack *extack)
 {
 	struct net_device *dev = team->dev;
+	struct net *net = dev_net(dev);
 	struct team_port *port;
 	char *portname = port_dev->name;
+	bool is_upper;
 	int err;
 
 	if (port_dev->flags & IFF_LOOPBACK) {
@@ -1156,7 +1158,10 @@ static int team_port_add(struct team *team, struct net_device *port_dev,
 		return -EINVAL;
 	}
 
-	if (netdev_has_upper_dev(dev, port_dev)) {
+	netif_lists_lock(dev);
+	is_upper = netdev_has_upper_dev(dev, port_dev);
+	netif_lists_unlock(net);
+	if (is_upper) {
 		NL_SET_ERR_MSG(extack, "Device is already an upper device of the team interface");
 		netdev_err(dev, "Device %s is already an upper device of the team interface\n",
 			   portname);
