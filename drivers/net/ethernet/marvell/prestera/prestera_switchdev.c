@@ -540,6 +540,8 @@ int prestera_bridge_port_event(struct net_device *dev, unsigned long event,
 	struct netlink_ext_ack *extack;
 	struct prestera_port *port;
 	struct net_device *upper;
+	struct net *net;
+	bool has_upper;
 	int err;
 
 	extack = netdev_notifier_info_to_extack(&info->info);
@@ -556,7 +558,12 @@ int prestera_bridge_port_event(struct net_device *dev, unsigned long event,
 		if (!info->linking)
 			break;
 
-		if (netdev_has_any_upper_dev(upper)) {
+		net = dev_net(upper);
+		netif_lists_lock(net);
+		has_upper = netdev_has_any_upper_dev(upper);
+		netif_lists_unlock(net);
+
+		if (has_upper) {
 			NL_SET_ERR_MSG_MOD(extack, "Upper device is already enslaved");
 			return -EINVAL;
 		}

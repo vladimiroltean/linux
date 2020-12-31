@@ -6995,11 +6995,13 @@ EXPORT_SYMBOL(netdev_has_upper_dev_all_rcu);
  * @dev: device
  *
  * Find out if a device is linked to an upper device and return true in case
- * it is. The caller must hold the RTNL lock.
+ * it is.
  */
 bool netdev_has_any_upper_dev(struct net_device *dev)
 {
-	ASSERT_RTNL();
+	struct net *net = dev_net(dev);
+
+	lockdep_assert_held(&net->netif_lists_lock);
 
 	return !list_empty(&dev->adj_list.upper);
 }
@@ -9478,6 +9480,7 @@ static void rollback_registered_many(struct list_head *head)
 	synchronize_net();
 
 	list_for_each_entry(dev, head, unreg_list) {
+		struct net *net = dev_net(dev);
 		struct sk_buff *skb = NULL;
 
 		/* Shutdown queueing discipline. */
@@ -9511,7 +9514,9 @@ static void rollback_registered_many(struct list_head *head)
 			rtmsg_ifinfo_send(skb, dev, GFP_KERNEL);
 
 		/* Notifier chain MUST detach us all upper devices. */
+		netif_lists_lock(net);
 		WARN_ON(netdev_has_any_upper_dev(dev));
+		netif_lists_unlock(net);
 		WARN_ON(netdev_has_any_lower_dev(dev));
 
 		/* Remove entries from kobject tree */

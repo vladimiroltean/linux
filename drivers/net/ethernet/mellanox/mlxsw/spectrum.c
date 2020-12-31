@@ -3910,6 +3910,8 @@ static int mlxsw_sp_netdevice_port_upper_event(struct net_device *lower_dev,
 	struct netlink_ext_ack *extack;
 	struct net_device *upper_dev;
 	struct mlxsw_sp *mlxsw_sp;
+	struct net *net;
+	bool has_upper;
 	int err = 0;
 	u16 proto;
 
@@ -3936,8 +3938,11 @@ static int mlxsw_sp_netdevice_port_upper_event(struct net_device *lower_dev,
 		    mlxsw_sp_bridge_has_vxlan(upper_dev) &&
 		    !mlxsw_sp_bridge_vxlan_is_valid(upper_dev, extack))
 			return -EOPNOTSUPP;
-		if (netdev_has_any_upper_dev(upper_dev) &&
-		    (!netif_is_bridge_master(upper_dev) ||
+		net = dev_net(upper_dev);
+		netif_lists_lock(net);
+		has_upper = netdev_has_any_upper_dev(upper_dev);
+		netif_lists_unlock(net);
+		if (has_upper && (!netif_is_bridge_master(upper_dev) ||
 		     !mlxsw_sp_bridge_device_is_offloaded(mlxsw_sp,
 							  upper_dev))) {
 			NL_SET_ERR_MSG_MOD(extack, "Enslaving a port to a device that already has an upper device is not supported");
