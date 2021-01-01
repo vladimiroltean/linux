@@ -4769,7 +4769,7 @@ static int rtnl_bridge_getlink(struct sk_buff *skb, struct netlink_callback *cb)
 	rcu_read_lock();
 	for_each_netdev_rcu(net, dev) {
 		const struct net_device_ops *ops = dev->netdev_ops;
-		struct net_device *br_dev = netdev_master_upper_dev_get(dev);
+		struct net_device *br_dev = netdev_master_upper_dev_get_rcu(dev);
 
 		if (br_dev && br_dev->netdev_ops->ndo_bridge_getlink) {
 			if (idx >= cb->args[0]) {
