@@ -8070,6 +8070,8 @@ int netdev_adjacent_change_prepare(struct net_device *old_dev,
 	};
 	int err;
 
+	ASSERT_RTNL();
+
 	if (!new_dev)
 		return 0;
 
@@ -8096,6 +8098,8 @@ void netdev_adjacent_change_commit(struct net_device *old_dev,
 		.data = NULL,
 	};
 
+	ASSERT_RTNL();
+
 	if (!new_dev || !old_dev)
 		return;
 
@@ -8115,6 +8119,8 @@ void netdev_adjacent_change_abort(struct net_device *old_dev,
 		.flags = 0,
 		.data = NULL,
 	};
+
+	ASSERT_RTNL();
 
 	if (!new_dev)
 		return;
