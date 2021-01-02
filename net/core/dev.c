@@ -7688,8 +7688,11 @@ static int __netdev_adjacent_dev_insert(struct net_device *dev,
 					struct list_head *dev_list,
 					void *private, bool master)
 {
+	struct net *net = dev_net(dev);
 	struct netdev_adjacent *adj;
 	int ret;
+
+	lockdep_assert_held(&net->netif_lists_lock);
 
 	adj = __netdev_find_adj(adj_dev, dev_list);
 
@@ -7822,10 +7825,17 @@ static int __netdev_adjacent_dev_link_neighbour(struct net_device *dev,
 						struct net_device *upper_dev,
 						void *private, bool master)
 {
-	return __netdev_adjacent_dev_link_lists(dev, upper_dev,
-						&dev->adj_list.upper,
-						&upper_dev->adj_list.lower,
-						private, master);
+	struct net *net = dev_net(dev);
+	int err;
+
+	netif_lists_lock(net);
+	err = __netdev_adjacent_dev_link_lists(dev, upper_dev,
+					       &dev->adj_list.upper,
+					       &upper_dev->adj_list.lower,
+					       private, master);
+	netif_lists_unlock(net);
+
+	return err;
 }
 
 static void __netdev_adjacent_dev_unlink_neighbour(struct net_device *dev,
