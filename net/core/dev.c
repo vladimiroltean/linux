@@ -7753,7 +7753,10 @@ static void __netdev_adjacent_dev_remove(struct net_device *dev,
 					 u16 ref_nr,
 					 struct list_head *dev_list)
 {
+	struct net *net = dev_net(dev);
 	struct netdev_adjacent *adj;
+
+	lockdep_assert_held(&net->netif_lists_lock);
 
 	pr_debug("Remove adjacency: dev %s adj_dev %s ref_nr %d\n",
 		 dev->name, adj_dev->name, ref_nr);
@@ -7841,9 +7844,13 @@ static int __netdev_adjacent_dev_link_neighbour(struct net_device *dev,
 static void __netdev_adjacent_dev_unlink_neighbour(struct net_device *dev,
 						   struct net_device *upper_dev)
 {
+	struct net *net = dev_net(dev);
+
+	netif_lists_lock(net);
 	__netdev_adjacent_dev_unlink_lists(dev, upper_dev, 1,
 					   &dev->adj_list.upper,
 					   &upper_dev->adj_list.lower);
+	netif_lists_unlock(net);
 }
 
 static int __netdev_upper_dev_link(struct net_device *dev,
