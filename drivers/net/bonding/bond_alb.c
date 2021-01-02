@@ -1149,6 +1149,7 @@ static int alb_handle_addr_collision_on_attach(struct bonding *bond, struct slav
 {
 	struct slave *has_bond_addr = rcu_access_pointer(bond->curr_active_slave);
 	struct slave *tmp_slave1, *free_mac_slave = NULL;
+	struct net *net = dev_net(bond->dev);
 	struct list_head *iter;
 
 	if (!bond_has_slaves(bond)) {
@@ -1171,6 +1172,8 @@ static int alb_handle_addr_collision_on_attach(struct bonding *bond, struct slav
 				       bond->dev->addr_len);
 	}
 
+	netif_lists_lock(net);
+
 	/* The slave's address is equal to the address of the bond.
 	 * Search for a spare address in the bond for this slave.
 	 */
@@ -1191,6 +1194,8 @@ static int alb_handle_addr_collision_on_attach(struct bonding *bond, struct slav
 			}
 		}
 	}
+
+	netif_lists_unlock(net);
 
 	if (free_mac_slave) {
 		alb_set_slave_mac_addr(slave, free_mac_slave->perm_hwaddr,
@@ -1224,6 +1229,7 @@ static int alb_handle_addr_collision_on_attach(struct bonding *bond, struct slav
 static int alb_set_mac_address(struct bonding *bond, void *addr)
 {
 	struct slave *slave, *rollback_slave;
+	struct net *net = dev_net(bond->dev);
 	struct list_head *iter;
 	struct sockaddr_storage ss;
 	char tmp_addr[MAX_ADDR_LEN];
@@ -1231,6 +1237,8 @@ static int alb_set_mac_address(struct bonding *bond, void *addr)
 
 	if (bond->alb_info.rlb_enabled)
 		return 0;
+
+	netif_lists_lock(net);
 
 	bond_for_each_slave(bond, slave, iter) {
 		/* save net_device's current hw address */
@@ -1246,6 +1254,8 @@ static int alb_set_mac_address(struct bonding *bond, void *addr)
 		if (res)
 			goto unwind;
 	}
+
+	netif_lists_unlock(net);
 
 	return 0;
 
@@ -1264,6 +1274,8 @@ unwind:
 		bond_hw_addr_copy(rollback_slave->dev->dev_addr, tmp_addr,
 				  rollback_slave->dev->addr_len);
 	}
+
+	netif_lists_unlock(net);
 
 	return res;
 }

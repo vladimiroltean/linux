@@ -77,7 +77,7 @@
  * @pos:	current slave
  * @iter:	list_head * iterator
  *
- * Caller must hold RTNL
+ * Caller must hold netif_lists_lock(dev_net(bond->dev))
  */
 #define bond_for_each_slave(bond, pos, iter) \
 	netdev_for_each_lower_private((bond)->dev, pos, iter)

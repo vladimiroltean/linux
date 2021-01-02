@@ -1380,6 +1380,7 @@ static void ad_port_selection_logic(struct port *port, bool *update_slave_arr)
 	struct list_head *iter;
 	struct bonding *bond;
 	struct slave *slave;
+	struct net *net;
 	int found = 0;
 
 	/* if the port is already Selected, do nothing */
@@ -1387,6 +1388,7 @@ static void ad_port_selection_logic(struct port *port, bool *update_slave_arr)
 		return;
 
 	bond = __get_bond_by_port(port);
+	net = dev_net(bond->dev);
 
 	/* if the port is connected to other aggregator, detach it */
 	if (port->aggregator) {
@@ -1440,6 +1442,8 @@ static void ad_port_selection_logic(struct port *port, bool *update_slave_arr)
 					     port->aggregator->aggregator_identifier);
 		}
 	}
+	netif_lists_lock(net);
+
 	/* search on all aggregators for a suitable aggregator for this port */
 	bond_for_each_slave_rcu(bond, slave, iter) {
 		aggregator = &(SLAVE_AD_INFO(slave)->aggregator);
@@ -1477,6 +1481,8 @@ static void ad_port_selection_logic(struct port *port, bool *update_slave_arr)
 			break;
 		}
 	}
+
+	netif_lists_unlock(net);
 
 	/* the port couldn't find an aggregator - attach it to a new
 	 * aggregator
@@ -2082,6 +2088,9 @@ void bond_3ad_unbind_slave(struct slave *slave)
 	struct slave *slave_iter;
 	struct list_head *iter;
 	bool dummy_slave_update; /* Ignore this value as caller updates array */
+	struct net *net;
+
+	net = dev_net(bond->dev);
 
 	/* Sync against bond_3ad_state_machine_handler() */
 	spin_lock_bh(&bond->mode_lock);
@@ -2114,6 +2123,8 @@ void bond_3ad_unbind_slave(struct slave *slave)
 		 */
 		if ((aggregator->lag_ports != port) ||
 		    (aggregator->lag_ports->next_port_in_aggregator)) {
+			netif_lists_lock(net);
+
 			/* find new aggregator for the related port(s) */
 			bond_for_each_slave(bond, slave_iter, iter) {
 				new_aggregator = &(SLAVE_AD_INFO(slave_iter)->aggregator);
@@ -2125,6 +2136,9 @@ void bond_3ad_unbind_slave(struct slave *slave)
 				     !new_aggregator->lag_ports->next_port_in_aggregator))
 					break;
 			}
+
+			netif_lists_unlock(net);
+
 			if (!slave_iter)
 				new_aggregator = NULL;
 
@@ -2191,6 +2205,8 @@ void bond_3ad_unbind_slave(struct slave *slave)
 
 	slave_dbg(bond->dev, slave->dev, "Unbinding port %d\n", port->actor_port_number);
 
+	netif_lists_lock(net);
+
 	/* find the aggregator that this port is connected to */
 	bond_for_each_slave(bond, slave_iter, iter) {
 		temp_aggregator = &(SLAVE_AD_INFO(slave_iter)->aggregator);
@@ -2222,6 +2238,9 @@ void bond_3ad_unbind_slave(struct slave *slave)
 			}
 		}
 	}
+
+	netif_lists_unlock(net);
+
 	port->slave = NULL;
 
 out:
@@ -2237,6 +2256,7 @@ out:
  */
 void bond_3ad_update_ad_actor_settings(struct bonding *bond)
 {
+	struct net *net = dev_net(bond->dev);
 	struct list_head *iter;
 	struct slave *slave;
 
@@ -2250,14 +2270,18 @@ void bond_3ad_update_ad_actor_settings(struct bonding *bond)
 		BOND_AD_INFO(bond).system.sys_mac_addr =
 		    *((struct mac_addr *)bond->params.ad_actor_system);
 
+	netif_lists_lock(net);
 	spin_lock_bh(&bond->mode_lock);
+
 	bond_for_each_slave(bond, slave, iter) {
 		struct port *port = &(SLAVE_AD_INFO(slave))->port;
 
 		__ad_actor_update_port(port);
 		port->ntt = true;
 	}
+
 	spin_unlock_bh(&bond->mode_lock);
+	netif_lists_unlock(net);
 }
 
 /**
@@ -2678,13 +2702,17 @@ int bond_3ad_lacpdu_recv(const struct sk_buff *skb, struct bonding *bond,
  */
 void bond_3ad_update_lacp_rate(struct bonding *bond)
 {
+	struct net *net = dev_net(bond->dev);
 	struct port *port = NULL;
 	struct list_head *iter;
 	struct slave *slave;
 	int lacp_fast;
 
 	lacp_fast = bond->params.lacp_fast;
+
+	netif_lists_lock(net);
 	spin_lock_bh(&bond->mode_lock);
+
 	bond_for_each_slave(bond, slave, iter) {
 		port = &(SLAVE_AD_INFO(slave)->port);
 		if (lacp_fast)
@@ -2692,7 +2720,9 @@ void bond_3ad_update_lacp_rate(struct bonding *bond)
 		else
 			port->actor_oper_port_state &= ~LACP_STATE_LACP_TIMEOUT;
 	}
+
 	spin_unlock_bh(&bond->mode_lock);
+	netif_lists_unlock(net);
 }
 
 size_t bond_3ad_stats_size(void)

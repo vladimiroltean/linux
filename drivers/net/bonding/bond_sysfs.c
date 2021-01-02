@@ -168,10 +168,11 @@ static ssize_t bonding_show_slaves(struct device *d,
 	struct bonding *bond = to_bond(d);
 	struct list_head *iter;
 	struct slave *slave;
+	struct net *net;
 	int res = 0;
 
-	if (!rtnl_trylock())
-		return restart_syscall();
+	net = dev_net(bond->dev);
+	netif_lists_lock(net);
 
 	bond_for_each_slave(bond, slave, iter) {
 		if (res > (PAGE_SIZE - IFNAMSIZ)) {
@@ -184,7 +185,7 @@ static ssize_t bonding_show_slaves(struct device *d,
 		res += sprintf(buf + res, "%s ", slave->dev->name);
 	}
 
-	rtnl_unlock();
+	netif_lists_unlock(net);
 
 	if (res)
 		buf[res-1] = '\n'; /* eat the leftover space */
@@ -592,10 +593,11 @@ static ssize_t bonding_show_queue_id(struct device *d,
 	struct bonding *bond = to_bond(d);
 	struct list_head *iter;
 	struct slave *slave;
+	struct net *net;
 	int res = 0;
 
-	if (!rtnl_trylock())
-		return restart_syscall();
+	net = dev_net(bond->dev);
+	netif_lists_lock(net);
 
 	bond_for_each_slave(bond, slave, iter) {
 		if (res > (PAGE_SIZE - IFNAMSIZ - 6)) {
@@ -611,7 +613,7 @@ static ssize_t bonding_show_queue_id(struct device *d,
 	if (res)
 		buf[res-1] = '\n'; /* eat the leftover space */
 
-	rtnl_unlock();
+	netif_lists_unlock(net);
 
 	return res;
 }

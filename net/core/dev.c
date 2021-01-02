@@ -7273,14 +7273,15 @@ static bool __netdev_has_upper_dev(struct net_device *dev,
  * @iter: list_head ** of the current position
  *
  * Gets the next netdev_adjacent->private from the dev's lower neighbour
- * list, starting from iter position. The caller must hold either hold the
- * RTNL lock or its own locking that guarantees that the neighbour lower
- * list will remain unchanged.
+ * list, starting from iter position.
  */
 void *netdev_lower_get_next_private(struct net_device *dev,
 				    struct list_head **iter)
 {
+	struct net *net = dev_net(dev);
 	struct netdev_adjacent *lower;
+
+	lockdep_assert_held(&net->netif_lists_lock);
 
 	lower = list_entry(*iter, struct netdev_adjacent, list);
 

@@ -330,14 +330,19 @@ static int bond_vlan_rx_add_vid(struct net_device *bond_dev,
 {
 	struct bonding *bond = netdev_priv(bond_dev);
 	struct slave *slave, *rollback_slave;
+	struct net *net = dev_net(bond_dev);
 	struct list_head *iter;
 	int res;
+
+	netif_lists_lock(net);
 
 	bond_for_each_slave(bond, slave, iter) {
 		res = vlan_vid_add(slave->dev, proto, vid);
 		if (res)
 			goto unwind;
 	}
+
+	netif_lists_unlock(net);
 
 	return 0;
 
@@ -349,6 +354,8 @@ unwind:
 
 		vlan_vid_del(rollback_slave->dev, proto, vid);
 	}
+
+	netif_lists_unlock(net);
 
 	return res;
 }
@@ -363,11 +370,16 @@ static int bond_vlan_rx_kill_vid(struct net_device *bond_dev,
 				 __be16 proto, u16 vid)
 {
 	struct bonding *bond = netdev_priv(bond_dev);
+	struct net *net = dev_net(bond_dev);
 	struct list_head *iter;
 	struct slave *slave;
 
+	netif_lists_lock(net);
+
 	bond_for_each_slave(bond, slave, iter)
 		vlan_vid_del(slave->dev, proto, vid);
+
+	netif_lists_unlock(net);
 
 	if (bond_is_lb(bond))
 		bond_alb_clear_vlan(bond, vid);
@@ -477,6 +489,7 @@ static const struct xfrmdev_ops bond_xfrmdev_ops = {
  */
 int bond_set_carrier(struct bonding *bond)
 {
+	struct net *net = dev_net(bond->dev);
 	struct list_head *iter;
 	struct slave *slave;
 
@@ -486,15 +499,21 @@ int bond_set_carrier(struct bonding *bond)
 	if (BOND_MODE(bond) == BOND_MODE_8023AD)
 		return bond_3ad_set_carrier(bond);
 
+	netif_lists_lock(net);
+
 	bond_for_each_slave(bond, slave, iter) {
 		if (slave->link == BOND_LINK_UP) {
 			if (!netif_carrier_ok(bond->dev)) {
 				netif_carrier_on(bond->dev);
+				netif_lists_unlock(net);
 				return 1;
 			}
+			netif_lists_unlock(net);
 			return 0;
 		}
 	}
+
+	netif_lists_unlock(net);
 
 down:
 	if (netif_carrier_ok(bond->dev)) {
@@ -635,13 +654,18 @@ static int bond_set_promiscuity(struct bonding *bond, int inc)
 		if (curr_active)
 			err = dev_set_promiscuity(curr_active->dev, inc);
 	} else {
+		struct net *net = dev_net(bond->dev);
 		struct slave *slave;
+
+		netif_lists_lock(net);
 
 		bond_for_each_slave(bond, slave, iter) {
 			err = dev_set_promiscuity(slave->dev, inc);
 			if (err)
-				return err;
+				break;
 		}
+
+		netif_lists_unlock(net);
 	}
 	return err;
 }
@@ -658,13 +682,18 @@ static int bond_set_allmulti(struct bonding *bond, int inc)
 		if (curr_active)
 			err = dev_set_allmulti(curr_active->dev, inc);
 	} else {
+		struct net *net = dev_net(bond->dev);
 		struct slave *slave;
+
+		netif_lists_lock(net);
 
 		bond_for_each_slave(bond, slave, iter) {
 			err = dev_set_allmulti(slave->dev, inc);
 			if (err)
-				return err;
+				break;
 		}
+
+		netif_lists_unlock(net);
 	}
 	return err;
 }
@@ -770,16 +799,23 @@ static int bond_set_dev_addr(struct net_device *bond_dev,
 static struct slave *bond_get_old_active(struct bonding *bond,
 					 struct slave *new_active)
 {
+	struct net *net = dev_net(bond->dev);
 	struct slave *slave;
 	struct list_head *iter;
+
+	netif_lists_lock(net);
 
 	bond_for_each_slave(bond, slave, iter) {
 		if (slave == new_active)
 			continue;
 
-		if (ether_addr_equal(bond->dev->dev_addr, slave->dev->dev_addr))
+		if (ether_addr_equal(bond->dev->dev_addr, slave->dev->dev_addr)) {
+			netif_lists_unlock(net);
 			return slave;
+		}
 	}
+
+	netif_lists_unlock(net);
 
 	return NULL;
 }
@@ -906,6 +942,7 @@ static struct slave *bond_choose_primary_or_current(struct bonding *bond)
 static struct slave *bond_find_best_slave(struct bonding *bond)
 {
 	struct slave *slave, *bestslave = NULL;
+	struct net *net = dev_net(bond->dev);
 	struct list_head *iter;
 	int mintime = bond->params.updelay;
 
@@ -913,15 +950,21 @@ static struct slave *bond_find_best_slave(struct bonding *bond)
 	if (slave)
 		return slave;
 
+	netif_lists_lock(net);
+
 	bond_for_each_slave(bond, slave, iter) {
-		if (slave->link == BOND_LINK_UP)
+		if (slave->link == BOND_LINK_UP) {
+			netif_lists_unlock(net);
 			return slave;
+		}
 		if (slave->link == BOND_LINK_BACK && bond_slave_is_up(slave) &&
 		    slave->delay < mintime) {
 			mintime = slave->delay;
 			bestslave = slave;
 		}
 	}
+
+	netif_lists_unlock(net);
 
 	return bestslave;
 }
@@ -1165,20 +1208,28 @@ static void bond_poll_controller(struct net_device *bond_dev)
 static void bond_netpoll_cleanup(struct net_device *bond_dev)
 {
 	struct bonding *bond = netdev_priv(bond_dev);
+	struct net *net = dev_net(bond_dev);
 	struct list_head *iter;
 	struct slave *slave;
+
+	netif_lists_lock(net);
 
 	bond_for_each_slave(bond, slave, iter)
 		if (bond_slave_is_up(slave))
 			slave_disable_netpoll(slave);
+
+	netif_lists_unlock(net);
 }
 
 static int bond_netpoll_setup(struct net_device *dev, struct netpoll_info *ni)
 {
 	struct bonding *bond = netdev_priv(dev);
+	struct net *net = dev_net(dev);
 	struct list_head *iter;
 	struct slave *slave;
 	int err = 0;
+
+	netif_lists_lock(net);
 
 	bond_for_each_slave(bond, slave, iter) {
 		err = slave_enable_netpoll(slave);
@@ -1187,6 +1238,9 @@ static int bond_netpoll_setup(struct net_device *dev, struct netpoll_info *ni)
 			break;
 		}
 	}
+
+	netif_lists_unlock(net);
+
 	return err;
 }
 #else
@@ -1208,6 +1262,7 @@ static netdev_features_t bond_fix_features(struct net_device *dev,
 					   netdev_features_t features)
 {
 	struct bonding *bond = netdev_priv(dev);
+	struct net *net = dev_net(dev);
 	struct list_head *iter;
 	netdev_features_t mask;
 	struct slave *slave;
@@ -1217,11 +1272,16 @@ static netdev_features_t bond_fix_features(struct net_device *dev,
 	features &= ~NETIF_F_ONE_FOR_ALL;
 	features |= NETIF_F_ALL_FOR_ALL;
 
+	netif_lists_lock(net);
+
 	bond_for_each_slave(bond, slave, iter) {
 		features = netdev_increment_features(features,
 						     slave->dev->features,
 						     mask);
 	}
+
+	netif_lists_unlock(net);
+
 	features = netdev_add_tso_features(features, mask);
 
 	return features;
@@ -1249,6 +1309,7 @@ static void bond_compute_features(struct bonding *bond)
 #endif /* CONFIG_XFRM_OFFLOAD */
 	netdev_features_t mpls_features  = BOND_MPLS_FEATURES;
 	struct net_device *bond_dev = bond->dev;
+	struct net *net = dev_net(bond_dev);
 	struct list_head *iter;
 	struct slave *slave;
 	unsigned short max_hard_header_len = ETH_HLEN;
@@ -1259,6 +1320,8 @@ static void bond_compute_features(struct bonding *bond)
 		goto done;
 	vlan_features &= NETIF_F_ALL_FOR_ALL;
 	mpls_features &= NETIF_F_ALL_FOR_ALL;
+
+	netif_lists_lock(net);
 
 	bond_for_each_slave(bond, slave, iter) {
 		vlan_features = netdev_increment_features(vlan_features,
@@ -1286,6 +1349,8 @@ static void bond_compute_features(struct bonding *bond)
 		gso_max_segs = min(gso_max_segs, slave->dev->gso_max_segs);
 	}
 	bond_dev->hard_header_len = max_hard_header_len;
+
+	netif_lists_unlock(net);
 
 done:
 	bond_dev->vlan_features = vlan_features;
@@ -2256,9 +2321,12 @@ static void bond_info_query(struct net_device *bond_dev, struct ifbond *info)
 static int bond_slave_info_query(struct net_device *bond_dev, struct ifslave *info)
 {
 	struct bonding *bond = netdev_priv(bond_dev);
+	struct net *net = dev_net(bond_dev);
 	struct list_head *iter;
 	int i = 0, res = -ENODEV;
 	struct slave *slave;
+
+	netif_lists_lock(net);
 
 	bond_for_each_slave(bond, slave, iter) {
 		if (i++ == (int)info->slave_id) {
@@ -2267,6 +2335,8 @@ static int bond_slave_info_query(struct net_device *bond_dev, struct ifslave *in
 			break;
 		}
 	}
+
+	netif_lists_unlock(net);
 
 	return res;
 }
@@ -2389,8 +2459,11 @@ static void bond_miimon_link_change(struct bonding *bond,
 
 static void bond_miimon_commit(struct bonding *bond)
 {
+	struct net *net = dev_net(bond->dev);
 	struct list_head *iter;
 	struct slave *slave, *primary;
+
+	netif_lists_lock(net);
 
 	bond_for_each_slave(bond, slave, iter) {
 		switch (slave->link_new_state) {
@@ -2474,6 +2547,8 @@ do_failover:
 		unblock_netpoll_tx();
 	}
 
+	netif_lists_unlock(net);
+
 	bond_set_carrier(bond);
 }
 
@@ -2513,6 +2588,8 @@ static void bond_mii_monitor(struct work_struct *work)
 	}
 
 	if (commit) {
+		struct net *net = dev_net(bond->dev);
+
 		/* Race avoidance with bond_close cancel of workqueue */
 		if (!rtnl_trylock()) {
 			delay = 1;
@@ -2520,9 +2597,14 @@ static void bond_mii_monitor(struct work_struct *work)
 			goto re_arm;
 		}
 
+		netif_lists_lock(net);
+
 		bond_for_each_slave(bond, slave, iter) {
 			bond_commit_link_state(slave, BOND_SLAVE_NOTIFY_LATER);
 		}
+
+		netif_lists_unlock(net);
+
 		bond_miimon_commit(bond);
 
 		rtnl_unlock();	/* might sleep, hold no other locks */
@@ -2933,13 +3015,19 @@ static void bond_loadbalance_arp_mon(struct bonding *bond)
 	rcu_read_unlock();
 
 	if (do_failover || slave_state_changed) {
+		struct net *net = dev_net(bond->dev);
+
 		if (!rtnl_trylock())
 			goto re_arm;
+
+		netif_lists_lock(net);
 
 		bond_for_each_slave(bond, slave, iter) {
 			if (slave->link_new_state != BOND_LINK_NOCHANGE)
 				slave->link = slave->link_new_state;
 		}
+
+		netif_lists_unlock(net);
 
 		if (slave_state_changed) {
 			bond_slave_state_change(bond);
@@ -3039,9 +3127,12 @@ static int bond_ab_arp_inspect(struct bonding *bond)
  */
 static void bond_ab_arp_commit(struct bonding *bond)
 {
+	struct net *net = dev_net(bond->dev);
 	unsigned long trans_start;
 	struct list_head *iter;
 	struct slave *slave;
+
+	netif_lists_lock(net);
 
 	bond_for_each_slave(bond, slave, iter) {
 		switch (slave->link_new_state) {
@@ -3118,6 +3209,8 @@ do_failover:
 		bond_select_active_slave(bond);
 		unblock_netpoll_tx();
 	}
+
+	netif_lists_unlock(net);
 
 	bond_set_carrier(bond);
 }
@@ -3613,6 +3706,10 @@ static int bond_open(struct net_device *bond_dev)
 
 	/* reset slave->backup and slave->inactive */
 	if (bond_has_slaves(bond)) {
+		struct net *net = dev_net(bond_dev);
+
+		netif_lists_lock(net);
+
 		bond_for_each_slave(bond, slave, iter) {
 			if (bond_uses_primary(bond) &&
 			    slave != rcu_access_pointer(bond->curr_active_slave)) {
@@ -3623,6 +3720,8 @@ static int bond_open(struct net_device *bond_dev)
 							    BOND_SLAVE_NOTIFY_NOW);
 			}
 		}
+
+		netif_lists_unlock(net);
 	}
 
 	if (bond_is_lb(bond)) {
@@ -3972,10 +4071,13 @@ static int bond_change_mtu(struct net_device *bond_dev, int new_mtu)
 {
 	struct bonding *bond = netdev_priv(bond_dev);
 	struct slave *slave, *rollback_slave;
+	struct net *net = dev_net(bond_dev);
 	struct list_head *iter;
 	int res = 0;
 
 	netdev_dbg(bond_dev, "bond=%p, new_mtu=%d\n", bond, new_mtu);
+
+	netif_lists_lock(net);
 
 	bond_for_each_slave(bond, slave, iter) {
 		slave_dbg(bond_dev, slave->dev, "s %p c_m %p\n",
@@ -3998,6 +4100,8 @@ static int bond_change_mtu(struct net_device *bond_dev, int new_mtu)
 		}
 	}
 
+	netif_lists_unlock(net);
+
 	bond_dev->mtu = new_mtu;
 
 	return 0;
@@ -4016,6 +4120,8 @@ unwind:
 				  tmp_res);
 	}
 
+	netif_lists_unlock(net);
+
 	return res;
 }
 
@@ -4030,6 +4136,7 @@ static int bond_set_mac_address(struct net_device *bond_dev, void *addr)
 	struct bonding *bond = netdev_priv(bond_dev);
 	struct slave *slave, *rollback_slave;
 	struct sockaddr_storage *ss = addr, tmp_ss;
+	struct net *net = dev_net(bond_dev);
 	struct list_head *iter;
 	int res = 0;
 
@@ -4049,6 +4156,8 @@ static int bond_set_mac_address(struct net_device *bond_dev, void *addr)
 	if (!is_valid_ether_addr(ss->__data))
 		return -EADDRNOTAVAIL;
 
+	netif_lists_lock(net);
+
 	bond_for_each_slave(bond, slave, iter) {
 		slave_dbg(bond_dev, slave->dev, "%s: slave=%p\n",
 			  __func__, slave);
@@ -4065,6 +4174,8 @@ static int bond_set_mac_address(struct net_device *bond_dev, void *addr)
 			goto unwind;
 		}
 	}
+
+	netif_lists_unlock(net);
 
 	/* success */
 	memcpy(bond_dev->dev_addr, ss->__data, bond_dev->addr_len);
@@ -4088,6 +4199,8 @@ unwind:
 				   __func__, tmp_res);
 		}
 	}
+
+	netif_lists_unlock(net);
 
 	return res;
 }
@@ -4330,6 +4443,7 @@ static void bond_reset_slave_arr(struct bonding *bond)
 int bond_update_slave_arr(struct bonding *bond, struct slave *skipslave)
 {
 	struct bond_up_slave *usable_slaves = NULL, *all_slaves = NULL;
+	struct net *net = dev_net(bond->dev);
 	struct slave *slave;
 	struct list_head *iter;
 	int agg_id = 0;
@@ -4360,6 +4474,9 @@ int bond_update_slave_arr(struct bonding *bond, struct slave *skipslave)
 		}
 		agg_id = ad_info.aggregator_id;
 	}
+
+	netif_lists_lock(net);
+
 	bond_for_each_slave(bond, slave, iter) {
 		if (skipslave == slave)
 			continue;
@@ -4380,6 +4497,8 @@ int bond_update_slave_arr(struct bonding *bond, struct slave *skipslave)
 
 		usable_slaves->arr[usable_slaves->count++] = slave;
 	}
+
+	netif_lists_unlock(net);
 
 	bond_set_slave_arr(bond, usable_slaves, all_slaves);
 	return ret;
@@ -4617,12 +4736,15 @@ static int bond_ethtool_get_link_ksettings(struct net_device *bond_dev,
 					   struct ethtool_link_ksettings *cmd)
 {
 	struct bonding *bond = netdev_priv(bond_dev);
+	struct net *net = dev_net(bond_dev);
 	struct list_head *iter;
 	struct slave *slave;
 	u32 speed = 0;
 
 	cmd->base.duplex = DUPLEX_UNKNOWN;
 	cmd->base.port = PORT_OTHER;
+
+	netif_lists_lock(net);
 
 	/* Since bond_slave_can_tx returns false for all inactive or down slaves, we
 	 * do not need to check mode.  Though link speed might not represent
@@ -4643,7 +4765,10 @@ static int bond_ethtool_get_link_ksettings(struct net_device *bond_dev,
 				cmd->base.duplex = slave->duplex;
 		}
 	}
+
 	cmd->base.speed = speed ? : SPEED_UNKNOWN;
+
+	netif_lists_unlock(net);
 
 	return 0;
 }
@@ -4767,6 +4892,7 @@ void bond_setup(struct net_device *bond_dev)
 static void bond_uninit(struct net_device *bond_dev)
 {
 	struct bonding *bond = netdev_priv(bond_dev);
+	struct net *net = dev_net(bond_dev);
 	struct bond_up_slave *usable, *all;
 	struct list_head *iter;
 	struct slave *slave;
@@ -4774,8 +4900,13 @@ static void bond_uninit(struct net_device *bond_dev)
 	bond_netpoll_cleanup(bond_dev);
 
 	/* Release the bonded slaves */
+	netif_lists_lock(net);
+
 	bond_for_each_slave(bond, slave, iter)
 		__bond_release_one(bond_dev, slave->dev, true, true);
+
+	netif_lists_unlock(net);
+
 	netdev_info(bond_dev, "Released all slaves\n");
 
 	usable = rtnl_dereference(bond->usable_slaves);

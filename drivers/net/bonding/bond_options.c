@@ -1001,12 +1001,18 @@ static void _bond_options_arp_ip_target_set(struct bonding *bond, int slot,
 					    unsigned long last_rx)
 {
 	__be32 *targets = bond->params.arp_targets;
+	struct net *net = dev_net(bond->dev);
 	struct list_head *iter;
 	struct slave *slave;
 
 	if (slot >= 0 && slot < BOND_MAX_ARP_TARGETS) {
+		netif_lists_lock(net);
+
 		bond_for_each_slave(bond, slave, iter)
 			slave->target_last_arp_rx[slot] = last_rx;
+
+		netif_lists_unlock(net);
+
 		targets[slot] = target;
 	}
 }
@@ -1049,6 +1055,7 @@ static int bond_option_arp_ip_target_add(struct bonding *bond, __be32 target)
 static int bond_option_arp_ip_target_rem(struct bonding *bond, __be32 target)
 {
 	__be32 *targets = bond->params.arp_targets;
+	struct net *net = dev_net(bond->dev);
 	struct list_head *iter;
 	struct slave *slave;
 	unsigned long *targets_rx;
@@ -1072,12 +1079,17 @@ static int bond_option_arp_ip_target_rem(struct bonding *bond, __be32 target)
 
 	netdev_dbg(bond->dev, "Removing ARP target %pI4\n", &target);
 
+	netif_lists_lock(net);
+
 	bond_for_each_slave(bond, slave, iter) {
 		targets_rx = slave->target_last_arp_rx;
 		for (i = ind; (i < BOND_MAX_ARP_TARGETS-1) && targets[i+1]; i++)
 			targets_rx[i] = targets_rx[i+1];
 		targets_rx[i] = 0;
 	}
+
+	netif_lists_unlock(net);
+
 	for (i = ind; (i < BOND_MAX_ARP_TARGETS-1) && targets[i+1]; i++)
 		targets[i] = targets[i+1];
 	targets[i] = 0;
@@ -1142,6 +1154,7 @@ static int bond_option_arp_all_targets_set(struct bonding *bond,
 static int bond_option_primary_set(struct bonding *bond,
 				   const struct bond_opt_value *newval)
 {
+	struct net *net = dev_net(bond->dev);
 	char *p, *primary = newval->string;
 	struct list_head *iter;
 	struct slave *slave;
@@ -1160,6 +1173,8 @@ static int bond_option_primary_set(struct bonding *bond,
 		goto out;
 	}
 
+	netif_lists_lock(net);
+
 	bond_for_each_slave(bond, slave, iter) {
 		if (strncmp(slave->dev->name, primary, IFNAMSIZ) == 0) {
 			slave_dbg(bond->dev, slave->dev, "Setting as primary slave\n");
@@ -1167,9 +1182,12 @@ static int bond_option_primary_set(struct bonding *bond,
 			strcpy(bond->params.primary, slave->dev->name);
 			bond->force_primary = true;
 			bond_select_active_slave(bond);
+			netif_lists_unlock(net);
 			goto out;
 		}
 	}
+
+	netif_lists_unlock(net);
 
 	if (rtnl_dereference(bond->primary_slave)) {
 		netdev_dbg(bond->dev, "Setting primary slave to None\n");
@@ -1243,12 +1261,16 @@ static int bond_option_num_peer_notif_set(struct bonding *bond,
 static int bond_option_all_slaves_active_set(struct bonding *bond,
 					     const struct bond_opt_value *newval)
 {
+	struct net *net = dev_net(bond->dev);
 	struct list_head *iter;
 	struct slave *slave;
 
 	if (newval->value == bond->params.all_slaves_active)
 		return 0;
 	bond->params.all_slaves_active = newval->value;
+
+	netif_lists_lock(net);
+
 	bond_for_each_slave(bond, slave, iter) {
 		if (!bond_is_active_slave(slave)) {
 			if (newval->value)
@@ -1257,6 +1279,8 @@ static int bond_option_all_slaves_active_set(struct bonding *bond,
 				slave->inactive = 1;
 		}
 	}
+
+	netif_lists_unlock(net);
 
 	return 0;
 }
@@ -1324,6 +1348,7 @@ static int bond_option_ad_select_set(struct bonding *bond,
 static int bond_option_queue_id_set(struct bonding *bond,
 				    const struct bond_opt_value *newval)
 {
+	struct net *net = dev_net(bond->dev);
 	struct slave *slave, *update_slave;
 	struct net_device *sdev;
 	struct list_head *iter;
@@ -1355,6 +1380,9 @@ static int bond_option_queue_id_set(struct bonding *bond,
 
 	/* Search for thes slave and check for duplicate qids */
 	update_slave = NULL;
+
+	netif_lists_lock(net);
+
 	bond_for_each_slave(bond, slave, iter) {
 		if (sdev == slave->dev)
 			/* We don't need to check the matching
@@ -1362,9 +1390,12 @@ static int bond_option_queue_id_set(struct bonding *bond,
 			 */
 			update_slave = slave;
 		else if (qid && qid == slave->queue_id) {
+			netif_lists_unlock(net);
 			goto err_no_cmd;
 		}
 	}
+
+	netif_lists_unlock(net);
 
 	if (!update_slave)
 		goto err_no_cmd;
