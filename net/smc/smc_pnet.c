@@ -796,10 +796,12 @@ static void smc_pnet_create_pnetids_list(struct net *net)
 	u8 ndev_pnetid[SMC_MAX_PNETID_LEN];
 	struct net_device *dev;
 
-	rtnl_lock();
+	netif_lists_lock(net);
+
 	for_each_netdev(net, dev)
 		smc_pnet_add_base_pnetid(net, dev, ndev_pnetid);
-	rtnl_unlock();
+
+	netif_lists_unlock(net);
 }
 
 /* clean up list of netdevice pnetids */
@@ -837,7 +839,9 @@ static int smc_pnet_netdev_event(struct notifier_block *this,
 		smc_pnet_add_base_pnetid(net, event_dev, ndev_pnetid);
 		return NOTIFY_OK;
 	case NETDEV_DOWN:
+		netif_lists_lock(net);
 		event_dev = __pnet_find_base_ndev(event_dev);
+		netif_lists_unlock(net);
 		if (!smc_pnetid_by_dev_port(event_dev->dev.parent,
 					    event_dev->dev_port, ndev_pnetid)) {
 			/* remove from PNETIDs list */
@@ -898,11 +902,11 @@ void smc_pnet_exit(void)
 	genl_unregister_family(&smc_pnet_nl_family);
 }
 
+/* Caller must hold netif_lists_lock(dev_net(ndev)) */
 static struct net_device *__pnet_find_base_ndev(struct net_device *ndev)
 {
 	int i, nest_lvl;
 
-	ASSERT_RTNL();
 	nest_lvl = ndev->lower_level;
 	for (i = 0; i < nest_lvl; i++) {
 		struct list_head *lower = &ndev->adj_list.lower;
@@ -922,9 +926,12 @@ static struct net_device *__pnet_find_base_ndev(struct net_device *ndev)
  */
 static struct net_device *pnet_find_base_ndev(struct net_device *ndev)
 {
-	rtnl_lock();
+	struct net *net = dev_net(ndev);
+
+	netif_lists_lock(net);
 	ndev = __pnet_find_base_ndev(ndev);
-	rtnl_unlock();
+	netif_lists_unlock(net);
+
 	return ndev;
 }
 
