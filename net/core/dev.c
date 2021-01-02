@@ -7388,7 +7388,10 @@ int netdev_walk_all_lower_dev(struct net_device *dev,
 {
 	struct net_device *ldev, *next, *now, *dev_stack[MAX_NEST_DEV + 1];
 	struct list_head *niter, *iter, *iter_stack[MAX_NEST_DEV + 1];
+	struct net *net = dev_net(dev);
 	int ret, cur = 0;
+
+	netif_lists_lock(net);
 
 	now = dev;
 	iter = &dev->adj_list.lower;
@@ -7396,8 +7399,10 @@ int netdev_walk_all_lower_dev(struct net_device *dev,
 	while (1) {
 		if (now != dev) {
 			ret = fn(now, priv);
-			if (ret)
+			if (ret) {
+				netif_lists_unlock(net);
 				return ret;
+			}
 		}
 
 		next = NULL;
@@ -7414,8 +7419,10 @@ int netdev_walk_all_lower_dev(struct net_device *dev,
 		}
 
 		if (!next) {
-			if (!cur)
+			if (!cur) {
+				netif_lists_unlock(net);
 				return 0;
+			}
 			next = dev_stack[--cur];
 			niter = iter_stack[cur];
 		}
@@ -7423,6 +7430,8 @@ int netdev_walk_all_lower_dev(struct net_device *dev,
 		now = next;
 		iter = niter;
 	}
+
+	netif_lists_unlock(net);
 
 	return 0;
 }
