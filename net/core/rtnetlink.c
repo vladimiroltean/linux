@@ -4606,7 +4606,7 @@ int ndo_dflt_bridge_getlink(struct sk_buff *skb, u32 pid, u32 seq,
 	struct nlattr *br_afspec;
 	struct nlattr *protinfo;
 	u8 operstate = netif_running(dev) ? dev->operstate : IF_OPER_DOWN;
-	struct net_device *br_dev = netdev_master_upper_dev_get(dev);
+	struct net_device *br_dev = netdev_master_upper_dev_get_rcu(dev);
 	int err = 0;
 
 	nlh = nlmsg_put(skb, pid, seq, RTM_NEWLINK, sizeof(*ifm), nlflags);
