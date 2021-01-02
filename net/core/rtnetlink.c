@@ -1948,6 +1948,7 @@ static const struct rtnl_link_ops *linkinfo_to_kind_ops(const struct nlattr *nla
 	return ops;
 }
 
+/* Caller must hold netif_lists_lock(dev_net(dev)) */
 static bool link_master_filtered(struct net_device *dev, int master_idx)
 {
 	struct net_device *master;
@@ -1955,7 +1956,7 @@ static bool link_master_filtered(struct net_device *dev, int master_idx)
 	if (!master_idx)
 		return false;
 
-	master = netdev_master_upper_dev_get(dev);
+	master = netdev_master_upper_dev_get_unlocked(dev);
 	if (!master || master->ifindex != master_idx)
 		return true;
 
@@ -2121,10 +2122,21 @@ walk_entries:
 		idx = 0;
 		head = &tgt_net->dev_index_head[h];
 		hlist_for_each_entry(dev, head, index_hlist) {
-			if (link_dump_filtered(dev, master_idx, kind_ops))
+			bool filtered;
+
+			/* For netdev_master_upper_dev_get_unlocked from
+			 * link_master_filtered
+			 */
+			netif_lists_lock(net);
+			filtered = link_dump_filtered(dev, master_idx, kind_ops);
+			netif_lists_unlock(net);
+
+			if (filtered)
 				goto cont;
+
 			if (idx < s_idx)
 				goto cont;
+
 			err = rtnl_fill_ifinfo(skb, dev, net,
 					       RTM_NEWLINK,
 					       NETLINK_CB(cb->skb).portid,
@@ -4361,6 +4373,8 @@ static int rtnl_fdb_dump(struct sk_buff *skb, struct netlink_callback *cb)
 	s_h = cb->args[0];
 	s_idx = cb->args[1];
 
+	netif_lists_lock(net);
+
 	for (h = s_h; h < NETDEV_HASHENTRIES; h++, s_idx = 0) {
 		idx = 0;
 		head = &net->dev_index_head[h];
@@ -4371,7 +4385,7 @@ static int rtnl_fdb_dump(struct sk_buff *skb, struct netlink_callback *cb)
 
 			if (!br_idx) { /* user did not specify a specific bridge */
 				if (netif_is_bridge_port(dev)) {
-					br_dev = netdev_master_upper_dev_get(dev);
+					br_dev = netdev_master_upper_dev_get_unlocked(dev);
 					cops = br_dev->netdev_ops;
 				}
 			} else {
@@ -4379,7 +4393,7 @@ static int rtnl_fdb_dump(struct sk_buff *skb, struct netlink_callback *cb)
 				    !netif_is_bridge_port(dev))
 					continue;
 
-				if (br_dev != netdev_master_upper_dev_get(dev) &&
+				if (br_dev != netdev_master_upper_dev_get_unlocked(dev) &&
 				    !(dev->priv_flags & IFF_EBRIDGE))
 					continue;
 				cops = ops;
@@ -4419,6 +4433,8 @@ cont:
 	}
 
 out:
+	netif_lists_unlock(net);
+
 	cb->args[0] = h;
 	cb->args[1] = idx;
 	cb->args[2] = fidx;

@@ -7008,17 +7008,18 @@ bool netdev_has_any_upper_dev(struct net_device *dev)
 EXPORT_SYMBOL(netdev_has_any_upper_dev);
 
 /**
- * netdev_master_upper_dev_get - Get master upper device
+ * netdev_master_upper_dev_get_unlocked - Get master upper device
  * @dev: device
  *
  * Find a master upper device and return pointer to it or NULL in case
- * it's not there. The caller must hold the RTNL lock.
+ * it's not there. Caller must hold netif_lists_lock(dev_net(dev)).
  */
-struct net_device *netdev_master_upper_dev_get(struct net_device *dev)
+struct net_device *netdev_master_upper_dev_get_unlocked(struct net_device *dev)
 {
+	struct net *net = dev_net(dev);
 	struct netdev_adjacent *upper;
 
-	ASSERT_RTNL();
+	lockdep_assert_held(&net->netif_lists_lock);
 
 	if (list_empty(&dev->adj_list.upper))
 		return NULL;
@@ -7028,6 +7029,25 @@ struct net_device *netdev_master_upper_dev_get(struct net_device *dev)
 	if (likely(upper->master))
 		return upper->dev;
 	return NULL;
+}
+EXPORT_SYMBOL(netdev_master_upper_dev_get_unlocked);
+
+/**
+ * netdev_master_upper_dev_get - Get master upper device
+ * @dev: device
+ *
+ * Same as above, except this deals with locking.
+ */
+struct net_device *netdev_master_upper_dev_get(struct net_device *dev)
+{
+	struct net *net = dev_net(dev);
+	struct net_device *master;
+
+	netif_lists_lock(net);
+	master = netdev_master_upper_dev_get_unlocked(dev);
+	netif_lists_unlock(net);
+
+	return master;
 }
 EXPORT_SYMBOL(netdev_master_upper_dev_get);
 
@@ -7926,6 +7946,7 @@ int netdev_master_upper_dev_link(struct net_device *dev,
 }
 EXPORT_SYMBOL(netdev_master_upper_dev_link);
 
+/* Holds netif_lists_lock(dev_net(dev)) */
 static void __netdev_upper_dev_unlink(struct net_device *dev,
 				      struct net_device *upper_dev,
 				      struct netdev_nested_priv *priv)

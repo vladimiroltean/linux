@@ -2529,7 +2529,7 @@ static bool neigh_master_filtered(struct net_device *dev, int master_idx)
 	if (!master_idx)
 		return false;
 
-	master = dev ? netdev_master_upper_dev_get(dev) : NULL;
+	master = dev ? netdev_master_upper_dev_get_unlocked(dev) : NULL;
 	if (!master || master->ifindex != master_idx)
 		return true;
 
@@ -2563,6 +2563,7 @@ static int neigh_dump_table(struct neigh_table *tbl, struct sk_buff *skb,
 	if (filter->dev_idx || filter->master_idx)
 		flags |= NLM_F_DUMP_FILTERED;
 
+	netif_lists_lock(net);
 	rcu_read_lock_bh();
 	nht = rcu_dereference_bh(tbl->nht);
 
@@ -2591,6 +2592,7 @@ next:
 	rc = skb->len;
 out:
 	rcu_read_unlock_bh();
+	netif_lists_unlock(net);
 	cb->args[1] = h;
 	cb->args[2] = idx;
 	return rc;
@@ -2609,6 +2611,7 @@ static int pneigh_dump_table(struct neigh_table *tbl, struct sk_buff *skb,
 	if (filter->dev_idx || filter->master_idx)
 		flags |= NLM_F_DUMP_FILTERED;
 
+	netif_lists_lock(net);
 	read_lock_bh(&tbl->lock);
 
 	for (h = s_h; h <= PNEIGH_HASHMASK; h++) {
@@ -2635,6 +2638,7 @@ static int pneigh_dump_table(struct neigh_table *tbl, struct sk_buff *skb,
 	read_unlock_bh(&tbl->lock);
 	rc = skb->len;
 out:
+	netif_lists_unlock(net);
 	cb->args[3] = h;
 	cb->args[4] = idx;
 	return rc;
