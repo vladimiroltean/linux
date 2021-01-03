@@ -543,7 +543,7 @@ static void br_mdb_switchdev_host(struct net_device *dev,
 	struct net_device *lower_dev;
 	struct list_head *iter;
 
-	netdev_for_each_lower_dev(dev, lower_dev, iter)
+	netdev_for_each_lower_dev_rcu(dev, lower_dev, iter)
 		br_mdb_switchdev_host_port(dev, lower_dev, mp, type);
 }
 

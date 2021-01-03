@@ -4655,6 +4655,13 @@ void *netdev_lower_get_next(struct net_device *dev,
 
 struct net_device *netdev_next_lower_dev_rcu(struct net_device *dev,
 					     struct list_head **iter);
+
+#define netdev_for_each_lower_dev_rcu(dev, ldev, iter) \
+	for (iter = &(dev)->adj_list.lower, \
+	     ldev = netdev_next_lower_dev_rcu(dev, &(iter)); \
+	     ldev; \
+	     ldev = netdev_next_lower_dev_rcu(dev, &(iter)))
+
 int netdev_walk_all_lower_dev(struct net_device *dev,
 			      int (*fn)(struct net_device *lower_dev,
 					struct netdev_nested_priv *priv),
