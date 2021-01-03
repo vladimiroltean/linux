@@ -349,13 +349,20 @@ struct mlxsw_sp_port_type_speed_ops {
 static inline struct net_device *
 mlxsw_sp_bridge_vxlan_dev_find(struct net_device *br_dev)
 {
-	struct net_device *dev;
+	struct net *net = dev_net(br_dev);
+	struct net_device *dev = NULL;
 	struct list_head *iter;
 
+	netif_lists_lock(net);
+
 	netdev_for_each_lower_dev(br_dev, dev, iter) {
-		if (netif_is_vxlan(dev))
+		if (netif_is_vxlan(dev)) {
+			netif_lists_unlock(net);
 			return dev;
+		}
 	}
+
+	netif_lists_unlock(net);
 
 	return NULL;
 }

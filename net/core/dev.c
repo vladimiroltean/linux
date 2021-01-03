@@ -1671,6 +1671,7 @@ EXPORT_SYMBOL(dev_close);
  */
 void dev_disable_lro(struct net_device *dev)
 {
+	struct net *net = dev_net(dev);
 	struct net_device *lower_dev;
 	struct list_head *iter;
 
@@ -1680,8 +1681,12 @@ void dev_disable_lro(struct net_device *dev)
 	if (unlikely(dev->features & NETIF_F_LRO))
 		netdev_WARN(dev, "failed to disable LRO!\n");
 
+	netif_lists_lock(net);
+
 	netdev_for_each_lower_dev(dev, lower_dev, iter)
 		dev_disable_lro(lower_dev);
+
+	netif_lists_unlock(net);
 }
 EXPORT_SYMBOL(dev_disable_lro);
 
@@ -8834,6 +8839,7 @@ int dev_get_port_parent_id(struct net_device *dev,
 {
 	const struct net_device_ops *ops = dev->netdev_ops;
 	struct netdev_phys_item_id first = { };
+	struct net *net = dev_net(dev);
 	struct net_device *lower_dev;
 	struct list_head *iter;
 	int err;
@@ -8851,15 +8857,22 @@ int dev_get_port_parent_id(struct net_device *dev,
 	if (!recurse)
 		return -EOPNOTSUPP;
 
+	netif_lists_lock(net);
+
 	netdev_for_each_lower_dev(dev, lower_dev, iter) {
 		err = dev_get_port_parent_id(lower_dev, ppid, recurse);
 		if (err)
 			break;
-		if (!first.id_len)
+
+		if (!first.id_len) {
 			first = *ppid;
-		else if (memcmp(&first, ppid, sizeof(*ppid)))
-			return -EOPNOTSUPP;
+		} else if (memcmp(&first, ppid, sizeof(*ppid))) {
+			err = -EOPNOTSUPP;
+			break;
+		}
 	}
+
+	netif_lists_unlock(net);
 
 	return err;
 }
@@ -9694,6 +9707,7 @@ static netdev_features_t netdev_fix_features(struct net_device *dev,
 int __netdev_update_features(struct net_device *dev)
 {
 	struct net_device *upper, *lower;
+	struct net *net = dev_net(dev);
 	netdev_features_t features;
 	struct list_head *iter;
 	int err = -1;
@@ -9734,11 +9748,15 @@ int __netdev_update_features(struct net_device *dev)
 	}
 
 sync_lower:
+	netif_lists_lock(net);
+
 	/* some features must be disabled on lower devices when disabled
 	 * on an upper device (think: bonding master or bridge)
 	 */
 	netdev_for_each_lower_dev(dev, lower, iter)
 		netdev_sync_lower_features(dev, lower, features);
+
+	netif_lists_unlock(net);
 
 	if (!err) {
 		netdev_features_t diff = features ^ dev->features;

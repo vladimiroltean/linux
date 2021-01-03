@@ -335,14 +335,22 @@ mlxsw_sp_span_entry_vlan(const struct net_device *vlan_dev,
 static struct net_device *
 mlxsw_sp_span_entry_lag(struct net_device *lag_dev)
 {
+	struct net *net = dev_net(lag_dev);
 	struct net_device *dev;
 	struct list_head *iter;
 
-	netdev_for_each_lower_dev(lag_dev, dev, iter)
+	netif_lists_lock(net);
+
+	netdev_for_each_lower_dev(lag_dev, dev, iter) {
 		if (netif_carrier_ok(dev) &&
 		    net_lag_port_dev_txable(dev) &&
-		    mlxsw_sp_port_dev_check(dev))
+		    mlxsw_sp_port_dev_check(dev)) {
+			netif_lists_unlock(net);
 			return dev;
+		}
+	}
+
+	netif_lists_unlock(net);
 
 	return NULL;
 }

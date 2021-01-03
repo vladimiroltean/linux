@@ -7856,9 +7856,12 @@ static int __mlxsw_sp_inetaddr_lag_event(struct net_device *l3_dev,
 					 unsigned long event, u16 vid,
 					 struct netlink_ext_ack *extack)
 {
+	struct net *net = dev_net(l3_dev);
 	struct net_device *port_dev;
 	struct list_head *iter;
-	int err;
+	int err = 0;
+
+	netif_lists_lock(net);
 
 	netdev_for_each_lower_dev(lag_dev, port_dev, iter) {
 		if (mlxsw_sp_port_dev_check(port_dev)) {
@@ -7867,11 +7870,13 @@ static int __mlxsw_sp_inetaddr_lag_event(struct net_device *l3_dev,
 								event, vid,
 								extack);
 			if (err)
-				return err;
+				break;
 		}
 	}
 
-	return 0;
+	netif_lists_unlock(net);
+
+	return err;
 }
 
 static int mlxsw_sp_inetaddr_lag_event(struct net_device *lag_dev,

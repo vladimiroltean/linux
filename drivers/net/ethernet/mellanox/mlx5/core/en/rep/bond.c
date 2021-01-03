@@ -201,6 +201,7 @@ static void mlx5e_rep_changelowerstate_event(struct net_device *netdev, void *pt
 {
 	struct netdev_notifier_changelowerstate_info *info;
 	struct netdev_lag_lower_state_info *lag_info;
+	struct net *net = dev_net(netdev);
 	struct mlx5e_rep_priv *rpriv;
 	struct net_device *lag_dev;
 	struct mlx5e_priv *priv;
@@ -227,6 +228,8 @@ static void mlx5e_rep_changelowerstate_event(struct net_device *netdev, void *pt
 	netdev_dbg(netdev, "lag_dev(%s)'s slave vport(%d) is txable(%d)\n",
 		   lag_dev->name, fwd_vport_num, net_lag_port_dev_txable(netdev));
 
+	netif_lists_lock(net);
+
 	/* Point everyone's egress acl to the vport of the active representor */
 	netdev_for_each_lower_dev(lag_dev, dev, iter) {
 		priv = netdev_priv(dev);
@@ -247,6 +250,8 @@ static void mlx5e_rep_changelowerstate_event(struct net_device *netdev, void *pt
 					    acl_vport_num, err);
 		}
 	}
+
+	netif_lists_unlock(net);
 
 	/* Insert new rx_rule for unique bond_metadata, save it as active vport's
 	 * rx_rule with new destination as active vport's root_ft

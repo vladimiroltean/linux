@@ -1230,6 +1230,7 @@ static int dpaa2_switch_port_bridge_join(struct net_device *netdev,
 	struct ethsw_port_priv *port_priv = netdev_priv(netdev);
 	struct ethsw_core *ethsw = port_priv->ethsw_data;
 	struct ethsw_port_priv *other_port_priv;
+	struct net *net = dev_net(netdev);
 	struct net_device *other_dev;
 	struct list_head *iter;
 	int i, err;
@@ -1242,17 +1243,22 @@ static int dpaa2_switch_port_bridge_join(struct net_device *netdev,
 			return -EINVAL;
 		}
 
+	netif_lists_lock(net);
+
 	netdev_for_each_lower_dev(upper_dev, other_dev, iter) {
 		if (!dpaa2_switch_port_dev_check(other_dev, NULL))
 			continue;
 
 		other_port_priv = netdev_priv(other_dev);
 		if (other_port_priv->ethsw_data != port_priv->ethsw_data) {
+			netif_lists_unlock(net);
 			netdev_err(netdev,
 				   "Interface from a different DPSW is in the bridge already!\n");
 			return -EINVAL;
 		}
 	}
+
+	netif_lists_unlock(net);
 
 	/* Enable flooding */
 	err = dpaa2_switch_port_set_flood(port_priv, 1);

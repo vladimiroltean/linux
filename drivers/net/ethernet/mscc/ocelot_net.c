@@ -1061,14 +1061,19 @@ static int ocelot_netdevice_event(struct notifier_block *unused,
 	}
 
 	if (netif_is_lag_master(dev)) {
+		struct net *net = dev_net(dev);
 		struct net_device *slave;
 		struct list_head *iter;
+
+		netif_lists_lock(net);
 
 		netdev_for_each_lower_dev(dev, slave, iter) {
 			ret = ocelot_netdevice_port_event(slave, event, info);
 			if (ret)
-				goto notify;
+				break;
 		}
+
+		netif_lists_unlock(net);
 	} else {
 		ret = ocelot_netdevice_port_event(dev, event, info);
 	}

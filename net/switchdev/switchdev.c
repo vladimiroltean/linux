@@ -452,6 +452,7 @@ static int __switchdev_handle_port_obj_add(struct net_device *dev,
 				      struct switchdev_trans *trans,
 				      struct netlink_ext_ack *extack))
 {
+	struct net *net = dev_net(dev);
 	struct netlink_ext_ack *extack;
 	struct net_device *lower_dev;
 	struct list_head *iter;
@@ -465,6 +466,8 @@ static int __switchdev_handle_port_obj_add(struct net_device *dev,
 		return add_cb(dev, port_obj_info->obj, port_obj_info->trans,
 			      extack);
 	}
+
+	netif_lists_lock(net);
 
 	/* Switch ports might be stacked under e.g. a LAG. Ignore the
 	 * unsupported devices, another driver might be able to handle them. But
@@ -480,8 +483,10 @@ static int __switchdev_handle_port_obj_add(struct net_device *dev,
 		err = __switchdev_handle_port_obj_add(lower_dev, port_obj_info,
 						      check_cb, add_cb);
 		if (err && err != -EOPNOTSUPP)
-			return err;
+			break;
 	}
+
+	netif_lists_unlock(net);
 
 	return err;
 }
@@ -510,6 +515,7 @@ static int __switchdev_handle_port_obj_del(struct net_device *dev,
 			int (*del_cb)(struct net_device *dev,
 				      const struct switchdev_obj *obj))
 {
+	struct net *net = dev_net(dev);
 	struct net_device *lower_dev;
 	struct list_head *iter;
 	int err = -EOPNOTSUPP;
@@ -519,6 +525,8 @@ static int __switchdev_handle_port_obj_del(struct net_device *dev,
 		port_obj_info->handled = true;
 		return del_cb(dev, port_obj_info->obj);
 	}
+
+	netif_lists_lock(net);
 
 	/* Switch ports might be stacked under e.g. a LAG. Ignore the
 	 * unsupported devices, another driver might be able to handle them. But
@@ -534,8 +542,10 @@ static int __switchdev_handle_port_obj_del(struct net_device *dev,
 		err = __switchdev_handle_port_obj_del(lower_dev, port_obj_info,
 						      check_cb, del_cb);
 		if (err && err != -EOPNOTSUPP)
-			return err;
+			break;
 	}
+
+	netif_lists_unlock(net);
 
 	return err;
 }
@@ -563,6 +573,7 @@ static int __switchdev_handle_port_attr_set(struct net_device *dev,
 				      const struct switchdev_attr *attr,
 				      struct switchdev_trans *trans))
 {
+	struct net *net = dev_net(dev);
 	struct net_device *lower_dev;
 	struct list_head *iter;
 	int err = -EOPNOTSUPP;
@@ -572,6 +583,8 @@ static int __switchdev_handle_port_attr_set(struct net_device *dev,
 		return set_cb(dev, port_attr_info->attr,
 			      port_attr_info->trans);
 	}
+
+	netif_lists_lock(net);
 
 	/* Switch ports might be stacked under e.g. a LAG. Ignore the
 	 * unsupported devices, another driver might be able to handle them. But
@@ -587,8 +600,10 @@ static int __switchdev_handle_port_attr_set(struct net_device *dev,
 		err = __switchdev_handle_port_attr_set(lower_dev, port_attr_info,
 						       check_cb, set_cb);
 		if (err && err != -EOPNOTSUPP)
-			return err;
+			break;
 	}
+
+	netif_lists_unlock(net);
 
 	return err;
 }

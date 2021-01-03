@@ -3842,14 +3842,19 @@ static void mlxsw_sp_port_ovs_leave(struct mlxsw_sp_port *mlxsw_sp_port)
 
 static bool mlxsw_sp_bridge_has_multiple_vxlans(struct net_device *br_dev)
 {
+	struct net *net = dev_net(br_dev);
 	unsigned int num_vxlans = 0;
 	struct net_device *dev;
 	struct list_head *iter;
+
+	netif_lists_lock(net);
 
 	netdev_for_each_lower_dev(br_dev, dev, iter) {
 		if (netif_is_vxlan(dev))
 			num_vxlans++;
 	}
+
+	netif_lists_unlock(net);
 
 	return num_vxlans > 1;
 }
@@ -3857,8 +3862,12 @@ static bool mlxsw_sp_bridge_has_multiple_vxlans(struct net_device *br_dev)
 static bool mlxsw_sp_bridge_vxlan_vlan_is_valid(struct net_device *br_dev)
 {
 	DECLARE_BITMAP(vlans, VLAN_N_VID) = {0};
+	struct net *net = dev_net(br_dev);
 	struct net_device *dev;
 	struct list_head *iter;
+	bool valid = true;
+
+	netif_lists_lock(net);
 
 	netdev_for_each_lower_dev(br_dev, dev, iter) {
 		u16 pvid;
@@ -3871,9 +3880,13 @@ static bool mlxsw_sp_bridge_vxlan_vlan_is_valid(struct net_device *br_dev)
 		if (err || !pvid)
 			continue;
 
-		if (test_and_set_bit(pvid, vlans))
-			return false;
+		if (test_and_set_bit(pvid, vlans)) {
+			valid = false;
+			break;
+		}
 	}
+
+	netif_lists_unlock(net);
 
 	return true;
 }
@@ -4095,20 +4108,25 @@ static int mlxsw_sp_netdevice_port_event(struct net_device *lower_dev,
 static int mlxsw_sp_netdevice_lag_event(struct net_device *lag_dev,
 					unsigned long event, void *ptr)
 {
+	struct net *net = dev_net(lag_dev);
 	struct net_device *dev;
 	struct list_head *iter;
-	int ret;
+	int ret = 0;
+
+	netif_lists_lock(net);
 
 	netdev_for_each_lower_dev(lag_dev, dev, iter) {
 		if (mlxsw_sp_port_dev_check(dev)) {
 			ret = mlxsw_sp_netdevice_port_event(lag_dev, dev, event,
 							    ptr);
 			if (ret)
-				return ret;
+				break;
 		}
 	}
 
-	return 0;
+	netif_lists_unlock(net);
+
+	return ret;
 }
 
 static int mlxsw_sp_netdevice_port_vlan_event(struct net_device *vlan_dev,
@@ -4183,9 +4201,12 @@ static int mlxsw_sp_netdevice_lag_port_vlan_event(struct net_device *vlan_dev,
 						  unsigned long event,
 						  void *ptr, u16 vid)
 {
+	struct net *net = dev_net(vlan_dev);
 	struct net_device *dev;
 	struct list_head *iter;
-	int ret;
+	int ret = 0;
+
+	netif_lists_lock(net);
 
 	netdev_for_each_lower_dev(lag_dev, dev, iter) {
 		if (mlxsw_sp_port_dev_check(dev)) {
@@ -4193,11 +4214,13 @@ static int mlxsw_sp_netdevice_lag_port_vlan_event(struct net_device *vlan_dev,
 								 event, ptr,
 								 vid);
 			if (ret)
-				return ret;
+				break;
 		}
 	}
 
-	return 0;
+	netif_lists_unlock(net);
+
+	return ret;
 }
 
 static int mlxsw_sp_netdevice_bridge_vlan_event(struct net_device *vlan_dev,

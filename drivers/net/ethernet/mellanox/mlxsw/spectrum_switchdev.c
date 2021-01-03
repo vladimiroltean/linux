@@ -162,9 +162,12 @@ static int mlxsw_sp_bridge_device_vxlan_init(struct mlxsw_sp_bridge *bridge,
 					     struct net_device *br_dev,
 					     struct netlink_ext_ack *extack)
 {
+	struct net *net = dev_net(br_dev);
 	struct net_device *dev, *stop_dev;
 	struct list_head *iter;
 	int err;
+
+	netif_lists_lock(net);
 
 	netdev_for_each_lower_dev(br_dev, dev, iter) {
 		if (netif_is_vxlan(dev) && netif_running(dev)) {
@@ -178,6 +181,8 @@ static int mlxsw_sp_bridge_device_vxlan_init(struct mlxsw_sp_bridge *bridge,
 		}
 	}
 
+	netif_lists_unlock(net);
+
 	return 0;
 
 err_vxlan_join:
@@ -188,19 +193,27 @@ err_vxlan_join:
 			mlxsw_sp_bridge_vxlan_leave(bridge->mlxsw_sp, dev);
 		}
 	}
+
+	netif_lists_unlock(net);
+
 	return err;
 }
 
 static void mlxsw_sp_bridge_device_vxlan_fini(struct mlxsw_sp_bridge *bridge,
 					      struct net_device *br_dev)
 {
+	struct net *net = dev_net(br_dev);
 	struct net_device *dev;
 	struct list_head *iter;
+
+	netif_lists_lock(net);
 
 	netdev_for_each_lower_dev(br_dev, dev, iter) {
 		if (netif_is_vxlan(dev) && netif_running(dev))
 			mlxsw_sp_bridge_vxlan_leave(bridge->mlxsw_sp, dev);
 	}
+
+	netif_lists_unlock(net);
 }
 
 static struct mlxsw_sp_bridge_device *
@@ -2115,8 +2128,11 @@ mlxsw_sp_bridge_8021q_vxlan_join(struct mlxsw_sp_bridge_device *bridge_device,
 static struct net_device *
 mlxsw_sp_bridge_8021q_vxlan_dev_find(struct net_device *br_dev, u16 vid)
 {
-	struct net_device *dev;
+	struct net *net = dev_net(br_dev);
+	struct net_device *dev = NULL;
 	struct list_head *iter;
+
+	netif_lists_lock(net);
 
 	netdev_for_each_lower_dev(br_dev, dev, iter) {
 		u16 pvid;
@@ -2129,10 +2145,12 @@ mlxsw_sp_bridge_8021q_vxlan_dev_find(struct net_device *br_dev, u16 vid)
 		if (err || pvid != vid)
 			continue;
 
-		return dev;
+		break;
 	}
 
-	return NULL;
+	netif_lists_unlock(net);
+
+	return dev;
 }
 
 static struct mlxsw_sp_fid *

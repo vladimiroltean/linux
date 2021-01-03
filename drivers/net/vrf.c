@@ -1708,11 +1708,16 @@ static int vrf_validate(struct nlattr *tb[], struct nlattr *data[],
 
 static void vrf_dellink(struct net_device *dev, struct list_head *head)
 {
+	struct net *net = dev_net(dev);
 	struct net_device *port_dev;
 	struct list_head *iter;
 
+	netif_lists_lock(net);
+
 	netdev_for_each_lower_dev(dev, port_dev, iter)
 		vrf_del_slave(dev, port_dev);
+
+	netif_lists_unlock(net);
 
 	vrf_map_unregister_dev(dev);
 
