@@ -295,8 +295,13 @@ netdev_tx_t bond_dev_queue_xmit(struct bonding *bond, struct sk_buff *skb,
 		     sizeof(qdisc_skb_cb(skb)->slave_dev_queue_mapping));
 	skb_set_queue_mapping(skb, qdisc_skb_cb(skb)->slave_dev_queue_mapping);
 
-	if (unlikely(netpoll_tx_running(bond->dev)))
-		return bond_netpoll_send_skb(bond_get_slave_by_dev(bond, slave_dev), skb);
+	if (unlikely(netpoll_tx_running(bond->dev))) {
+		struct slave *slave;
+
+		slave = bond_get_slave_by_dev_rcu(bond, slave_dev);
+
+		return bond_netpoll_send_skb(slave, skb);
+	}
 
 	return dev_queue_xmit(skb);
 }
@@ -2128,7 +2133,9 @@ static int __bond_release_one(struct net_device *bond_dev,
 
 	block_netpoll_tx();
 
-	slave = bond_get_slave_by_dev(bond, slave_dev);
+	rcu_read_lock();
+	slave = bond_get_slave_by_dev_rcu(bond, slave_dev);
+	rcu_read_unlock();
 	if (!slave) {
 		/* not a slave of this bond */
 		slave_info(bond_dev, slave_dev, "interface not enslaved\n");

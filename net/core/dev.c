@@ -6932,12 +6932,27 @@ struct netdev_adjacent {
 static struct netdev_adjacent *__netdev_find_adj(struct net_device *adj_dev,
 						 struct list_head *adj_list)
 {
+	struct net *net = dev_net(adj_dev);
 	struct netdev_adjacent *adj;
+
+	lockdep_assert_held(&net->netif_lists_lock);
 
 	list_for_each_entry(adj, adj_list, list) {
 		if (adj->dev == adj_dev)
 			return adj;
 	}
+	return NULL;
+}
+
+static struct netdev_adjacent *__netdev_find_adj_rcu(struct net_device *adj_dev,
+						     struct list_head *adj_list)
+{
+	struct netdev_adjacent *adj;
+
+	list_for_each_entry_rcu(adj, adj_list, list)
+		if (adj->dev == adj_dev)
+			return adj;
+
 	return NULL;
 }
 
@@ -8252,21 +8267,20 @@ void netdev_adjacent_rename_links(struct net_device *dev, char *oldname)
 	}
 }
 
-void *netdev_lower_dev_get_private(struct net_device *dev,
-				   struct net_device *lower_dev)
+void *netdev_lower_dev_get_private_rcu(struct net_device *dev,
+				       struct net_device *lower_dev)
 {
 	struct netdev_adjacent *lower;
 
 	if (!lower_dev)
 		return NULL;
-	lower = __netdev_find_adj(lower_dev, &dev->adj_list.lower);
+	lower = __netdev_find_adj_rcu(lower_dev, &dev->adj_list.lower);
 	if (!lower)
 		return NULL;
 
 	return lower->private;
 }
-EXPORT_SYMBOL(netdev_lower_dev_get_private);
-
+EXPORT_SYMBOL(netdev_lower_dev_get_private_rcu);
 
 /**
  * netdev_lower_state_changed - Dispatch event about lower device state change

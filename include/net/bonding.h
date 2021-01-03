@@ -267,13 +267,11 @@ struct bond_vlan_tag {
 
 /**
  * Returns NULL if the net_device does not belong to any of the bond's slaves
- *
- * Caller must hold bond lock for read
  */
-static inline struct slave *bond_get_slave_by_dev(struct bonding *bond,
-						  struct net_device *slave_dev)
+static inline struct slave *
+bond_get_slave_by_dev_rcu(struct bonding *bond, struct net_device *slave_dev)
 {
-	return netdev_lower_dev_get_private(bond->dev, slave_dev);
+	return netdev_lower_dev_get_private_rcu(bond->dev, slave_dev);
 }
 
 static inline struct bonding *bond_get_bond_by_slave(struct slave *slave)
