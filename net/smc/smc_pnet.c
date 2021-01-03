@@ -836,7 +836,9 @@ static int smc_pnet_netdev_event(struct notifier_block *this,
 		smc_ib_ndev_change(event_dev, event);
 		return NOTIFY_OK;
 	case NETDEV_UP:
+		netif_lists_lock(net);
 		smc_pnet_add_base_pnetid(net, event_dev, ndev_pnetid);
+		netif_lists_unlock(net);
 		return NOTIFY_OK;
 	case NETDEV_DOWN:
 		netif_lists_lock(net);
