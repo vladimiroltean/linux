@@ -288,12 +288,10 @@ static int br_port_fill_attrs(struct sk_buff *skb,
 #endif
 
 	/* we might be called only with br->lock */
-	rcu_read_lock();
 	backup_p = rcu_dereference(p->backup_port);
 	if (backup_p)
 		nla_put_u32(skb, IFLA_BRPORT_BACKUP_PORT,
 			    backup_p->dev->ifindex);
-	rcu_read_unlock();
 
 	return 0;
 }

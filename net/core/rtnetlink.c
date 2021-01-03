@@ -615,6 +615,7 @@ static bool rtnl_have_link_slave_info(const struct net_device *dev)
 	return ret;
 }
 
+/* Must be called under rcu_read_lock() */
 static int rtnl_link_slave_info_fill(struct sk_buff *skb,
 				     const struct net_device *dev)
 {
@@ -623,7 +624,7 @@ static int rtnl_link_slave_info_fill(struct sk_buff *skb,
 	struct nlattr *slave_data;
 	int err;
 
-	master_dev = netdev_master_upper_dev_get((struct net_device *) dev);
+	master_dev = netdev_master_upper_dev_get_rcu((struct net_device *) dev);
 	if (!master_dev)
 		return 0;
 	ops = master_dev->rtnl_link_ops;
