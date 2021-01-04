@@ -303,22 +303,6 @@ netdev_tx_t bond_dev_queue_xmit(struct bonding *bond, struct sk_buff *skb,
 
 /*---------------------------------- VLAN -----------------------------------*/
 
-/* In the following 2 functions, bond_vlan_rx_add_vid and bond_vlan_rx_kill_vid,
- * We don't protect the slave list iteration with a lock because:
- * a. This operation is performed in IOCTL context,
- * b. The operation is protected by the RTNL semaphore in the 8021q code,
- * c. Holding a lock with BH disabled while directly calling a base driver
- *    entry point is generally a BAD idea.
- *
- * The design of synchronization/protection for this operation in the 8021q
- * module is good for one or more VLAN devices over a single physical device
- * and cannot be extended for a teaming solution like bonding, so there is a
- * potential race condition here where a net device from the vlan group might
- * be referenced (either by a base driver or the 8021q code) while it is being
- * removed from the system. However, it turns out we're not making matters
- * worse, and if it works for regular VLAN usage it will work here too.
-*/
-
 /**
  * bond_vlan_rx_add_vid - Propagates adding an id to slaves
  * @bond_dev: bonding net device that got called
@@ -329,33 +313,24 @@ static int bond_vlan_rx_add_vid(struct net_device *bond_dev,
 				__be16 proto, u16 vid)
 {
 	struct bonding *bond = netdev_priv(bond_dev);
-	struct slave *slave, *rollback_slave;
-	struct net *net = dev_net(bond_dev);
-	struct list_head *iter;
-	int res;
+	int res, i, num_slaves;
+	struct slave **slaves;
 
-	netif_lists_lock(net);
+	res = bond_get_slave_arr(bond, &slaves, &num_slaves);
+	if (res)
+		return res;
 
-	bond_for_each_slave(bond, slave, iter) {
-		res = vlan_vid_add(slave->dev, proto, vid);
-		if (res)
-			goto unwind;
-	}
-
-	netif_lists_unlock(net);
-
-	return 0;
-
-unwind:
-	/* unwind to the slave that failed */
-	bond_for_each_slave(bond, rollback_slave, iter) {
-		if (rollback_slave == slave)
+	for (i = 0; i < num_slaves; i++) {
+		res = vlan_vid_add(slaves[i]->dev, proto, vid);
+		if (res) {
+			/* Unwind */
+			while (i-- >= 0)
+				vlan_vid_del(slaves[i]->dev, proto, vid);
 			break;
-
-		vlan_vid_del(rollback_slave->dev, proto, vid);
+		}
 	}
 
-	netif_lists_unlock(net);
+	bond_put_slaves_arr(slaves, num_slaves);
 
 	return res;
 }
@@ -370,16 +345,17 @@ static int bond_vlan_rx_kill_vid(struct net_device *bond_dev,
 				 __be16 proto, u16 vid)
 {
 	struct bonding *bond = netdev_priv(bond_dev);
-	struct net *net = dev_net(bond_dev);
-	struct list_head *iter;
-	struct slave *slave;
+	int res, i, num_slaves;
+	struct slave **slaves;
 
-	netif_lists_lock(net);
+	res = bond_get_slave_arr(bond, &slaves, &num_slaves);
+	if (res)
+		return res;
 
-	bond_for_each_slave(bond, slave, iter)
-		vlan_vid_del(slave->dev, proto, vid);
+	for (i = 0; i < num_slaves; i++)
+		vlan_vid_del(slaves[i]->dev, proto, vid);
 
-	netif_lists_unlock(net);
+	bond_put_slaves_arr(slaves, num_slaves);
 
 	if (bond_is_lb(bond))
 		bond_alb_clear_vlan(bond, vid);
@@ -645,57 +621,59 @@ static int bond_check_dev_link(struct bonding *bond,
 /* Push the promiscuity flag down to appropriate slaves */
 static int bond_set_promiscuity(struct bonding *bond, int inc)
 {
-	struct list_head *iter;
-	int err = 0;
+	int res = 0;
 
 	if (bond_uses_primary(bond)) {
 		struct slave *curr_active = rtnl_dereference(bond->curr_active_slave);
 
 		if (curr_active)
-			err = dev_set_promiscuity(curr_active->dev, inc);
+			res = dev_set_promiscuity(curr_active->dev, inc);
 	} else {
-		struct net *net = dev_net(bond->dev);
-		struct slave *slave;
+		struct slave **slaves;
+		int i, num_slaves;
 
-		netif_lists_lock(net);
+		res = bond_get_slave_arr(bond, &slaves, &num_slaves);
+		if (res)
+			return res;
 
-		bond_for_each_slave(bond, slave, iter) {
-			err = dev_set_promiscuity(slave->dev, inc);
-			if (err)
+		for (i = 0; i < num_slaves; i++) {
+			res = dev_set_promiscuity(slaves[i]->dev, inc);
+			if (res)
 				break;
 		}
 
-		netif_lists_unlock(net);
+		bond_put_slaves_arr(slaves, num_slaves);
 	}
-	return err;
+	return res;
 }
 
 /* Push the allmulti flag down to all slaves */
 static int bond_set_allmulti(struct bonding *bond, int inc)
 {
-	struct list_head *iter;
-	int err = 0;
+	int res = 0;
 
 	if (bond_uses_primary(bond)) {
 		struct slave *curr_active = rtnl_dereference(bond->curr_active_slave);
 
 		if (curr_active)
-			err = dev_set_allmulti(curr_active->dev, inc);
+			res = dev_set_allmulti(curr_active->dev, inc);
 	} else {
-		struct net *net = dev_net(bond->dev);
-		struct slave *slave;
+		struct slave **slaves;
+		int i, num_slaves;
 
-		netif_lists_lock(net);
+		res = bond_get_slave_arr(bond, &slaves, &num_slaves);
+		if (res)
+			return res;
 
-		bond_for_each_slave(bond, slave, iter) {
-			err = dev_set_allmulti(slave->dev, inc);
-			if (err)
+		for (i = 0; i < num_slaves; i++) {
+			res = dev_set_allmulti(slaves[i]->dev, inc);
+			if (res)
 				break;
 		}
 
-		netif_lists_unlock(net);
+		bond_put_slaves_arr(slaves, num_slaves);
 	}
-	return err;
+	return res;
 }
 
 /* Retrieve the list of registered multicast addresses for the bonding
@@ -2457,15 +2435,15 @@ static void bond_miimon_link_change(struct bonding *bond,
 	}
 }
 
-static void bond_miimon_commit(struct bonding *bond)
+static void bond_miimon_commit(struct bonding *bond, struct slave **slaves,
+			       int num_slaves)
 {
-	struct net *net = dev_net(bond->dev);
-	struct list_head *iter;
 	struct slave *slave, *primary;
+	int i;
 
-	netif_lists_lock(net);
+	for (i = 0; i < num_slaves; i++) {
+		slave = slaves[i];
 
-	bond_for_each_slave(bond, slave, iter) {
 		switch (slave->link_new_state) {
 		case BOND_LINK_NOCHANGE:
 			/* For 802.3ad mode, check current slave speed and
@@ -2547,8 +2525,6 @@ do_failover:
 		unblock_netpoll_tx();
 	}
 
-	netif_lists_unlock(net);
-
 	bond_set_carrier(bond);
 }
 
@@ -2566,8 +2542,6 @@ static void bond_mii_monitor(struct work_struct *work)
 	bool should_notify_peers = false;
 	bool commit;
 	unsigned long delay;
-	struct slave *slave;
-	struct list_head *iter;
 
 	delay = msecs_to_jiffies(bond->params.miimon);
 
@@ -2588,7 +2562,15 @@ static void bond_mii_monitor(struct work_struct *work)
 	}
 
 	if (commit) {
-		struct net *net = dev_net(bond->dev);
+		int res, i, num_slaves;
+		struct slave **slaves;
+
+		res = bond_get_slave_arr(bond, &slaves, &num_slaves);
+		if (res) {
+			delay = 1;
+			should_notify_peers = false;
+			goto re_arm;
+		}
 
 		/* Race avoidance with bond_close cancel of workqueue */
 		if (!rtnl_trylock()) {
@@ -2597,17 +2579,16 @@ static void bond_mii_monitor(struct work_struct *work)
 			goto re_arm;
 		}
 
-		netif_lists_lock(net);
-
-		bond_for_each_slave(bond, slave, iter) {
-			bond_commit_link_state(slave, BOND_SLAVE_NOTIFY_LATER);
+		for (i = 0; i < num_slaves; i++) {
+			bond_commit_link_state(slaves[i],
+					       BOND_SLAVE_NOTIFY_LATER);
 		}
 
-		netif_lists_unlock(net);
-
-		bond_miimon_commit(bond);
+		bond_miimon_commit(bond, slaves, num_slaves);
 
 		rtnl_unlock();	/* might sleep, hold no other locks */
+
+		bond_put_slaves_arr(slaves, num_slaves);
 	}
 
 re_arm:
@@ -3015,22 +2996,25 @@ static void bond_loadbalance_arp_mon(struct bonding *bond)
 	rcu_read_unlock();
 
 	if (do_failover || slave_state_changed) {
-		struct net *net = dev_net(bond->dev);
+		struct slave **slaves;
+		int res, i, num_slaves;
 
-		if (!rtnl_trylock())
+		res = bond_get_slave_arr(bond, &slaves, &num_slaves);
+		if (res)
 			goto re_arm;
 
-		netif_lists_lock(net);
-
-		bond_for_each_slave(bond, slave, iter) {
-			if (slave->link_new_state != BOND_LINK_NOCHANGE)
-				slave->link = slave->link_new_state;
+		if (!rtnl_trylock()) {
+			bond_put_slaves_arr(slaves, num_slaves);
+			goto re_arm;
 		}
 
-		netif_lists_unlock(net);
+		for (i = 0; i < num_slaves; i++) {
+			if (slaves[i]->link_new_state != BOND_LINK_NOCHANGE)
+				slaves[i]->link = slaves[i]->link_new_state;
+		}
 
 		if (slave_state_changed) {
-			bond_slave_state_change(bond);
+			bond_slave_state_change(bond, slaves, num_slaves);
 			if (BOND_MODE(bond) == BOND_MODE_XOR)
 				bond_update_slave_arr(bond, NULL);
 		}
@@ -3040,6 +3024,8 @@ static void bond_loadbalance_arp_mon(struct bonding *bond)
 			unblock_netpoll_tx();
 		}
 		rtnl_unlock();
+
+		bond_put_slaves_arr(slaves, num_slaves);
 	}
 
 re_arm:
@@ -3346,10 +3332,22 @@ re_arm:
 			call_netdevice_notifiers(NETDEV_NOTIFY_PEERS,
 						 bond->dev);
 		if (should_notify_rtnl) {
-			bond_slave_state_notify(bond);
-			bond_slave_link_notify(bond);
-		}
+			struct slave **slaves;
+			int res, num_slaves;
 
+			res = bond_get_slave_arr(bond, &slaves, &num_slaves);
+			if (res) {
+				netdev_err(bond->dev,
+					   "failed to allocate memory for slave array\n");
+				goto out;
+			}
+
+			bond_slave_state_notify(bond, slaves, num_slaves);
+			bond_slave_link_notify(bond, slaves, num_slaves);
+
+			bond_put_slaves_arr(slaves, num_slaves);
+		}
+out:
 		rtnl_unlock();
 	}
 }
@@ -4134,11 +4132,9 @@ unwind:
 static int bond_set_mac_address(struct net_device *bond_dev, void *addr)
 {
 	struct bonding *bond = netdev_priv(bond_dev);
-	struct slave *slave, *rollback_slave;
 	struct sockaddr_storage *ss = addr, tmp_ss;
-	struct net *net = dev_net(bond_dev);
-	struct list_head *iter;
-	int res = 0;
+	int res, i, num_slaves;
+	struct slave **slaves;
 
 	if (BOND_MODE(bond) == BOND_MODE_ALB)
 		return bond_alb_set_mac_address(bond_dev, addr);
@@ -4156,12 +4152,12 @@ static int bond_set_mac_address(struct net_device *bond_dev, void *addr)
 	if (!is_valid_ether_addr(ss->__data))
 		return -EADDRNOTAVAIL;
 
-	netif_lists_lock(net);
+	res = bond_get_slave_arr(bond, &slaves, &num_slaves);
+	if (res)
+		return res;
 
-	bond_for_each_slave(bond, slave, iter) {
-		slave_dbg(bond_dev, slave->dev, "%s: slave=%p\n",
-			  __func__, slave);
-		res = dev_set_mac_address(slave->dev, addr, NULL);
+	for (i = 0; i < num_slaves; i++) {
+		res = dev_set_mac_address(slaves[i]->dev, addr, NULL);
 		if (res) {
 			/* TODO: consider downing the slave
 			 * and retry ?
@@ -4169,13 +4165,13 @@ static int bond_set_mac_address(struct net_device *bond_dev, void *addr)
 			 * breakage anyway until ARP finish
 			 * updating, so...
 			 */
-			slave_dbg(bond_dev, slave->dev, "%s: err %d\n",
+			slave_dbg(bond_dev, slaves[i]->dev, "%s: err %d\n",
 				  __func__, res);
 			goto unwind;
 		}
 	}
 
-	netif_lists_unlock(net);
+	bond_put_slaves_arr(slaves, num_slaves);
 
 	/* success */
 	memcpy(bond_dev->dev_addr, ss->__data, bond_dev->addr_len);
@@ -4185,22 +4181,18 @@ unwind:
 	memcpy(tmp_ss.__data, bond_dev->dev_addr, bond_dev->addr_len);
 	tmp_ss.ss_family = bond_dev->type;
 
-	/* unwind from head to the slave that failed */
-	bond_for_each_slave(bond, rollback_slave, iter) {
+	while (i-- >= 0) {
 		int tmp_res;
 
-		if (rollback_slave == slave)
-			break;
-
-		tmp_res = dev_set_mac_address(rollback_slave->dev,
+		tmp_res = dev_set_mac_address(slaves[i]->dev,
 					      (struct sockaddr *)&tmp_ss, NULL);
 		if (tmp_res) {
-			slave_dbg(bond_dev, rollback_slave->dev, "%s: unwind err %d\n",
+			slave_dbg(bond_dev, slaves[i]->dev, "%s: unwind err %d\n",
 				   __func__, tmp_res);
 		}
 	}
 
-	netif_lists_unlock(net);
+	bond_put_slaves_arr(slaves, num_slaves);
 
 	return res;
 }

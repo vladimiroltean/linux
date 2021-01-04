@@ -384,28 +384,30 @@ static inline void bond_set_slave_state(struct slave *slave,
 	}
 }
 
-static inline void bond_slave_state_change(struct bonding *bond)
+static inline void bond_slave_state_change(struct bonding *bond,
+					   struct slave **slaves,
+					   int num_slaves)
 {
-	struct list_head *iter;
-	struct slave *tmp;
+	int i;
 
-	bond_for_each_slave(bond, tmp, iter) {
-		if (tmp->link == BOND_LINK_UP)
-			bond_set_active_slave(tmp);
-		else if (tmp->link == BOND_LINK_DOWN)
-			bond_set_backup_slave(tmp);
+	for (i = 0; i < num_slaves; i++) {
+		if (slaves[i]->link == BOND_LINK_UP)
+			bond_set_active_slave(slaves[i]);
+		else if (slaves[i]->link == BOND_LINK_DOWN)
+			bond_set_backup_slave(slaves[i]);
 	}
 }
 
-static inline void bond_slave_state_notify(struct bonding *bond)
+static inline void bond_slave_state_notify(struct bonding *bond,
+					   struct slave **slaves,
+					   int num_slaves)
 {
-	struct list_head *iter;
-	struct slave *tmp;
+	int i;
 
-	bond_for_each_slave(bond, tmp, iter) {
-		if (tmp->should_notify) {
-			bond_lower_state_changed(tmp);
-			tmp->should_notify = 0;
+	for (i = 0; i < num_slaves; i++) {
+		if (slaves[i]->should_notify) {
+			bond_lower_state_changed(slaves[i]);
+			slaves[i]->should_notify = 0;
 		}
 	}
 }
@@ -447,6 +449,45 @@ static inline void bond_hw_addr_copy(u8 *dst, const u8 *src, unsigned int len)
 	}
 
 	memcpy(dst, src, len);
+}
+
+static inline int bond_get_slave_arr(struct bonding *bond,
+				     struct slave ***slaves,
+				     int *num_slaves)
+{
+	struct net *net = dev_net(bond->dev);
+	struct list_head *iter;
+	struct slave *slave;
+	int i = 0;
+
+	netif_lists_lock(net);
+
+	*slaves = kcalloc(bond->slave_cnt, sizeof(*slaves), GFP_KERNEL);
+	if (!(*slaves)) {
+		netif_lists_unlock(net);
+		return -ENOMEM;
+	}
+
+	bond_for_each_slave(bond, slave, iter) {
+		dev_hold(slave->dev);
+		*slaves[i++] = slave;
+	}
+
+	*num_slaves = bond->slave_cnt;
+
+	netif_lists_unlock(net);
+
+	return 0;
+}
+
+static inline void bond_put_slaves_arr(struct slave **slaves, int num_slaves)
+{
+	int i;
+
+	for (i = 0; i < num_slaves; i++)
+		dev_put(slaves[i]->dev);
+
+	kfree(slaves);
 }
 
 #define BOND_PRI_RESELECT_ALWAYS	0
@@ -581,16 +622,17 @@ static inline void bond_set_slave_link_state(struct slave *slave, int state,
 	bond_commit_link_state(slave, notify);
 }
 
-static inline void bond_slave_link_notify(struct bonding *bond)
+static inline void bond_slave_link_notify(struct bonding *bond,
+					  struct slave **slaves,
+					  int num_slaves)
 {
-	struct list_head *iter;
-	struct slave *tmp;
+	int i;
 
-	bond_for_each_slave(bond, tmp, iter) {
-		if (tmp->should_notify_link) {
-			bond_queue_slave_event(tmp);
-			bond_lower_state_changed(tmp);
-			tmp->should_notify_link = 0;
+	for (i = 0; i < num_slaves; i++) {
+		if (slaves[i]->should_notify_link) {
+			bond_queue_slave_event(slaves[i]);
+			bond_lower_state_changed(slaves[i]);
+			slaves[i]->should_notify_link = 0;
 		}
 	}
 }

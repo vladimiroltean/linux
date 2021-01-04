@@ -1380,7 +1380,6 @@ static void ad_port_selection_logic(struct port *port, bool *update_slave_arr)
 	struct list_head *iter;
 	struct bonding *bond;
 	struct slave *slave;
-	struct net *net;
 	int found = 0;
 
 	/* if the port is already Selected, do nothing */
@@ -1388,7 +1387,6 @@ static void ad_port_selection_logic(struct port *port, bool *update_slave_arr)
 		return;
 
 	bond = __get_bond_by_port(port);
-	net = dev_net(bond->dev);
 
 	/* if the port is connected to other aggregator, detach it */
 	if (port->aggregator) {
@@ -1442,7 +1440,6 @@ static void ad_port_selection_logic(struct port *port, bool *update_slave_arr)
 					     port->aggregator->aggregator_identifier);
 		}
 	}
-	netif_lists_lock(net);
 
 	/* search on all aggregators for a suitable aggregator for this port */
 	bond_for_each_slave_rcu(bond, slave, iter) {
@@ -1481,8 +1478,6 @@ static void ad_port_selection_logic(struct port *port, bool *update_slave_arr)
 			break;
 		}
 	}
-
-	netif_lists_unlock(net);
 
 	/* the port couldn't find an aggregator - attach it to a new
 	 * aggregator
@@ -2374,9 +2369,23 @@ re_arm:
 		bond_slave_arr_work_rearm(bond, 0);
 
 	if (should_notify_rtnl && rtnl_trylock()) {
-		bond_slave_state_notify(bond);
+		struct slave **slaves;
+		int res, num_slaves;
+
+		res = bond_get_slave_arr(bond, &slaves, &num_slaves);
+		if (res) {
+			netdev_err(bond->dev,
+				   "failed to allocate memory for slave array\n");
+			rtnl_unlock();
+			goto out;
+		}
+
+		bond_slave_state_notify(bond, slaves, num_slaves);
+
+		bond_put_slaves_arr(slaves, num_slaves);
 		rtnl_unlock();
 	}
+out:
 	queue_delayed_work(bond->wq, &bond->ad_work, ad_delta_in_ticks);
 }
 
