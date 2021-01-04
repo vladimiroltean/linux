@@ -1370,6 +1370,8 @@ static void ad_periodic_machine(struct port *port)
  * Select aggregation groups, and assign each port for it's aggregetor. The
  * selection logic is called in the inititalization (after all the handshkes),
  * and after every lacpdu receive (if selected is off).
+ *
+ * This function assumes rcu_read_lock() protection.
  */
 static void ad_port_selection_logic(struct port *port, bool *update_slave_arr)
 {
@@ -1439,7 +1441,7 @@ static void ad_port_selection_logic(struct port *port, bool *update_slave_arr)
 		}
 	}
 	/* search on all aggregators for a suitable aggregator for this port */
-	bond_for_each_slave(bond, slave, iter) {
+	bond_for_each_slave_rcu(bond, slave, iter) {
 		aggregator = &(SLAVE_AD_INFO(slave)->aggregator);
 
 		/* keep a free aggregator for later use(if needed) */
