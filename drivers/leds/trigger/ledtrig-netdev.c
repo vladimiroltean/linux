@@ -347,9 +347,8 @@ static void netdev_trig_work(struct work_struct *work)
 {
 	struct led_netdev_data *trigger_data =
 		container_of(work, struct led_netdev_data, work.work);
-	struct rtnl_link_stats64 *dev_stats;
+	struct rtnl_link_stats64 dev_stats;
 	unsigned int new_activity;
-	struct rtnl_link_stats64 temp;
 	unsigned long interval;
 	int invert;
 
@@ -364,12 +363,12 @@ static void netdev_trig_work(struct work_struct *work)
 	    !test_bit(NETDEV_LED_RX, &trigger_data->mode))
 		return;
 
-	dev_stats = dev_get_stats(trigger_data->net_dev, &temp);
+	dev_get_stats(trigger_data->net_dev, &dev_stats);
 	new_activity =
 	    (test_bit(NETDEV_LED_TX, &trigger_data->mode) ?
-		dev_stats->tx_packets : 0) +
+		dev_stats.tx_packets : 0) +
 	    (test_bit(NETDEV_LED_RX, &trigger_data->mode) ?
-		dev_stats->rx_packets : 0);
+		dev_stats.rx_packets : 0);
 
 	if (trigger_data->last_activity != new_activity) {
 		led_stop_software_blink(trigger_data->led_cdev);
