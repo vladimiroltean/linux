@@ -3693,77 +3693,64 @@ static void bond_fold_stats(struct rtnl_link_stats64 *_res,
 	}
 }
 
-#ifdef CONFIG_LOCKDEP
-static int bond_get_lowest_level_rcu(struct net_device *dev)
-{
-	struct net_device *ldev, *next, *now, *dev_stack[MAX_NEST_DEV + 1];
-	struct list_head *niter, *iter, *iter_stack[MAX_NEST_DEV + 1];
-	int cur = 0, max = 0;
-
-	now = dev;
-	iter = &dev->adj_list.lower;
-
-	while (1) {
-		next = NULL;
-		while (1) {
-			ldev = netdev_next_lower_dev_rcu(now, &iter);
-			if (!ldev)
-				break;
-
-			next = ldev;
-			niter = &ldev->adj_list.lower;
-			dev_stack[cur] = now;
-			iter_stack[cur++] = iter;
-			if (max <= cur)
-				max = cur;
-			break;
-		}
-
-		if (!next) {
-			if (!cur)
-				return max;
-			next = dev_stack[--cur];
-			niter = iter_stack[cur];
-		}
-
-		now = next;
-		iter = niter;
-	}
-
-	return max;
-}
-#endif
-
 static void bond_get_stats(struct net_device *bond_dev,
 			   struct rtnl_link_stats64 *stats)
 {
 	struct bonding *bond = netdev_priv(bond_dev);
-	struct rtnl_link_stats64 temp;
-	struct list_head *iter;
-	struct slave *slave;
-	int nest_level = 0;
+	struct rtnl_link_stats64 *dev_stats;
+	struct net_device **slaves;
+	int i, res, num_slaves;
 
+	res = bond_get_slave_arr(bond, &slaves, &num_slaves);
+	if (res) {
+		netdev_err(bond->dev,
+			   "failed to allocate memory for slave array\n");
+		return;
+	}
 
-	rcu_read_lock();
-#ifdef CONFIG_LOCKDEP
-	nest_level = bond_get_lowest_level_rcu(bond_dev);
-#endif
+	dev_stats = kcalloc(num_slaves, sizeof(*dev_stats), GFP_KERNEL);
+	if (!dev_stats) {
+		netdev_err(bond->dev,
+			   "failed to allocate memory for slave stats\n");
+		bond_put_slave_arr(slaves, num_slaves);
+		return;
+	}
 
-	spin_lock_nested(&bond->stats_lock, nest_level);
+	/* Recurse with no locks taken */
+	for (i = 0; i < num_slaves; i++)
+		dev_get_stats(slaves[i], &dev_stats[i]);
+
+	/* When taking the slaves lock again, the new slave array might be
+	 * different from the original one.
+	 */
+	mutex_lock(&bond->slaves_lock);
+
 	memcpy(stats, &bond->bond_stats, sizeof(*stats));
 
-	bond_for_each_slave_rcu(bond, slave, iter) {
-		dev_get_stats(slave->dev, &temp);
+	for (i = 0; i < num_slaves; i++) {
+		struct list_head *iter;
+		struct slave *slave;
 
-		bond_fold_stats(stats, &temp, &slave->slave_stats);
+		bond_for_each_slave(bond, slave, iter) {
+			if (slave->dev != slaves[i])
+				continue;
 
-		/* save off the slave stats for the next run */
-		memcpy(&slave->slave_stats, &temp, sizeof(temp));
+			bond_fold_stats(stats, &dev_stats[i],
+					&slave->slave_stats);
+
+			/* save off the slave stats for the next run */
+			memcpy(&slave->slave_stats, &dev_stats[i],
+			       sizeof(dev_stats[i]));
+			break;
+		}
 	}
 
 	memcpy(&bond->bond_stats, stats, sizeof(*stats));
-	spin_unlock(&bond->stats_lock);
-	rcu_read_unlock();
+
+	mutex_unlock(&bond->slaves_lock);
+
+	kfree(dev_stats);
+	bond_put_slave_arr(slaves, num_slaves);
 }
 
 static int bond_do_ioctl(struct net_device *bond_dev, struct ifreq *ifr, int cmd)
@@ -4287,11 +4274,11 @@ static void bond_set_slave_arr(struct bonding *bond,
 {
 	struct bond_up_slave *usable, *all;
 
-	usable = rtnl_dereference(bond->usable_slaves);
+	usable = bond_dereference(bond, bond->usable_slaves);
 	rcu_assign_pointer(bond->usable_slaves, usable_slaves);
 	kfree_rcu(usable, rcu);
 
-	all = rtnl_dereference(bond->all_slaves);
+	all = bond_dereference(bond, bond->all_slaves);
 	rcu_assign_pointer(bond->all_slaves, all_slaves);
 	kfree_rcu(all, rcu);
 }
@@ -4332,6 +4319,8 @@ int bond_update_slave_arr(struct bonding *bond, struct slave *skipslave)
 #ifdef CONFIG_LOCKDEP
 	WARN_ON(lockdep_is_held(&bond->mode_lock));
 #endif
+
+	mutex_lock(&bond->slaves_lock);
 
 	usable_slaves = kzalloc(struct_size(usable_slaves, arr,
 					    bond->slave_cnt), GFP_KERNEL);
@@ -4376,16 +4365,21 @@ int bond_update_slave_arr(struct bonding *bond, struct slave *skipslave)
 	}
 
 	bond_set_slave_arr(bond, usable_slaves, all_slaves);
+
+	mutex_unlock(&bond->slaves_lock);
+
 	return ret;
 out:
 	if (ret != 0 && skipslave) {
-		bond_skip_slave(rtnl_dereference(bond->all_slaves),
+		bond_skip_slave(bond_dereference(bond, bond->all_slaves),
 				skipslave);
-		bond_skip_slave(rtnl_dereference(bond->usable_slaves),
+		bond_skip_slave(bond_dereference(bond, bond->usable_slaves),
 				skipslave);
 	}
 	kfree_rcu(all_slaves, rcu);
 	kfree_rcu(usable_slaves, rcu);
+
+	mutex_unlock(&bond->slaves_lock);
 
 	return ret;
 }
@@ -4699,6 +4693,7 @@ void bond_setup(struct net_device *bond_dev)
 {
 	struct bonding *bond = netdev_priv(bond_dev);
 
+	mutex_init(&bond->slaves_lock);
 	spin_lock_init(&bond->mode_lock);
 	bond->params = bonding_defaults;
 
@@ -5189,7 +5184,6 @@ static int bond_init(struct net_device *bond_dev)
 	if (!bond->wq)
 		return -ENOMEM;
 
-	spin_lock_init(&bond->stats_lock);
 	netdev_lockdep_set_classes(bond_dev);
 
 	list_add_tail(&bond->bond_list, &bn->dev_list);
