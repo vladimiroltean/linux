@@ -360,8 +360,7 @@ static __inline__ int led_get_net_activity(void)
 
 	for_each_netdev(&init_net, dev) {
 		struct in_device *in_dev = in_dev_get(dev);
-		const struct rtnl_link_stats64 *stats;
-		struct rtnl_link_stats64 temp;
+		struct rtnl_link_stats64 stats;
 
 		if (!in_dev || !in_dev->ifa_list ||
 		    ipv4_is_loopback(in_dev->ifa_list->ifa_local)) {
@@ -371,9 +370,9 @@ static __inline__ int led_get_net_activity(void)
 
 		in_dev_put(in_dev);
 
-		stats = dev_get_stats(dev, &temp);
-		rx_total += stats->rx_packets;
-		tx_total += stats->tx_packets;
+		dev_get_stats(dev, &stats);
+		rx_total += stats.rx_packets;
+		tx_total += stats.tx_packets;
 	}
 
 	netif_lists_unlock(&init_net);
