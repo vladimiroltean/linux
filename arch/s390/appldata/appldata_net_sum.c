@@ -81,19 +81,18 @@ static void appldata_get_net_sum_data(void *data)
 	netif_lists_lock(&init_net);
 
 	for_each_netdev(&init_net, dev) {
-		const struct rtnl_link_stats64 *stats;
-		struct rtnl_link_stats64 temp;
+		struct rtnl_link_stats64 stats;
 
-		stats = dev_get_stats(dev, &temp);
-		rx_packets += stats->rx_packets;
-		tx_packets += stats->tx_packets;
-		rx_bytes   += stats->rx_bytes;
-		tx_bytes   += stats->tx_bytes;
-		rx_errors  += stats->rx_errors;
-		tx_errors  += stats->tx_errors;
-		rx_dropped += stats->rx_dropped;
-		tx_dropped += stats->tx_dropped;
-		collisions += stats->collisions;
+		dev_get_stats(dev, &stats);
+		rx_packets += stats.rx_packets;
+		tx_packets += stats.tx_packets;
+		rx_bytes   += stats.rx_bytes;
+		tx_bytes   += stats.tx_bytes;
+		rx_errors  += stats.rx_errors;
+		tx_errors  += stats.tx_errors;
+		rx_dropped += stats.rx_dropped;
+		tx_dropped += stats.tx_dropped;
+		collisions += stats.collisions;
 		i++;
 	}
 

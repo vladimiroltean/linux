@@ -835,8 +835,7 @@ static void hns_get_ethtool_stats(struct net_device *netdev,
 	u64 *p = data;
 	struct hns_nic_priv *priv = netdev_priv(netdev);
 	struct hnae_handle *h = priv->ae_handle;
-	const struct rtnl_link_stats64 *net_stats;
-	struct rtnl_link_stats64 temp;
+	struct rtnl_link_stats64 net_stats;
 
 	if (!h->dev->ops->get_stats || !h->dev->ops->update_stats) {
 		netdev_err(netdev, "get_stats or update_stats is null!\n");
@@ -845,32 +844,32 @@ static void hns_get_ethtool_stats(struct net_device *netdev,
 
 	h->dev->ops->update_stats(h, &netdev->stats);
 
-	net_stats = dev_get_stats(netdev, &temp);
+	dev_get_stats(netdev, &net_stats);
 
 	/* get netdev statistics */
-	p[0] = net_stats->rx_packets;
-	p[1] = net_stats->tx_packets;
-	p[2] = net_stats->rx_bytes;
-	p[3] = net_stats->tx_bytes;
-	p[4] = net_stats->rx_errors;
-	p[5] = net_stats->tx_errors;
-	p[6] = net_stats->rx_dropped;
-	p[7] = net_stats->tx_dropped;
-	p[8] = net_stats->multicast;
-	p[9] = net_stats->collisions;
-	p[10] = net_stats->rx_over_errors;
-	p[11] = net_stats->rx_crc_errors;
-	p[12] = net_stats->rx_frame_errors;
-	p[13] = net_stats->rx_fifo_errors;
-	p[14] = net_stats->rx_missed_errors;
-	p[15] = net_stats->tx_aborted_errors;
-	p[16] = net_stats->tx_carrier_errors;
-	p[17] = net_stats->tx_fifo_errors;
-	p[18] = net_stats->tx_heartbeat_errors;
-	p[19] = net_stats->rx_length_errors;
-	p[20] = net_stats->tx_window_errors;
-	p[21] = net_stats->rx_compressed;
-	p[22] = net_stats->tx_compressed;
+	p[0] = net_stats.rx_packets;
+	p[1] = net_stats.tx_packets;
+	p[2] = net_stats.rx_bytes;
+	p[3] = net_stats.tx_bytes;
+	p[4] = net_stats.rx_errors;
+	p[5] = net_stats.tx_errors;
+	p[6] = net_stats.rx_dropped;
+	p[7] = net_stats.tx_dropped;
+	p[8] = net_stats.multicast;
+	p[9] = net_stats.collisions;
+	p[10] = net_stats.rx_over_errors;
+	p[11] = net_stats.rx_crc_errors;
+	p[12] = net_stats.rx_frame_errors;
+	p[13] = net_stats.rx_fifo_errors;
+	p[14] = net_stats.rx_missed_errors;
+	p[15] = net_stats.tx_aborted_errors;
+	p[16] = net_stats.tx_carrier_errors;
+	p[17] = net_stats.tx_fifo_errors;
+	p[18] = net_stats.tx_heartbeat_errors;
+	p[19] = net_stats.rx_length_errors;
+	p[20] = net_stats.tx_window_errors;
+	p[21] = net_stats.rx_compressed;
+	p[22] = net_stats.tx_compressed;
 
 	p[23] = netdev->rx_dropped.counter;
 	p[24] = netdev->tx_dropped.counter;
