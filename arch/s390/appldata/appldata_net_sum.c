@@ -84,19 +84,18 @@ static void appldata_get_net_sum_data(void *data)
 	}
 
 	for (i = 0; i < dev_count; i++) {
-		const struct rtnl_link_stats64 *stats;
-		struct rtnl_link_stats64 temp;
+		struct rtnl_link_stats64 stats;
 
-		stats = dev_get_stats(dev_array[i], &temp);
-		rx_packets += stats->rx_packets;
-		tx_packets += stats->tx_packets;
-		rx_bytes   += stats->rx_bytes;
-		tx_bytes   += stats->tx_bytes;
-		rx_errors  += stats->rx_errors;
-		tx_errors  += stats->tx_errors;
-		rx_dropped += stats->rx_dropped;
-		tx_dropped += stats->tx_dropped;
-		collisions += stats->collisions;
+		dev_get_stats(dev_array[i], &stats);
+		rx_packets += stats.rx_packets;
+		tx_packets += stats.tx_packets;
+		rx_bytes   += stats.rx_bytes;
+		tx_bytes   += stats.tx_bytes;
+		rx_errors  += stats.rx_errors;
+		tx_errors  += stats.tx_errors;
+		rx_dropped += stats.rx_dropped;
+		tx_dropped += stats.tx_dropped;
+		collisions += stats.collisions;
 	}
 
 	net_put_dev_array(dev_array, dev_count);

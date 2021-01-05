@@ -183,7 +183,6 @@ static void net_failover_get_stats(struct net_device *dev,
 				   struct rtnl_link_stats64 *stats)
 {
 	struct net_failover_info *nfo_info = netdev_priv(dev);
-	const struct rtnl_link_stats64 *new;
 	struct rtnl_link_stats64 temp;
 	struct net_device *slave_dev;
 
@@ -194,16 +193,16 @@ static void net_failover_get_stats(struct net_device *dev,
 
 	slave_dev = rcu_dereference(nfo_info->primary_dev);
 	if (slave_dev) {
-		new = dev_get_stats(slave_dev, &temp);
-		net_failover_fold_stats(stats, new, &nfo_info->primary_stats);
-		memcpy(&nfo_info->primary_stats, new, sizeof(*new));
+		dev_get_stats(slave_dev, &temp);
+		net_failover_fold_stats(stats, &temp, &nfo_info->primary_stats);
+		memcpy(&nfo_info->primary_stats, &temp, sizeof(temp));
 	}
 
 	slave_dev = rcu_dereference(nfo_info->standby_dev);
 	if (slave_dev) {
-		new = dev_get_stats(slave_dev, &temp);
-		net_failover_fold_stats(stats, new, &nfo_info->standby_stats);
-		memcpy(&nfo_info->standby_stats, new, sizeof(*new));
+		dev_get_stats(slave_dev, &temp);
+		net_failover_fold_stats(stats, &temp, &nfo_info->standby_stats);
+		memcpy(&nfo_info->standby_stats, &temp, sizeof(temp));
 	}
 
 	rcu_read_unlock();

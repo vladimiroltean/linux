@@ -169,14 +169,13 @@ static const u32 oid_supported_list[] = {
 static int gen_ndis_query_resp(struct rndis_params *params, u32 OID, u8 *buf,
 			       unsigned buf_len, rndis_resp_t *r)
 {
+	struct rtnl_link_stats64 stats;
 	int retval = -ENOTSUPP;
 	u32 length = 4;	/* usually */
 	__le32 *outbuf;
 	int i, count;
 	rndis_query_cmplt_type *resp;
 	struct net_device *net;
-	struct rtnl_link_stats64 temp;
-	const struct rtnl_link_stats64 *stats;
 
 	if (!r) return -ENOMEM;
 	resp = (rndis_query_cmplt_type *)r->buf;
@@ -199,7 +198,7 @@ static int gen_ndis_query_resp(struct rndis_params *params, u32 OID, u8 *buf,
 	resp->InformationBufferOffset = cpu_to_le32(16);
 
 	net = params->dev;
-	stats = dev_get_stats(net, &temp);
+	dev_get_stats(net, &stats);
 
 	switch (OID) {
 
@@ -353,51 +352,41 @@ static int gen_ndis_query_resp(struct rndis_params *params, u32 OID, u8 *buf,
 	case RNDIS_OID_GEN_XMIT_OK:
 		if (rndis_debug > 1)
 			pr_debug("%s: RNDIS_OID_GEN_XMIT_OK\n", __func__);
-		if (stats) {
-			*outbuf = cpu_to_le32(stats->tx_packets
-				- stats->tx_errors - stats->tx_dropped);
-			retval = 0;
-		}
+		*outbuf = cpu_to_le32(stats.tx_packets - stats.tx_errors -
+				      stats.tx_dropped);
+		retval = 0;
 		break;
 
 	/* mandatory */
 	case RNDIS_OID_GEN_RCV_OK:
 		if (rndis_debug > 1)
 			pr_debug("%s: RNDIS_OID_GEN_RCV_OK\n", __func__);
-		if (stats) {
-			*outbuf = cpu_to_le32(stats->rx_packets
-				- stats->rx_errors - stats->rx_dropped);
-			retval = 0;
-		}
+		*outbuf = cpu_to_le32(stats.rx_packets - stats.rx_errors -
+				      stats.rx_dropped);
+		retval = 0;
 		break;
 
 	/* mandatory */
 	case RNDIS_OID_GEN_XMIT_ERROR:
 		if (rndis_debug > 1)
 			pr_debug("%s: RNDIS_OID_GEN_XMIT_ERROR\n", __func__);
-		if (stats) {
-			*outbuf = cpu_to_le32(stats->tx_errors);
-			retval = 0;
-		}
+		*outbuf = cpu_to_le32(stats.tx_errors);
+		retval = 0;
 		break;
 
 	/* mandatory */
 	case RNDIS_OID_GEN_RCV_ERROR:
 		if (rndis_debug > 1)
 			pr_debug("%s: RNDIS_OID_GEN_RCV_ERROR\n", __func__);
-		if (stats) {
-			*outbuf = cpu_to_le32(stats->rx_errors);
-			retval = 0;
-		}
+		*outbuf = cpu_to_le32(stats.rx_errors);
+		retval = 0;
 		break;
 
 	/* mandatory */
 	case RNDIS_OID_GEN_RCV_NO_BUFFER:
 		pr_debug("%s: RNDIS_OID_GEN_RCV_NO_BUFFER\n", __func__);
-		if (stats) {
-			*outbuf = cpu_to_le32(stats->rx_dropped);
-			retval = 0;
-		}
+		*outbuf = cpu_to_le32(stats.rx_dropped);
+		retval = 0;
 		break;
 
 	/* ieee802.3 OIDs (table 4-3) */
@@ -449,10 +438,8 @@ static int gen_ndis_query_resp(struct rndis_params *params, u32 OID, u8 *buf,
 	/* mandatory */
 	case RNDIS_OID_802_3_RCV_ERROR_ALIGNMENT:
 		pr_debug("%s: RNDIS_OID_802_3_RCV_ERROR_ALIGNMENT\n", __func__);
-		if (stats) {
-			*outbuf = cpu_to_le32(stats->rx_frame_errors);
-			retval = 0;
-		}
+		*outbuf = cpu_to_le32(stats.rx_frame_errors);
+		retval = 0;
 		break;
 
 	/* mandatory */

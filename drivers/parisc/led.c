@@ -363,8 +363,7 @@ static __inline__ int led_get_net_activity(void)
 	for (i = 0; i < dev_count; i++) {
 		struct net_device *dev = dev_array[i];
 		struct in_device *in_dev = in_dev_get(dev);
-		const struct rtnl_link_stats64 *stats;
-		struct rtnl_link_stats64 temp;
+		struct rtnl_link_stats64 stats;
 
 		if (!in_dev)
 			continue;
@@ -377,9 +376,9 @@ static __inline__ int led_get_net_activity(void)
 
 		in_dev_put(in_dev);
 
-		stats = dev_get_stats(dev, &temp);
-		rx_total += stats->rx_packets;
-		tx_total += stats->tx_packets;
+		dev_get_stats(dev, &stats);
+		rx_total += stats.rx_packets;
+		tx_total += stats.tx_packets;
 	}
 
 	net_put_dev_array(dev_array, dev_count);
