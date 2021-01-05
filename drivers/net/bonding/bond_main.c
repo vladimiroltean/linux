@@ -3753,13 +3753,12 @@ static void bond_get_stats(struct net_device *bond_dev,
 	memcpy(stats, &bond->bond_stats, sizeof(*stats));
 
 	bond_for_each_slave_rcu(bond, slave, iter) {
-		const struct rtnl_link_stats64 *new =
-			dev_get_stats(slave->dev, &temp);
+		dev_get_stats(slave->dev, &temp);
 
-		bond_fold_stats(stats, new, &slave->slave_stats);
+		bond_fold_stats(stats, &temp, &slave->slave_stats);
 
 		/* save off the slave stats for the next run */
-		memcpy(&slave->slave_stats, new, sizeof(*new));
+		memcpy(&slave->slave_stats, &temp, sizeof(temp));
 	}
 
 	memcpy(&bond->bond_stats, stats, sizeof(*stats));

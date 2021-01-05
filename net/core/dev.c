@@ -10398,13 +10398,12 @@ EXPORT_SYMBOL(netdev_stats_to_stats64);
  *	@dev: device to get statistics from
  *	@storage: place to store stats
  *
- *	Get network statistics from device. Return @storage.
+ *	Get network statistics from device.
  *	The device driver may provide its own method by setting
  *	dev->netdev_ops->get_stats64 or dev->netdev_ops->get_stats;
  *	otherwise the internal statistics structure is used.
  */
-struct rtnl_link_stats64 *dev_get_stats(struct net_device *dev,
-					struct rtnl_link_stats64 *storage)
+void dev_get_stats(struct net_device *dev, struct rtnl_link_stats64 *storage)
 {
 	const struct net_device_ops *ops = dev->netdev_ops;
 
@@ -10419,7 +10418,6 @@ struct rtnl_link_stats64 *dev_get_stats(struct net_device *dev,
 	storage->rx_dropped += (unsigned long)atomic_long_read(&dev->rx_dropped);
 	storage->tx_dropped += (unsigned long)atomic_long_read(&dev->tx_dropped);
 	storage->rx_nohandler += (unsigned long)atomic_long_read(&dev->rx_nohandler);
-	return storage;
 }
 EXPORT_SYMBOL(dev_get_stats);
 

@@ -170,11 +170,11 @@ void __fcoe_get_lesb(struct fc_lport *lport,
 		     struct fc_els_lesb *fc_lesb,
 		     struct net_device *netdev)
 {
+	struct rtnl_link_stats64 stats;
 	unsigned int cpu;
 	u32 lfc, vlfc, mdac;
 	struct fc_stats *stats;
 	struct fcoe_fc_els_lesb *lesb;
-	struct rtnl_link_stats64 temp;
 
 	lfc = 0;
 	vlfc = 0;
@@ -190,8 +190,8 @@ void __fcoe_get_lesb(struct fc_lport *lport,
 	lesb->lesb_link_fail = htonl(lfc);
 	lesb->lesb_vlink_fail = htonl(vlfc);
 	lesb->lesb_miss_fka = htonl(mdac);
-	lesb->lesb_fcs_error =
-			htonl(dev_get_stats(netdev, &temp)->rx_crc_errors);
+	dev_get_stats(netdev, &stats);
+	lesb->lesb_fcs_error = htonl(stats.rx_crc_errors);
 }
 EXPORT_SYMBOL_GPL(__fcoe_get_lesb);
 
