@@ -222,7 +222,6 @@ struct bonding {
 	 * ALB mode (6) - to sync the use and modifications of its hash table
 	 */
 	spinlock_t mode_lock;
-	spinlock_t stats_lock;
 	u8	 send_peer_notif;
 	u8       igmp_retrans;
 #ifdef CONFIG_PROC_FS
@@ -249,6 +248,14 @@ struct bonding {
 #ifdef CONFIG_XFRM_OFFLOAD
 	struct xfrm_state *xs;
 #endif /* CONFIG_XFRM_OFFLOAD */
+
+	/* Protects the slave array. TODO: convert all instances of
+	 * rtnl_dereference to bond_dereference
+	 */
+	struct mutex slaves_lock;
+
+	/* Serializes access to bond_stats */
+	struct mutex stats_lock;
 };
 
 #define bond_slave_get_rcu(dev) \
@@ -256,6 +263,9 @@ struct bonding {
 
 #define bond_slave_get_rtnl(dev) \
 	((struct slave *) rtnl_dereference(dev->rx_handler_data))
+
+#define bond_dereference(bond, p) \
+	rcu_dereference_protected(p, lockdep_is_held(&(bond)->slaves_lock))
 
 void bond_queue_slave_event(struct slave *slave);
 void bond_lower_state_changed(struct slave *slave);
@@ -447,6 +457,46 @@ static inline void bond_hw_addr_copy(u8 *dst, const u8 *src, unsigned int len)
 	}
 
 	memcpy(dst, src, len);
+}
+
+static inline int bond_get_slave_arr(struct bonding *bond,
+				     struct net_device ***slaves,
+				     int *num_slaves)
+{
+	struct net *net = dev_net(bond->dev);
+	struct list_head *iter;
+	struct slave *slave;
+	int i = 0;
+
+	mutex_lock(&bond->slaves_lock);
+
+	*slaves = kcalloc(bond->slave_cnt, sizeof(*slaves), GFP_KERNEL);
+	if (!(*slaves)) {
+		netif_lists_unlock(net);
+		return -ENOMEM;
+	}
+
+	bond_for_each_slave(bond, slave, iter) {
+		dev_hold(slave->dev);
+		*slaves[i++] = slave->dev;
+	}
+
+	*num_slaves = bond->slave_cnt;
+
+	mutex_unlock(&bond->slaves_lock);
+
+	return 0;
+}
+
+static inline void bond_put_slave_arr(struct net_device **slaves,
+				      int num_slaves)
+{
+	int i;
+
+	for (i = 0; i < num_slaves; i++)
+		dev_put(slaves[i]);
+
+	kfree(slaves);
 }
 
 #define BOND_PRI_RESELECT_ALWAYS	0
