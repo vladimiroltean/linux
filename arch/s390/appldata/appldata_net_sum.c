@@ -86,7 +86,13 @@ static void appldata_get_net_sum_data(void *data)
 	for (i = 0; i < dev_count; i++) {
 		struct rtnl_link_stats64 stats;
 
-		dev_get_stats(dev_array[i], &stats);
+		ret = dev_get_stats(dev_array[i], &stats);
+		if (ret) {
+			netdev_err(dev, "dev_get_stats returned %d\n", ret);
+			net_put_dev_array(dev_array, dev_count);
+			return;
+		}
+
 		rx_packets += stats.rx_packets;
 		tx_packets += stats.tx_packets;
 		rx_bytes   += stats.rx_bytes;

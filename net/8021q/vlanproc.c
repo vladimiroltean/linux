@@ -244,12 +244,15 @@ static int vlandev_seq_show(struct seq_file *seq, void *offset)
 	const struct vlan_dev_priv *vlan = vlan_dev_priv(vlandev);
 	static const char fmt64[] = "%30s %12llu\n";
 	struct rtnl_link_stats64 stats;
-	int i;
+	int err, i;
 
 	if (!is_vlan_dev(vlandev))
 		return 0;
 
-	dev_get_stats(vlandev, &stats);
+	err = dev_get_stats(vlandev, &stats);
+	if (err)
+		return err;
+
 	seq_printf(seq,
 		   "%s  VID: %d	 REORDER_HDR: %i  dev->priv_flags: %hx\n",
 		   vlandev->name, vlan->vlan_id,

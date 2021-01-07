@@ -185,6 +185,7 @@ static int net_failover_get_stats(struct net_device *dev,
 	struct net_failover_info *nfo_info = netdev_priv(dev);
 	struct rtnl_link_stats64 temp;
 	struct net_device *slave_dev;
+	int err = 0;
 
 	spin_lock(&nfo_info->stats_lock);
 	memcpy(stats, &nfo_info->failover_stats, sizeof(*stats));
@@ -193,24 +194,29 @@ static int net_failover_get_stats(struct net_device *dev,
 
 	slave_dev = rcu_dereference(nfo_info->primary_dev);
 	if (slave_dev) {
-		dev_get_stats(slave_dev, &temp);
+		err = dev_get_stats(slave_dev, &temp);
+		if (err)
+			goto out;
 		net_failover_fold_stats(stats, &temp, &nfo_info->primary_stats);
 		memcpy(&nfo_info->primary_stats, &temp, sizeof(temp));
 	}
 
 	slave_dev = rcu_dereference(nfo_info->standby_dev);
 	if (slave_dev) {
-		dev_get_stats(slave_dev, &temp);
+		err = dev_get_stats(slave_dev, &temp);
+		if (err)
+			goto out;
 		net_failover_fold_stats(stats, &temp, &nfo_info->standby_stats);
 		memcpy(&nfo_info->standby_stats, &temp, sizeof(temp));
 	}
 
+out:
 	rcu_read_unlock();
 
 	memcpy(&nfo_info->failover_stats, stats, sizeof(*stats));
 	spin_unlock(&nfo_info->stats_lock);
 
-	return 0;
+	return err;
 }
 
 static int net_failover_change_mtu(struct net_device *dev, int new_mtu)
@@ -545,11 +551,15 @@ static int net_failover_slave_register(struct net_device *slave_dev,
 	if (slave_is_standby) {
 		rcu_assign_pointer(nfo_info->standby_dev, slave_dev);
 		standby_dev = slave_dev;
-		dev_get_stats(standby_dev, &nfo_info->standby_stats);
+		err = dev_get_stats(standby_dev, &nfo_info->standby_stats);
+		if (err)
+			goto err_stats_get;
 	} else {
 		rcu_assign_pointer(nfo_info->primary_dev, slave_dev);
 		primary_dev = slave_dev;
-		dev_get_stats(primary_dev, &nfo_info->primary_stats);
+		err = dev_get_stats(primary_dev, &nfo_info->primary_stats);
+		if (err)
+			goto err_stats_get;
 		failover_dev->min_mtu = slave_dev->min_mtu;
 		failover_dev->max_mtu = slave_dev->max_mtu;
 	}
@@ -564,6 +574,8 @@ static int net_failover_slave_register(struct net_device *slave_dev,
 
 	return 0;
 
+err_stats_get:
+	vlan_vids_del_by_dev(slave_dev, failover_dev);
 err_vlan_add:
 	dev_uc_unsync(slave_dev, failover_dev);
 	dev_mc_unsync(slave_dev, failover_dev);
@@ -597,6 +609,7 @@ static int net_failover_slave_unregister(struct net_device *slave_dev,
 	struct net_device *standby_dev, *primary_dev;
 	struct net_failover_info *nfo_info;
 	bool slave_is_standby;
+	int err;
 
 	nfo_info = netdev_priv(failover_dev);
 	primary_dev = rtnl_dereference(nfo_info->primary_dev);
@@ -611,7 +624,8 @@ static int net_failover_slave_unregister(struct net_device *slave_dev,
 	dev_close(slave_dev);
 
 	nfo_info = netdev_priv(failover_dev);
-	dev_get_stats(failover_dev, &nfo_info->failover_stats);
+	/* Proceed with the deregistration anyway */
+	err = dev_get_stats(failover_dev, &nfo_info->failover_stats);
 
 	slave_is_standby = slave_dev->dev.parent == failover_dev->dev.parent;
 	if (slave_is_standby) {
@@ -631,7 +645,7 @@ static int net_failover_slave_unregister(struct net_device *slave_dev,
 	netdev_info(failover_dev, "failover %s slave:%s unregistered\n",
 		    slave_is_standby ? "standby" : "primary", slave_dev->name);
 
-	return 0;
+	return err;
 }
 
 static int net_failover_slave_link_change(struct net_device *slave_dev,
@@ -639,6 +653,7 @@ static int net_failover_slave_link_change(struct net_device *slave_dev,
 {
 	struct net_device *primary_dev, *standby_dev;
 	struct net_failover_info *nfo_info;
+	int err;
 
 	nfo_info = netdev_priv(failover_dev);
 
@@ -653,7 +668,9 @@ static int net_failover_slave_link_change(struct net_device *slave_dev,
 		netif_carrier_on(failover_dev);
 		netif_tx_wake_all_queues(failover_dev);
 	} else {
-		dev_get_stats(failover_dev, &nfo_info->failover_stats);
+		err = dev_get_stats(failover_dev, &nfo_info->failover_stats);
+		if (err)
+			return err;
 		netif_carrier_off(failover_dev);
 		netif_tx_stop_all_queues(failover_dev);
 	}

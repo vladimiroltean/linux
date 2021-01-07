@@ -86,8 +86,13 @@ static void dev_seq_stop(struct seq_file *seq, void *v)
 static void dev_seq_printf_stats(struct seq_file *seq, struct net_device *dev)
 {
 	struct rtnl_link_stats64 stats;
+	int err;
 
-	dev_get_stats(dev, &stats);
+	err = dev_get_stats(dev, &stats);
+	if (err) {
+		netdev_err(dev, "dev_get_stats returned %d\n", err);
+		return;
+	}
 
 	seq_printf(seq, "%6s: %7llu %7llu %4llu %4llu %4llu %5llu %10llu %9llu "
 		   "%8llu %7llu %4llu %4llu %4llu %5llu %7llu %10llu\n",
@@ -122,6 +127,7 @@ static int dev_seq_show(struct seq_file *seq, void *v)
 			      "drop fifo colls carrier compressed\n");
 	else
 		dev_seq_printf_stats(seq, v);
+
 	return 0;
 }
 
