@@ -267,11 +267,15 @@ void ovs_vport_del(struct vport *vport)
  *
  * Must be called with ovs_mutex or rcu_read_lock.
  */
-void ovs_vport_get_stats(struct vport *vport, struct ovs_vport_stats *stats)
+int ovs_vport_get_stats(struct vport *vport, struct ovs_vport_stats *stats)
 {
 	struct rtnl_link_stats64 dev_stats;
+	int err;
 
-	dev_get_stats(vport->dev, &dev_stats);
+	err = dev_get_stats(vport->dev, &dev_stats);
+	if (err)
+		return err;
+
 	stats->rx_errors  = dev_stats.rx_errors;
 	stats->tx_errors  = dev_stats.tx_errors;
 	stats->tx_dropped = dev_stats.tx_dropped;
@@ -281,6 +285,8 @@ void ovs_vport_get_stats(struct vport *vport, struct ovs_vport_stats *stats)
 	stats->rx_packets = dev_stats.rx_packets;
 	stats->tx_bytes	  = dev_stats.tx_bytes;
 	stats->tx_packets = dev_stats.tx_packets;
+
+	return 0;
 }
 
 /**
