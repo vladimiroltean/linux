@@ -665,8 +665,8 @@ void mbox_handler_nix_bp_enable(struct otx2_nic *pfvf,
 
 /* Device stats APIs */
 void otx2_get_dev_stats(struct otx2_nic *pfvf);
-void otx2_get_stats64(struct net_device *netdev,
-		      struct rtnl_link_stats64 *stats);
+int otx2_get_stats64(struct net_device *netdev,
+		     struct rtnl_link_stats64 *stats);
 void otx2_update_lmac_stats(struct otx2_nic *pfvf);
 int otx2_update_rq_stats(struct otx2_nic *pfvf, int qidx);
 int otx2_update_sq_stats(struct otx2_nic *pfvf, int qidx);

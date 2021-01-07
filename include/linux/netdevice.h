@@ -1039,8 +1039,8 @@ struct netdev_net_notifier {
  *	Callback used when the transmitter has not made any progress
  *	for dev->watchdog ticks.
  *
- * void (*ndo_get_stats64)(struct net_device *dev,
- *                         struct rtnl_link_stats64 *storage);
+ * int (*ndo_get_stats64)(struct net_device *dev,
+ *			  struct rtnl_link_stats64 *storage);
  * struct net_device_stats* (*ndo_get_stats)(struct net_device *dev);
  *	Called when a user wants to get the network device usage
  *	statistics. Drivers must do one of the following:
@@ -1317,7 +1317,7 @@ struct net_device_ops {
 	void			(*ndo_tx_timeout) (struct net_device *dev,
 						   unsigned int txqueue);
 
-	void			(*ndo_get_stats64)(struct net_device *dev,
+	int			(*ndo_get_stats64)(struct net_device *dev,
 						   struct rtnl_link_stats64 *storage);
 	bool			(*ndo_has_offload_stats)(const struct net_device *dev, int attr_id);
 	int			(*ndo_get_offload_stats)(int attr_id,
@@ -4562,12 +4562,12 @@ void netdev_notify_peers(struct net_device *dev);
 void netdev_features_change(struct net_device *dev);
 /* Load a device via the kmod */
 void dev_load(struct net *net, const char *name);
-void dev_get_stats(struct net_device *dev, struct rtnl_link_stats64 *storage);
+int dev_get_stats(struct net_device *dev, struct rtnl_link_stats64 *storage);
 void netdev_stats_to_stats64(struct rtnl_link_stats64 *stats64,
 			     const struct net_device_stats *netdev_stats);
 void dev_fetch_sw_netstats(struct rtnl_link_stats64 *s,
 			   const struct pcpu_sw_netstats __percpu *netstats);
-void dev_get_tstats64(struct net_device *dev, struct rtnl_link_stats64 *s);
+int dev_get_tstats64(struct net_device *dev, struct rtnl_link_stats64 *s);
 
 extern int		netdev_max_backlog;
 extern int		netdev_tstamp_prequeue;

@@ -6274,8 +6274,8 @@ no_rings:
 	stats->tx_errors = errors;
 }
 
-static void niu_get_stats(struct net_device *dev,
-			  struct rtnl_link_stats64 *stats)
+static int niu_get_stats(struct net_device *dev,
+			 struct rtnl_link_stats64 *stats)
 {
 	struct niu *np = netdev_priv(dev);
 
@@ -6283,6 +6283,8 @@ static void niu_get_stats(struct net_device *dev,
 		niu_get_rx_stats(np, stats);
 		niu_get_tx_stats(np, stats);
 	}
+
+	return 0;
 }
 
 static void niu_load_hash_xmac(struct niu *np, u16 *hash)

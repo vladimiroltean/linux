@@ -60,7 +60,7 @@ static int nsim_change_mtu(struct net_device *dev, int new_mtu)
 	return 0;
 }
 
-static void
+static int
 nsim_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
 {
 	struct netdevsim *ns = netdev_priv(dev);
@@ -71,6 +71,8 @@ nsim_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
 		stats->tx_bytes = ns->tx_bytes;
 		stats->tx_packets = ns->tx_packets;
 	} while (u64_stats_fetch_retry(&ns->syncp, start));
+
+	return 0;
 }
 
 static int

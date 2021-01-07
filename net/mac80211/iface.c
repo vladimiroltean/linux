@@ -698,10 +698,12 @@ static u16 ieee80211_netdev_select_queue(struct net_device *dev,
 	return ieee80211_select_queue(IEEE80211_DEV_TO_SUB_IF(dev), skb);
 }
 
-static void
+static int
 ieee80211_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
 {
 	dev_fetch_sw_netstats(stats, dev->tstats);
+
+	return 0;
 }
 
 static const struct net_device_ops ieee80211_dataif_ops = {

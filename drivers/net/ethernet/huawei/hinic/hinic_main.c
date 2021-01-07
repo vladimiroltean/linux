@@ -854,8 +854,8 @@ static void hinic_tx_timeout(struct net_device *netdev, unsigned int txqueue)
 	}
 }
 
-static void hinic_get_stats64(struct net_device *netdev,
-			      struct rtnl_link_stats64 *stats)
+static int hinic_get_stats64(struct net_device *netdev,
+			     struct rtnl_link_stats64 *stats)
 {
 	struct hinic_dev *nic_dev = netdev_priv(netdev);
 	struct hinic_rxq_stats *nic_rx_stats;
@@ -878,6 +878,8 @@ static void hinic_get_stats64(struct net_device *netdev,
 	stats->tx_bytes   = nic_tx_stats->bytes;
 	stats->tx_packets = nic_tx_stats->pkts;
 	stats->tx_errors  = nic_tx_stats->tx_dropped;
+
+	return 0;
 }
 
 static int hinic_set_features(struct net_device *netdev,

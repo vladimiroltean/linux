@@ -1907,8 +1907,8 @@ static void gmac_clear_hw_stats(struct net_device *netdev)
 	readl(port->gmac_base + GMAC_IN_MAC2);
 }
 
-static void gmac_get_stats64(struct net_device *netdev,
-			     struct rtnl_link_stats64 *stats)
+static int gmac_get_stats64(struct net_device *netdev,
+			    struct rtnl_link_stats64 *stats)
 {
 	struct gemini_ethernet_port *port = netdev_priv(netdev);
 	unsigned int start;
@@ -1954,6 +1954,8 @@ static void gmac_get_stats64(struct net_device *netdev,
 	} while (u64_stats_fetch_retry(&port->tx_stats_syncp, start));
 
 	stats->rx_dropped += stats->rx_missed_errors;
+
+	return 0;
 }
 
 static int gmac_change_mtu(struct net_device *netdev, int new_mtu)

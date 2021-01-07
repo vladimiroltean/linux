@@ -3360,8 +3360,8 @@ nfp_net_vlan_rx_kill_vid(struct net_device *netdev, __be16 proto, u16 vid)
 	return nfp_net_mbox_reconfig_and_unlock(nn, cmd);
 }
 
-static void nfp_net_stat64(struct net_device *netdev,
-			   struct rtnl_link_stats64 *stats)
+static int nfp_net_stat64(struct net_device *netdev,
+			  struct rtnl_link_stats64 *stats)
 {
 	struct nfp_net *nn = netdev_priv(netdev);
 	int r;
@@ -3400,6 +3400,8 @@ static void nfp_net_stat64(struct net_device *netdev,
 
 	stats->tx_dropped += nn_readq(nn, NFP_NET_CFG_STATS_TX_DISCARDS);
 	stats->tx_errors += nn_readq(nn, NFP_NET_CFG_STATS_TX_ERRORS);
+
+	return 0;
 }
 
 static int nfp_net_set_features(struct net_device *netdev,

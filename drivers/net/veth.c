@@ -361,8 +361,8 @@ static void veth_stats_rx(struct veth_stats *result, struct net_device *dev)
 	}
 }
 
-static void veth_get_stats64(struct net_device *dev,
-			     struct rtnl_link_stats64 *tot)
+static int veth_get_stats64(struct net_device *dev,
+			    struct rtnl_link_stats64 *tot)
 {
 	struct veth_priv *priv = netdev_priv(dev);
 	struct net_device *peer;
@@ -393,6 +393,8 @@ static void veth_get_stats64(struct net_device *dev,
 		tot->tx_packets += rx.xdp_packets;
 	}
 	rcu_read_unlock();
+
+	return 0;
 }
 
 /* fake multicast ability */

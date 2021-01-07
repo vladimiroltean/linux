@@ -44,7 +44,7 @@ static void fjes_raise_intr_rxdata_task(struct work_struct *);
 static void fjes_tx_stall_task(struct work_struct *);
 static void fjes_force_close_task(struct work_struct *);
 static irqreturn_t fjes_intr(int, void*);
-static void fjes_get_stats64(struct net_device *, struct rtnl_link_stats64 *);
+static int fjes_get_stats64(struct net_device *, struct rtnl_link_stats64 *);
 static int fjes_change_mtu(struct net_device *, int);
 static int fjes_vlan_rx_add_vid(struct net_device *, __be16 proto, u16);
 static int fjes_vlan_rx_kill_vid(struct net_device *, __be16 proto, u16);
@@ -802,12 +802,14 @@ static void fjes_tx_retry(struct net_device *netdev, unsigned int txqueue)
 	netif_tx_wake_queue(queue);
 }
 
-static void
+static int
 fjes_get_stats64(struct net_device *netdev, struct rtnl_link_stats64 *stats)
 {
 	struct fjes_adapter *adapter = netdev_priv(netdev);
 
 	memcpy(stats, &adapter->stats64, sizeof(struct rtnl_link_stats64));
+
+	return 0;
 }
 
 static int fjes_change_mtu(struct net_device *netdev, int new_mtu)

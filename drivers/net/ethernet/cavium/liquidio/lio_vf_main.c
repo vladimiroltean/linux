@@ -1161,7 +1161,7 @@ static int liquidio_set_mac(struct net_device *netdev, void *p)
 	return 0;
 }
 
-static void
+static int
 liquidio_get_stats64(struct net_device *netdev,
 		     struct rtnl_link_stats64 *lstats)
 {
@@ -1175,7 +1175,7 @@ liquidio_get_stats64(struct net_device *netdev,
 	oct = lio->oct_dev;
 
 	if (ifstate_check(lio, LIO_IFSTATE_RESETTING))
-		return;
+		return 0;
 
 	for (i = 0; i < oct->num_iqs; i++) {
 		iq_no = lio->linfo.txpciq[i].s.q_no;
@@ -1226,6 +1226,8 @@ liquidio_get_stats64(struct net_device *netdev,
 
 	lstats->tx_errors = lstats->tx_aborted_errors +
 		lstats->tx_carrier_errors;
+
+	return 0;
 }
 
 /**

@@ -2605,8 +2605,8 @@ static int lan743x_netdev_change_mtu(struct net_device *netdev, int new_mtu)
 	return ret;
 }
 
-static void lan743x_netdev_get_stats64(struct net_device *netdev,
-				       struct rtnl_link_stats64 *stats)
+static int lan743x_netdev_get_stats64(struct net_device *netdev,
+				      struct rtnl_link_stats64 *stats)
 {
 	struct lan743x_adapter *adapter = netdev_priv(netdev);
 
@@ -2650,6 +2650,8 @@ static void lan743x_netdev_get_stats64(struct net_device *netdev,
 					     STAT_TX_MULTIPLE_COLLISIONS) +
 			    lan743x_csr_read(adapter,
 					     STAT_TX_LATE_COLLISIONS);
+
+	return 0;
 }
 
 static int lan743x_netdev_set_mac_address(struct net_device *netdev,

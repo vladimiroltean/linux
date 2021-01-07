@@ -10096,7 +10096,7 @@ static void bnxt_add_prev_stats(struct bnxt *bp,
 	stats->tx_dropped += prev_stats->tx_dropped;
 }
 
-static void
+static int
 bnxt_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
 {
 	struct bnxt *bp = netdev_priv(dev);
@@ -10109,7 +10109,7 @@ bnxt_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
 	if (!test_bit(BNXT_STATE_OPEN, &bp->state)) {
 		clear_bit(BNXT_STATE_READ_STATS, &bp->state);
 		*stats = bp->net_stats_prev;
-		return;
+		return 0;
 	}
 
 	bnxt_get_ring_stats(bp, stats);
@@ -10138,6 +10138,8 @@ bnxt_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
 		stats->tx_errors = BNXT_GET_TX_PORT_STATS64(tx, tx_err);
 	}
 	clear_bit(BNXT_STATE_READ_STATS, &bp->state);
+
+	return 0;
 }
 
 static bool bnxt_mc_list_updated(struct bnxt *bp, u32 *rx_mask)

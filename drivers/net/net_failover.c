@@ -179,8 +179,8 @@ static void net_failover_fold_stats(struct rtnl_link_stats64 *_res,
 	}
 }
 
-static void net_failover_get_stats(struct net_device *dev,
-				   struct rtnl_link_stats64 *stats)
+static int net_failover_get_stats(struct net_device *dev,
+				  struct rtnl_link_stats64 *stats)
 {
 	struct net_failover_info *nfo_info = netdev_priv(dev);
 	struct rtnl_link_stats64 temp;
@@ -209,6 +209,8 @@ static void net_failover_get_stats(struct net_device *dev,
 
 	memcpy(&nfo_info->failover_stats, stats, sizeof(*stats));
 	spin_unlock(&nfo_info->stats_lock);
+
+	return 0;
 }
 
 static int net_failover_change_mtu(struct net_device *dev, int new_mtu)

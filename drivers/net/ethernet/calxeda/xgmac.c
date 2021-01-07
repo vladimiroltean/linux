@@ -1438,7 +1438,7 @@ static void xgmac_poll_controller(struct net_device *dev)
 }
 #endif
 
-static void
+static int
 xgmac_get_stats64(struct net_device *dev,
 		  struct rtnl_link_stats64 *storage)
 {
@@ -1468,6 +1468,8 @@ xgmac_get_stats64(struct net_device *dev,
 
 	writel(0, base + XGMAC_MMC_CTRL);
 	spin_unlock_bh(&priv->stats_lock);
+
+	return 0;
 }
 
 static int xgmac_set_mac_address(struct net_device *dev, void *p)

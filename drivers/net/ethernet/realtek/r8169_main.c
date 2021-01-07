@@ -4733,7 +4733,7 @@ err_free_tx_0:
 	goto out;
 }
 
-static void
+static int
 rtl8169_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
 {
 	struct rtl8169_private *tp = netdev_priv(dev);
@@ -4766,6 +4766,8 @@ rtl8169_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
 		le16_to_cpu(tp->tc_offset.rx_missed);
 
 	pm_runtime_put_noidle(&pdev->dev);
+
+	return 0;
 }
 
 static void rtl8169_net_suspend(struct rtl8169_private *tp)

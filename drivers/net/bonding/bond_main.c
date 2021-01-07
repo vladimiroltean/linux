@@ -252,8 +252,8 @@ static struct flow_dissector flow_keys_bonding __read_mostly;
 
 static int bond_init(struct net_device *bond_dev);
 static void bond_uninit(struct net_device *bond_dev);
-static void bond_get_stats(struct net_device *bond_dev,
-			   struct rtnl_link_stats64 *stats);
+static int bond_get_stats(struct net_device *bond_dev,
+			  struct rtnl_link_stats64 *stats);
 static void bond_slave_arr_handler(struct work_struct *work);
 static bool bond_time_in_interval(struct bonding *bond, unsigned long last_act,
 				  int mod);
@@ -2070,6 +2070,7 @@ static int __bond_release_one(struct net_device *bond_dev,
 	struct sockaddr_storage ss;
 	int old_flags = bond_dev->flags;
 	netdev_features_t old_features = bond_dev->features;
+	int err;
 
 	/* slave is not a slave or master is not master of this slave */
 	if (!(slave_dev->flags & IFF_SLAVE) ||
@@ -3734,8 +3735,8 @@ static int bond_get_lowest_level_rcu(struct net_device *dev)
 }
 #endif
 
-static void bond_get_stats(struct net_device *bond_dev,
-			   struct rtnl_link_stats64 *stats)
+static int bond_get_stats(struct net_device *bond_dev,
+			  struct rtnl_link_stats64 *stats)
 {
 	struct bonding *bond = netdev_priv(bond_dev);
 	struct rtnl_link_stats64 temp;
@@ -3764,6 +3765,8 @@ static void bond_get_stats(struct net_device *bond_dev,
 	memcpy(&bond->bond_stats, stats, sizeof(*stats));
 	spin_unlock(&bond->stats_lock);
 	rcu_read_unlock();
+
+	return 0;
 }
 
 static int bond_do_ioctl(struct net_device *bond_dev, struct ifreq *ifr, int cmd)

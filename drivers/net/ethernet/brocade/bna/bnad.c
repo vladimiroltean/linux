@@ -3096,7 +3096,7 @@ bnad_start_xmit(struct sk_buff *skb, struct net_device *netdev)
  * Used spin_lock to synchronize reading of stats structures, which
  * is written by BNA under the same lock.
  */
-static void
+static int
 bnad_get_stats64(struct net_device *netdev, struct rtnl_link_stats64 *stats)
 {
 	struct bnad *bnad = netdev_priv(netdev);
@@ -3108,6 +3108,8 @@ bnad_get_stats64(struct net_device *netdev, struct rtnl_link_stats64 *stats)
 	bnad_netdev_hwstats_fill(bnad, stats);
 
 	spin_unlock_irqrestore(&bnad->bna_lock, flags);
+
+	return 0;
 }
 
 static void

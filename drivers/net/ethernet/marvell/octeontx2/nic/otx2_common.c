@@ -110,8 +110,8 @@ void otx2_get_dev_stats(struct otx2_nic *pfvf)
 			       dev_stats->tx_ucast_frames;
 }
 
-void otx2_get_stats64(struct net_device *netdev,
-		      struct rtnl_link_stats64 *stats)
+int otx2_get_stats64(struct net_device *netdev,
+		     struct rtnl_link_stats64 *stats)
 {
 	struct otx2_nic *pfvf = netdev_priv(netdev);
 	struct otx2_dev_stats *dev_stats;
@@ -127,6 +127,8 @@ void otx2_get_stats64(struct net_device *netdev,
 	stats->tx_bytes = dev_stats->tx_bytes;
 	stats->tx_packets = dev_stats->tx_frames;
 	stats->tx_dropped = dev_stats->tx_drops;
+
+	return 0;
 }
 EXPORT_SYMBOL(otx2_get_stats64);
 
