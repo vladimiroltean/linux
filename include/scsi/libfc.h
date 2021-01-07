@@ -501,7 +501,7 @@ struct libfc_function_template {
 	 *
 	 * STATUS: OPTIONAL
 	 */
-	void (*get_lesb)(struct fc_lport *, struct fc_els_lesb *lesb);
+	int (*get_lesb)(struct fc_lport *, struct fc_els_lesb *lesb);
 
 	/*
 	 * Reset an exchange manager, completing all sequences and exchanges.
