@@ -1757,7 +1757,12 @@ int bond_enslave(struct net_device *bond_dev, struct net_device *slave_dev,
 
 	slave_dev->priv_flags |= IFF_BONDING;
 	/* initialize slave stats */
-	dev_get_stats(new_slave->dev, &new_slave->slave_stats);
+	res = dev_get_stats(new_slave->dev, &new_slave->slave_stats);
+	if (res) {
+		slave_err(bond_dev, slave_dev, "dev_get_stats returned %d\n",
+			  res);
+		goto err_close;
+	}
 
 	if (bond_is_lb(bond)) {
 		/* bond_alb_init_slave() must be called before all other stages since
@@ -2094,7 +2099,13 @@ static int __bond_release_one(struct net_device *bond_dev,
 	bond_sysfs_slave_del(slave);
 
 	/* recompute stats just before removing the slave */
-	bond_get_stats(bond->dev, &bond->bond_stats);
+	err = bond_get_stats(bond->dev, &bond->bond_stats);
+	if (err) {
+		slave_info(bond_dev, slave_dev, "dev_get_stats returned %d\n",
+			   err);
+		unblock_netpoll_tx();
+		return err;
+	}
 
 	bond_upper_dev_unlink(bond, slave);
 	/* unregister rx_handler early so bond_handle_frame wouldn't be called

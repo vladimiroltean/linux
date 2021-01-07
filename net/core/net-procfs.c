@@ -78,11 +78,14 @@ static void dev_seq_stop(struct seq_file *seq, void *v)
 	netif_lists_unlock(net);
 }
 
-static void dev_seq_printf_stats(struct seq_file *seq, struct net_device *dev)
+static int dev_seq_printf_stats(struct seq_file *seq, struct net_device *dev)
 {
 	struct rtnl_link_stats64 stats;
+	int err;
 
-	dev_get_stats(dev, &stats);
+	err = dev_get_stats(dev, &stats);
+	if (err)
+		return err;
 
 	seq_printf(seq, "%6s: %7llu %7llu %4llu %4llu %4llu %5llu %10llu %9llu "
 		   "%8llu %7llu %4llu %4llu %4llu %5llu %7llu %10llu\n",
@@ -101,6 +104,8 @@ static void dev_seq_printf_stats(struct seq_file *seq, struct net_device *dev)
 		    stats.tx_window_errors +
 		    stats.tx_heartbeat_errors,
 		   stats.tx_compressed);
+
+	return 0;
 }
 
 /*
@@ -109,6 +114,8 @@ static void dev_seq_printf_stats(struct seq_file *seq, struct net_device *dev)
  */
 static int dev_seq_show(struct seq_file *seq, void *v)
 {
+	int err = 0;
+
 	if (v == SEQ_START_TOKEN)
 		seq_puts(seq, "Inter-|   Receive                            "
 			      "                    |  Transmit\n"
@@ -116,8 +123,9 @@ static int dev_seq_show(struct seq_file *seq, void *v)
 			      "compressed multicast|bytes    packets errs "
 			      "drop fifo colls carrier compressed\n");
 	else
-		dev_seq_printf_stats(seq, v);
-	return 0;
+		err = dev_seq_printf_stats(seq, v);
+
+	return err;
 }
 
 static u32 softnet_backlog_len(struct softnet_data *sd)

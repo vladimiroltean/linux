@@ -198,7 +198,9 @@ static int gen_ndis_query_resp(struct rndis_params *params, u32 OID, u8 *buf,
 	resp->InformationBufferOffset = cpu_to_le32(16);
 
 	net = params->dev;
-	dev_get_stats(net, &stats);
+	retval = dev_get_stats(net, &stats);
+	if (retval)
+		return retval;
 
 	switch (OID) {
 
