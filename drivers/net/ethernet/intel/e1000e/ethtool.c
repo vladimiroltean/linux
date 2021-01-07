@@ -2060,14 +2060,19 @@ static void e1000_get_ethtool_stats(struct net_device *netdev,
 {
 	struct e1000_adapter *adapter = netdev_priv(netdev);
 	struct rtnl_link_stats64 net_stats;
-	int i;
 	char *p = NULL;
+	int err, i;
 
 	pm_runtime_get_sync(netdev->dev.parent);
 
-	dev_get_stats(netdev, &net_stats);
+	err = dev_get_stats(netdev, &net_stats);
 
 	pm_runtime_put_sync(netdev->dev.parent);
+
+	if (err) {
+		netdev_err(netdev, "dev_get_stats returned %d\n", err);
+		return;
+	}
 
 	for (i = 0; i < E1000_GLOBAL_STATS_LEN; i++) {
 		switch (e1000_gstrings_stats[i].type) {

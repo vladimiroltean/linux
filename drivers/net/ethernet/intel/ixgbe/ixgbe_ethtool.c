@@ -1298,11 +1298,16 @@ static void ixgbe_get_ethtool_stats(struct net_device *netdev,
 	struct rtnl_link_stats64 net_stats;
 	unsigned int start;
 	struct ixgbe_ring *ring;
-	int i, j;
 	char *p = NULL;
+	int err, i, j;
 
 	ixgbe_update_stats(adapter);
-	dev_get_stats(netdev, &net_stats);
+	err = dev_get_stats(netdev, &net_stats);
+	if (err) {
+		netdev_err(netdev, "dev_get_stats returned %d\n", err);
+		return;
+	}
+
 	for (i = 0; i < IXGBE_GLOBAL_STATS_LEN; i++) {
 		switch (ixgbe_gstrings_stats[i].type) {
 		case NETDEV_STATS:
