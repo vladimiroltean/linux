@@ -145,8 +145,8 @@ static void vrf_tx_error(struct net_device *vrf_dev, struct sk_buff *skb)
 	kfree_skb(skb);
 }
 
-static void vrf_get_stats64(struct net_device *dev,
-			    struct rtnl_link_stats64 *stats)
+static int vrf_get_stats64(struct net_device *dev,
+			   struct rtnl_link_stats64 *stats)
 {
 	int i;
 
@@ -170,6 +170,8 @@ static void vrf_get_stats64(struct net_device *dev,
 		stats->rx_bytes += rbytes;
 		stats->rx_packets += rpkts;
 	}
+
+	return 0;
 }
 
 static struct vrf_map *netns_vrf_map(struct net *net)

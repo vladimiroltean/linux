@@ -26,7 +26,7 @@
 const char gve_version_str[] = GVE_VERSION;
 static const char gve_version_prefix[] = GVE_VERSION_PREFIX;
 
-static void gve_get_stats(struct net_device *dev, struct rtnl_link_stats64 *s)
+static int gve_get_stats(struct net_device *dev, struct rtnl_link_stats64 *s)
 {
 	struct gve_priv *priv = netdev_priv(dev);
 	unsigned int start;
@@ -54,6 +54,8 @@ static void gve_get_stats(struct net_device *dev, struct rtnl_link_stats64 *s)
 						       start));
 		}
 	}
+
+	return 0;
 }
 
 static int gve_alloc_counter_array(struct gve_priv *priv)

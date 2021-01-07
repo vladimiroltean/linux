@@ -895,7 +895,7 @@ bool mlx5e_check_fragmented_striding_rq_cap(struct mlx5_core_dev *mdev);
 bool mlx5e_striding_rq_possible(struct mlx5_core_dev *mdev,
 				struct mlx5e_params *params);
 
-void mlx5e_get_stats(struct net_device *dev, struct rtnl_link_stats64 *stats);
+int mlx5e_get_stats(struct net_device *dev, struct rtnl_link_stats64 *stats);
 void mlx5e_fold_sw_stats64(struct mlx5e_priv *priv, struct rtnl_link_stats64 *s);
 
 void mlx5e_init_l2_addr(struct mlx5e_priv *priv);

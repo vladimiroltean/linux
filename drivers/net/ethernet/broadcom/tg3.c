@@ -14201,8 +14201,8 @@ static const struct ethtool_ops tg3_ethtool_ops = {
 	.set_link_ksettings	= tg3_set_link_ksettings,
 };
 
-static void tg3_get_stats64(struct net_device *dev,
-			    struct rtnl_link_stats64 *stats)
+static int tg3_get_stats64(struct net_device *dev,
+			   struct rtnl_link_stats64 *stats)
 {
 	struct tg3 *tp = netdev_priv(dev);
 
@@ -14210,11 +14210,13 @@ static void tg3_get_stats64(struct net_device *dev,
 	if (!tp->hw_stats || !tg3_flag(tp, INIT_COMPLETE)) {
 		*stats = tp->net_stats_prev;
 		spin_unlock_bh(&tp->lock);
-		return;
+		return 0;
 	}
 
 	tg3_get_nstats(tp, stats);
 	spin_unlock_bh(&tp->lock);
+
+	return 0;
 }
 
 static void tg3_set_rx_mode(struct net_device *dev)

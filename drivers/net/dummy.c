@@ -50,10 +50,12 @@ static void set_multicast_list(struct net_device *dev)
 {
 }
 
-static void dummy_get_stats64(struct net_device *dev,
-			      struct rtnl_link_stats64 *stats)
+static int dummy_get_stats64(struct net_device *dev,
+			     struct rtnl_link_stats64 *stats)
 {
 	dev_lstats_read(dev, &stats->tx_packets, &stats->tx_bytes);
+
+	return 0;
 }
 
 static netdev_tx_t dummy_xmit(struct sk_buff *skb, struct net_device *dev)

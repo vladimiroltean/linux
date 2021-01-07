@@ -1089,7 +1089,7 @@ static void tun_set_headroom(struct net_device *dev, int new_hr)
 	tun->align = new_hr;
 }
 
-static void
+static int
 tun_net_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
 {
 	struct tun_struct *tun = netdev_priv(dev);
@@ -1098,6 +1098,8 @@ tun_net_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
 
 	stats->rx_frame_errors +=
 		(unsigned long)atomic_long_read(&tun->rx_frame_errors);
+
+	return 0;
 }
 
 static int tun_xdp_set(struct net_device *dev, struct bpf_prog *prog,

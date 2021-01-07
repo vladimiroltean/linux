@@ -252,8 +252,8 @@ static inline u32 ionic_coal_usec_to_hw(struct ionic *ionic, u32 usecs)
 typedef void (*ionic_reset_cb)(struct ionic_lif *lif, void *arg);
 
 void ionic_link_status_check_request(struct ionic_lif *lif, bool can_sleep);
-void ionic_get_stats64(struct net_device *netdev,
-		       struct rtnl_link_stats64 *ns);
+int ionic_get_stats64(struct net_device *netdev,
+		      struct rtnl_link_stats64 *ns);
 void ionic_lif_deferred_enqueue(struct ionic_deferred *def,
 				struct ionic_deferred_work *work);
 int ionic_lif_alloc(struct ionic *ionic);

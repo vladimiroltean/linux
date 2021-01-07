@@ -10403,13 +10403,14 @@ EXPORT_SYMBOL(netdev_stats_to_stats64);
  *	dev->netdev_ops->get_stats64 or dev->netdev_ops->get_stats;
  *	otherwise the internal statistics structure is used.
  */
-void dev_get_stats(struct net_device *dev, struct rtnl_link_stats64 *storage)
+int dev_get_stats(struct net_device *dev, struct rtnl_link_stats64 *storage)
 {
 	const struct net_device_ops *ops = dev->netdev_ops;
+	int err = 0;
 
 	if (ops->ndo_get_stats64) {
 		memset(storage, 0, sizeof(*storage));
-		ops->ndo_get_stats64(dev, storage);
+		err = ops->ndo_get_stats64(dev, storage);
 	} else if (ops->ndo_get_stats) {
 		netdev_stats_to_stats64(storage, ops->ndo_get_stats(dev));
 	} else {
@@ -10418,6 +10419,8 @@ void dev_get_stats(struct net_device *dev, struct rtnl_link_stats64 *storage)
 	storage->rx_dropped += (unsigned long)atomic_long_read(&dev->rx_dropped);
 	storage->tx_dropped += (unsigned long)atomic_long_read(&dev->tx_dropped);
 	storage->rx_nohandler += (unsigned long)atomic_long_read(&dev->rx_nohandler);
+
+	return err;
 }
 EXPORT_SYMBOL(dev_get_stats);
 
@@ -10463,10 +10466,12 @@ EXPORT_SYMBOL_GPL(dev_fetch_sw_netstats);
  *	Populate @s from dev->stats and dev->tstats. Can be used as
  *	ndo_get_stats64() callback.
  */
-void dev_get_tstats64(struct net_device *dev, struct rtnl_link_stats64 *s)
+int dev_get_tstats64(struct net_device *dev, struct rtnl_link_stats64 *s)
 {
 	netdev_stats_to_stats64(s, &dev->stats);
 	dev_fetch_sw_netstats(s, dev->tstats);
+
+	return 0;
 }
 EXPORT_SYMBOL_GPL(dev_get_tstats64);
 

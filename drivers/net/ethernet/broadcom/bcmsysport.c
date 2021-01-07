@@ -1859,8 +1859,8 @@ static int bcm_sysport_change_mac(struct net_device *dev, void *p)
 	return 0;
 }
 
-static void bcm_sysport_get_stats64(struct net_device *dev,
-				    struct rtnl_link_stats64 *stats)
+static int bcm_sysport_get_stats64(struct net_device *dev,
+				   struct rtnl_link_stats64 *stats)
 {
 	struct bcm_sysport_priv *priv = netdev_priv(dev);
 	struct bcm_sysport_stats64 *stats64 = &priv->stats64;
@@ -1876,6 +1876,8 @@ static void bcm_sysport_get_stats64(struct net_device *dev,
 		stats->rx_packets = stats64->rx_packets;
 		stats->rx_bytes = stats64->rx_bytes;
 	} while (u64_stats_fetch_retry_irq(&priv->syncp, start));
+
+	return 0;
 }
 
 static void bcm_sysport_netif_start(struct net_device *dev)

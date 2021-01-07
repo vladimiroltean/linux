@@ -1385,7 +1385,7 @@ static void mlx4_en_tx_timeout(struct net_device *dev, unsigned int txqueue)
 }
 
 
-static void
+static int
 mlx4_en_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
 {
 	struct mlx4_en_priv *priv = netdev_priv(dev);
@@ -1394,6 +1394,8 @@ mlx4_en_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
 	mlx4_en_fold_software_stats(dev);
 	netdev_stats_to_stats64(stats, &dev->stats);
 	spin_unlock_bh(&priv->stats_lock);
+
+	return 0;
 }
 
 static void mlx4_en_set_default_moderation(struct mlx4_en_priv *priv)

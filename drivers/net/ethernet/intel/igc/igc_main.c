@@ -3899,8 +3899,8 @@ static int igc_change_mtu(struct net_device *netdev, int new_mtu)
  * Returns the address of the device statistics structure.
  * The statistics are updated here and also from the timer callback.
  */
-static void igc_get_stats64(struct net_device *netdev,
-			    struct rtnl_link_stats64 *stats)
+static int igc_get_stats64(struct net_device *netdev,
+			   struct rtnl_link_stats64 *stats)
 {
 	struct igc_adapter *adapter = netdev_priv(netdev);
 
@@ -3909,6 +3909,8 @@ static void igc_get_stats64(struct net_device *netdev,
 		igc_update_stats(adapter);
 	memcpy(stats, &adapter->stats64, sizeof(*stats));
 	spin_unlock(&adapter->stats64_lock);
+
+	return 0;
 }
 
 static netdev_features_t igc_fix_features(struct net_device *netdev,

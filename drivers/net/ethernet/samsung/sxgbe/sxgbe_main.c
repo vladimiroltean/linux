@@ -1708,8 +1708,8 @@ static inline u64 sxgbe_get_stat64(void __iomem *ioaddr, int reg_lo, int reg_hi)
  *  executed to see device statistics. Statistics are number of
  *  bytes sent or received, errors occurred etc.
  */
-static void sxgbe_get_stats64(struct net_device *dev,
-			      struct rtnl_link_stats64 *stats)
+static int sxgbe_get_stats64(struct net_device *dev,
+			     struct rtnl_link_stats64 *stats)
 {
 	struct sxgbe_priv_data *priv = netdev_priv(dev);
 	void __iomem *ioaddr = priv->ioaddr;
@@ -1760,6 +1760,8 @@ static void sxgbe_get_stats64(struct net_device *dev,
 						 SXGBE_MMC_TXUFLWHI_GBCNT_REG);
 	writel(0, ioaddr + SXGBE_MMC_CTL_REG);
 	spin_unlock(&priv->stats_lock);
+
+	return 0;
 }
 
 /*  sxgbe_set_features - entry point to set offload features of the device.

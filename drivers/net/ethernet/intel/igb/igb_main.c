@@ -124,8 +124,8 @@ static void igb_update_phy_info(struct timer_list *);
 static void igb_watchdog(struct timer_list *);
 static void igb_watchdog_task(struct work_struct *);
 static netdev_tx_t igb_xmit_frame(struct sk_buff *skb, struct net_device *);
-static void igb_get_stats64(struct net_device *dev,
-			    struct rtnl_link_stats64 *stats);
+static int igb_get_stats64(struct net_device *dev,
+			   struct rtnl_link_stats64 *stats);
 static int igb_change_mtu(struct net_device *, int);
 static int igb_set_mac(struct net_device *, void *);
 static void igb_set_uta(struct igb_adapter *adapter, bool set);
@@ -6479,8 +6479,8 @@ static void igb_reset_task(struct work_struct *work)
  *  @netdev: network interface device structure
  *  @stats: rtnl_link_stats64 pointer
  **/
-static void igb_get_stats64(struct net_device *netdev,
-			    struct rtnl_link_stats64 *stats)
+static int igb_get_stats64(struct net_device *netdev,
+			   struct rtnl_link_stats64 *stats)
 {
 	struct igb_adapter *adapter = netdev_priv(netdev);
 
@@ -6488,6 +6488,8 @@ static void igb_get_stats64(struct net_device *netdev,
 	igb_update_stats(adapter);
 	memcpy(stats, &adapter->stats64, sizeof(*stats));
 	spin_unlock(&adapter->stats64_lock);
+
+	return 0;
 }
 
 /**

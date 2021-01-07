@@ -1896,8 +1896,8 @@ static int dpaa2_eth_set_addr(struct net_device *net_dev, void *addr)
 /** Fill in counters maintained by the GPP driver. These may be different from
  * the hardware counters obtained by ethtool.
  */
-static void dpaa2_eth_get_stats(struct net_device *net_dev,
-				struct rtnl_link_stats64 *stats)
+static int dpaa2_eth_get_stats(struct net_device *net_dev,
+			       struct rtnl_link_stats64 *stats)
 {
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
 	struct rtnl_link_stats64 *percpu_stats;
@@ -1912,6 +1912,8 @@ static void dpaa2_eth_get_stats(struct net_device *net_dev,
 		for (j = 0; j < num; j++)
 			netstats[j] += cpustats[j];
 	}
+
+	return 0;
 }
 
 /* Copy mac unicast addresses from @net_dev to @priv.

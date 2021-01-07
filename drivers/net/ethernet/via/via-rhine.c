@@ -507,8 +507,8 @@ static irqreturn_t rhine_interrupt(int irq, void *dev_instance);
 static void rhine_tx(struct net_device *dev);
 static int rhine_rx(struct net_device *dev, int limit);
 static void rhine_set_rx_mode(struct net_device *dev);
-static void rhine_get_stats64(struct net_device *dev,
-			      struct rtnl_link_stats64 *stats);
+static int rhine_get_stats64(struct net_device *dev,
+			     struct rtnl_link_stats64 *stats);
 static int netdev_ioctl(struct net_device *dev, struct ifreq *rq, int cmd);
 static const struct ethtool_ops netdev_ethtool_ops;
 static int  rhine_close(struct net_device *dev);
@@ -2207,7 +2207,7 @@ out_unlock:
 	mutex_unlock(&rp->task_lock);
 }
 
-static void
+static int
 rhine_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
 {
 	struct rhine_private *rp = netdev_priv(dev);
@@ -2230,6 +2230,8 @@ rhine_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
 		stats->tx_packets = rp->tx_stats.packets;
 		stats->tx_bytes = rp->tx_stats.bytes;
 	} while (u64_stats_fetch_retry_irq(&rp->tx_stats.syncp, start));
+
+	return 0;
 }
 
 static void rhine_set_rx_mode(struct net_device *dev)

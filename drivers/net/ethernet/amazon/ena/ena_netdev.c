@@ -3229,8 +3229,8 @@ int ena_update_hw_stats(struct ena_adapter *adapter)
 	return 0;
 }
 
-static void ena_get_stats64(struct net_device *netdev,
-			    struct rtnl_link_stats64 *stats)
+static int ena_get_stats64(struct net_device *netdev,
+			   struct rtnl_link_stats64 *stats)
 {
 	struct ena_adapter *adapter = netdev_priv(netdev);
 	struct ena_ring *rx_ring, *tx_ring;
@@ -3240,7 +3240,7 @@ static void ena_get_stats64(struct net_device *netdev,
 	int i;
 
 	if (!test_bit(ENA_FLAG_DEV_UP, &adapter->flags))
-		return;
+		return 0;
 
 	for (i = 0; i < adapter->num_io_queues; i++) {
 		u64 bytes, packets;
@@ -3289,6 +3289,8 @@ static void ena_get_stats64(struct net_device *netdev,
 
 	stats->rx_errors = 0;
 	stats->tx_errors = 0;
+
+	return 0;
 }
 
 static const struct net_device_ops ena_netdev_ops = {

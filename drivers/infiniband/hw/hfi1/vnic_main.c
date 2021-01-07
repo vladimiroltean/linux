@@ -220,13 +220,15 @@ static void hfi1_vnic_update_rx_counters(struct hfi1_vnic_vport_info *vinfo,
 }
 
 /* This function is overloaded for opa_vnic specific implementation */
-static void hfi1_vnic_get_stats64(struct net_device *netdev,
-				  struct rtnl_link_stats64 *stats)
+static int hfi1_vnic_get_stats64(struct net_device *netdev,
+				 struct rtnl_link_stats64 *stats)
 {
 	struct opa_vnic_stats *vstats = (struct opa_vnic_stats *)stats;
 	struct hfi1_vnic_vport_info *vinfo = opa_vnic_dev_priv(netdev);
 
 	hfi1_vnic_update_stats(vinfo, vstats);
+
+	return 0;
 }
 
 static u64 create_bypass_pbc(u32 vl, u32 dw_len)

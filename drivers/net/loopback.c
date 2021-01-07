@@ -115,8 +115,8 @@ void dev_lstats_read(struct net_device *dev, u64 *packets, u64 *bytes)
 }
 EXPORT_SYMBOL(dev_lstats_read);
 
-static void loopback_get_stats64(struct net_device *dev,
-				 struct rtnl_link_stats64 *stats)
+static int loopback_get_stats64(struct net_device *dev,
+				struct rtnl_link_stats64 *stats)
 {
 	u64 packets, bytes;
 
@@ -126,6 +126,8 @@ static void loopback_get_stats64(struct net_device *dev,
 	stats->tx_packets = packets;
 	stats->rx_bytes   = bytes;
 	stats->tx_bytes   = bytes;
+
+	return 0;
 }
 
 static u32 always_on(struct net_device *dev)

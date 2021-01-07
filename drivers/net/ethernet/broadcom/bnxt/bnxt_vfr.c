@@ -129,7 +129,7 @@ static netdev_tx_t bnxt_vf_rep_xmit(struct sk_buff *skb,
 	return rc;
 }
 
-static void
+static int
 bnxt_vf_rep_get_stats64(struct net_device *dev,
 			struct rtnl_link_stats64 *stats)
 {
@@ -139,6 +139,8 @@ bnxt_vf_rep_get_stats64(struct net_device *dev,
 	stats->rx_bytes = vf_rep->rx_stats.bytes;
 	stats->tx_packets = vf_rep->tx_stats.packets;
 	stats->tx_bytes = vf_rep->tx_stats.bytes;
+
+	return 0;
 }
 
 static int bnxt_vf_rep_setup_tc_block_cb(enum tc_setup_type type,

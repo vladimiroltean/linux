@@ -31,7 +31,7 @@ void efx_link_set_wanted_fc(struct efx_nic *efx, u8);
 void efx_start_all(struct efx_nic *efx);
 void efx_stop_all(struct efx_nic *efx);
 
-void efx_net_stats(struct net_device *net_dev, struct rtnl_link_stats64 *stats);
+int efx_net_stats(struct net_device *net_dev, struct rtnl_link_stats64 *stats);
 
 int efx_create_reset_workqueue(void);
 void efx_queue_reset_work(struct efx_nic *efx);

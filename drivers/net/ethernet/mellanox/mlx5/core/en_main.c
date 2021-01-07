@@ -3677,7 +3677,7 @@ void mlx5e_fold_sw_stats64(struct mlx5e_priv *priv, struct rtnl_link_stats64 *s)
 	}
 }
 
-void
+int
 mlx5e_get_stats(struct net_device *dev, struct rtnl_link_stats64 *stats)
 {
 	struct mlx5e_priv *priv = netdev_priv(dev);
@@ -3715,6 +3715,8 @@ mlx5e_get_stats(struct net_device *dev, struct rtnl_link_stats64 *stats)
 	stats->rx_errors = stats->rx_length_errors + stats->rx_crc_errors +
 			   stats->rx_frame_errors;
 	stats->tx_errors = stats->tx_aborted_errors + stats->tx_carrier_errors;
+
+	return 0;
 }
 
 static void mlx5e_set_rx_mode(struct net_device *dev)
