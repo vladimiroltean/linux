@@ -265,7 +265,7 @@ void ovs_vport_del(struct vport *vport)
  *
  * Retrieves transmit, receive, and error stats for the given device.
  *
- * Must be called with ovs_mutex or rcu_read_lock.
+ * Must be called with ovs_mutex.
  */
 int ovs_vport_get_stats(struct vport *vport, struct ovs_vport_stats *stats)
 {
