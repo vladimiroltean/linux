@@ -2097,14 +2097,16 @@ int ef4_net_stop(struct net_device *net_dev)
 }
 
 /* Context: process, dev_base_lock or RTNL held, non-blocking. */
-static void ef4_net_stats(struct net_device *net_dev,
-			  struct rtnl_link_stats64 *stats)
+static int ef4_net_stats(struct net_device *net_dev,
+			 struct rtnl_link_stats64 *stats)
 {
 	struct ef4_nic *efx = netdev_priv(net_dev);
 
 	spin_lock_bh(&efx->stats_lock);
 	efx->type->update_stats(efx, NULL, stats);
 	spin_unlock_bh(&efx->stats_lock);
+
+	return 0;
 }
 
 /* Context: netif_tx_lock held, BHs disabled. */

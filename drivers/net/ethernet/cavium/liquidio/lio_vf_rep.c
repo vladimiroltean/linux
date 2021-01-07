@@ -34,8 +34,8 @@ static netdev_tx_t lio_vf_rep_pkt_xmit(struct sk_buff *skb,
 static void lio_vf_rep_tx_timeout(struct net_device *netdev, unsigned int txqueue);
 static int lio_vf_rep_phys_port_name(struct net_device *dev,
 				     char *buf, size_t len);
-static void lio_vf_rep_get_stats64(struct net_device *dev,
-				   struct rtnl_link_stats64 *stats64);
+static int lio_vf_rep_get_stats64(struct net_device *dev,
+				  struct rtnl_link_stats64 *stats64);
 static int lio_vf_rep_change_mtu(struct net_device *ndev, int new_mtu);
 static int lio_vf_get_port_parent_id(struct net_device *dev,
 				     struct netdev_phys_item_id *ppid);
@@ -179,7 +179,7 @@ lio_vf_rep_tx_timeout(struct net_device *ndev, unsigned int txqueue)
 	netif_wake_queue(ndev);
 }
 
-static void
+static int
 lio_vf_rep_get_stats64(struct net_device *dev,
 		       struct rtnl_link_stats64 *stats64)
 {
@@ -193,6 +193,8 @@ lio_vf_rep_get_stats64(struct net_device *dev,
 	stats64->rx_packets = vf_rep->stats.tx_packets;
 	stats64->rx_bytes   = vf_rep->stats.tx_bytes;
 	stats64->rx_dropped = vf_rep->stats.tx_dropped;
+
+	return 0;
 }
 
 static int

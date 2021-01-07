@@ -1615,16 +1615,16 @@ static struct devlink_port *dsa_slave_get_devlink_port(struct net_device *dev)
 	return dp->ds->devlink ? &dp->devlink_port : NULL;
 }
 
-static void dsa_slave_get_stats64(struct net_device *dev,
-				  struct rtnl_link_stats64 *s)
+static int dsa_slave_get_stats64(struct net_device *dev,
+				 struct rtnl_link_stats64 *s)
 {
 	struct dsa_port *dp = dsa_slave_to_port(dev);
 	struct dsa_switch *ds = dp->ds;
 
 	if (ds->ops->get_stats64)
-		ds->ops->get_stats64(ds, dp->index, s);
-	else
-		dev_get_tstats64(dev, s);
+		return ds->ops->get_stats64(ds, dp->index, s);
+
+	return dev_get_tstats64(dev, s);
 }
 
 static const struct net_device_ops dsa_slave_netdev_ops = {

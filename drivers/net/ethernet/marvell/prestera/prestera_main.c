@@ -152,8 +152,8 @@ static int prestera_port_change_mtu(struct net_device *dev, int mtu)
 	return 0;
 }
 
-static void prestera_port_get_stats64(struct net_device *dev,
-				      struct rtnl_link_stats64 *stats)
+static int prestera_port_get_stats64(struct net_device *dev,
+				     struct rtnl_link_stats64 *stats)
 {
 	struct prestera_port *port = netdev_priv(dev);
 	struct prestera_port_stats *port_stats = &port->cached_hw_stats.stats;
@@ -180,6 +180,8 @@ static void prestera_port_get_stats64(struct net_device *dev,
 	stats->collisions = port_stats->excessive_collision;
 
 	stats->rx_crc_errors = port_stats->bad_crc;
+
+	return 0;
 }
 
 static void prestera_port_get_hw_stats(struct prestera_port *port)

@@ -113,7 +113,7 @@ vmxnet3_global_stats[] = {
 };
 
 
-void
+int
 vmxnet3_get_stats64(struct net_device *netdev,
 		   struct rtnl_link_stats64 *stats)
 {
@@ -160,6 +160,8 @@ vmxnet3_get_stats64(struct net_device *netdev,
 		stats->rx_dropped += drvRxStats->drop_total;
 		stats->multicast +=  devRxStats->mcastPktsRxOK;
 	}
+
+	return 0;
 }
 
 static int

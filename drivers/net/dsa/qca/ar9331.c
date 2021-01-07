@@ -613,8 +613,8 @@ static void ar9331_do_stats_poll(struct work_struct *work)
 	schedule_delayed_work(&port->mib_read, STATS_INTERVAL_JIFFIES);
 }
 
-static void ar9331_get_stats64(struct dsa_switch *ds, int port,
-			       struct rtnl_link_stats64 *s)
+static int ar9331_get_stats64(struct dsa_switch *ds, int port,
+			      struct rtnl_link_stats64 *s)
 {
 	struct ar9331_sw_priv *priv = (struct ar9331_sw_priv *)ds->priv;
 	struct ar9331_sw_port *p = &priv->port[port];
@@ -622,6 +622,8 @@ static void ar9331_get_stats64(struct dsa_switch *ds, int port,
 	spin_lock(&p->stats_lock);
 	memcpy(s, &p->stats, sizeof(*s));
 	spin_unlock(&p->stats_lock);
+
+	return 0;
 }
 
 static const struct dsa_switch_ops ar9331_sw_ops = {

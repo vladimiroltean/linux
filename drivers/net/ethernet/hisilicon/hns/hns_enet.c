@@ -1876,8 +1876,8 @@ static void hns_nic_set_rx_mode(struct net_device *ndev)
 		netdev_err(ndev, "sync uc address fail\n");
 }
 
-static void hns_nic_get_stats64(struct net_device *ndev,
-				struct rtnl_link_stats64 *stats)
+static int hns_nic_get_stats64(struct net_device *ndev,
+			       struct rtnl_link_stats64 *stats)
 {
 	int idx = 0;
 	u64 tx_bytes = 0;
@@ -1919,6 +1919,8 @@ static void hns_nic_get_stats64(struct net_device *ndev,
 	stats->tx_window_errors = ndev->stats.tx_window_errors;
 	stats->rx_compressed = ndev->stats.rx_compressed;
 	stats->tx_compressed = ndev->stats.tx_compressed;
+
+	return 0;
 }
 
 static u16

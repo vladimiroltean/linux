@@ -1104,14 +1104,16 @@ static void mtk_star_tx_complete_all(struct mtk_star_priv *priv)
 	spin_unlock(&priv->lock);
 }
 
-static void mtk_star_netdev_get_stats64(struct net_device *ndev,
-					struct rtnl_link_stats64 *stats)
+static int mtk_star_netdev_get_stats64(struct net_device *ndev,
+				       struct rtnl_link_stats64 *stats)
 {
 	struct mtk_star_priv *priv = netdev_priv(ndev);
 
 	mtk_star_update_stats(priv);
 
 	memcpy(stats, &priv->stats, sizeof(*stats));
+
+	return 0;
 }
 
 static void mtk_star_set_rx_mode(struct net_device *ndev)

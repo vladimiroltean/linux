@@ -86,13 +86,13 @@ nfp_repr_vnic_get_stats64(struct nfp_port *port,
 	stats->rx_dropped = readq(port->vnic + NFP_NET_CFG_STATS_TX_DISCARDS);
 }
 
-static void
+static int
 nfp_repr_get_stats64(struct net_device *netdev, struct rtnl_link_stats64 *stats)
 {
 	struct nfp_repr *repr = netdev_priv(netdev);
 
 	if (WARN_ON(!repr->port))
-		return;
+		return 0;
 
 	switch (repr->port->type) {
 	case NFP_PORT_PHYS_PORT:
@@ -106,6 +106,8 @@ nfp_repr_get_stats64(struct net_device *netdev, struct rtnl_link_stats64 *stats)
 	default:
 		break;
 	}
+
+	return 0;
 }
 
 static bool

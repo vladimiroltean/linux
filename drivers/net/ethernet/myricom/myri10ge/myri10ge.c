@@ -362,8 +362,8 @@ static inline void put_be32(__be32 val, __be32 __iomem * p)
 	__raw_writel((__force __u32) val, (__force void __iomem *)p);
 }
 
-static void myri10ge_get_stats(struct net_device *dev,
-			       struct rtnl_link_stats64 *stats);
+static int myri10ge_get_stats(struct net_device *dev,
+			      struct rtnl_link_stats64 *stats);
 
 static void set_fw_name(struct myri10ge_priv *mgp, char *name, bool allocated)
 {
@@ -1790,7 +1790,7 @@ myri10ge_get_ethtool_stats(struct net_device *netdev,
 
 	/* force stats update */
 	memset(&link_stats, 0, sizeof(link_stats));
-	(void)myri10ge_get_stats(netdev, &link_stats);
+	myri10ge_get_stats(netdev, &link_stats);
 	for (i = 0; i < MYRI10GE_NET_STATS_LEN; i++)
 		data[i] = ((u64 *)&link_stats)[i];
 
@@ -2914,8 +2914,8 @@ drop:
 	return NETDEV_TX_OK;
 }
 
-static void myri10ge_get_stats(struct net_device *dev,
-			       struct rtnl_link_stats64 *stats)
+static int myri10ge_get_stats(struct net_device *dev,
+			      struct rtnl_link_stats64 *stats)
 {
 	const struct myri10ge_priv *mgp = netdev_priv(dev);
 	const struct myri10ge_slice_netstats *slice_stats;
@@ -2930,6 +2930,8 @@ static void myri10ge_get_stats(struct net_device *dev,
 		stats->rx_dropped += slice_stats->rx_dropped;
 		stats->tx_dropped += slice_stats->tx_dropped;
 	}
+
+	return 0;
 }
 
 static void myri10ge_set_multicast_list(struct net_device *dev)

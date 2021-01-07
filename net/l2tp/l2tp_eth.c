@@ -87,8 +87,8 @@ static netdev_tx_t l2tp_eth_dev_xmit(struct sk_buff *skb, struct net_device *dev
 	return NETDEV_TX_OK;
 }
 
-static void l2tp_eth_get_stats64(struct net_device *dev,
-				 struct rtnl_link_stats64 *stats)
+static int l2tp_eth_get_stats64(struct net_device *dev,
+				struct rtnl_link_stats64 *stats)
 {
 	struct l2tp_eth *priv = netdev_priv(dev);
 
@@ -98,6 +98,8 @@ static void l2tp_eth_get_stats64(struct net_device *dev,
 	stats->rx_bytes   = (unsigned long)atomic_long_read(&priv->rx_bytes);
 	stats->rx_packets = (unsigned long)atomic_long_read(&priv->rx_packets);
 	stats->rx_errors  = (unsigned long)atomic_long_read(&priv->rx_errors);
+
+	return 0;
 }
 
 static const struct net_device_ops l2tp_eth_netdev_ops = {

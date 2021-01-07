@@ -122,8 +122,8 @@ static void rmnet_vnd_uninit(struct net_device *dev)
 	free_percpu(priv->pcpu_stats);
 }
 
-static void rmnet_get_stats64(struct net_device *dev,
-			      struct rtnl_link_stats64 *s)
+static int rmnet_get_stats64(struct net_device *dev,
+			     struct rtnl_link_stats64 *s)
 {
 	struct rmnet_priv *priv = netdev_priv(dev);
 	struct rmnet_vnd_stats total_stats;
@@ -151,6 +151,8 @@ static void rmnet_get_stats64(struct net_device *dev,
 	s->tx_packets = total_stats.tx_pkts;
 	s->tx_bytes = total_stats.tx_bytes;
 	s->tx_dropped = total_stats.tx_drops;
+
+	return 0;
 }
 
 static const struct net_device_ops rmnet_vnd_ops = {

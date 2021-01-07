@@ -317,7 +317,7 @@ static void xlr_set_rx_mode(struct net_device *ndev)
 	xlr_nae_wreg(priv->base_addr, R_MAC_FILTER_CONFIG, regval);
 }
 
-static void xlr_stats(struct net_device *ndev, struct rtnl_link_stats64 *stats)
+static int xlr_stats(struct net_device *ndev, struct rtnl_link_stats64 *stats)
 {
 	struct xlr_net_priv *priv = netdev_priv(ndev);
 
@@ -360,6 +360,8 @@ static void xlr_stats(struct net_device *ndev, struct rtnl_link_stats64 *stats)
 						 TX_DROP_FRAME_COUNTER);
 	stats->tx_fifo_errors = xlr_nae_rdreg(priv->base_addr,
 					      TX_DROP_FRAME_COUNTER);
+
+	return 0;
 }
 
 static const struct net_device_ops xlr_netdev_ops = {

@@ -407,8 +407,8 @@ static void i40e_get_netdev_stats_struct_tx(struct i40e_ring *ring,
  * Returns the address of the device statistics structure.
  * The statistics are actually updated from the service task.
  **/
-static void i40e_get_netdev_stats_struct(struct net_device *netdev,
-				  struct rtnl_link_stats64 *stats)
+static int i40e_get_netdev_stats_struct(struct net_device *netdev,
+					struct rtnl_link_stats64 *stats)
 {
 	struct i40e_netdev_priv *np = netdev_priv(netdev);
 	struct i40e_vsi *vsi = np->vsi;
@@ -417,10 +417,10 @@ static void i40e_get_netdev_stats_struct(struct net_device *netdev,
 	int i;
 
 	if (test_bit(__I40E_VSI_DOWN, vsi->state))
-		return;
+		return 0;
 
 	if (!vsi->tx_rings)
-		return;
+		return 0;
 
 	rcu_read_lock();
 	for (i = 0; i < vsi->num_queue_pairs; i++) {
@@ -462,6 +462,8 @@ static void i40e_get_netdev_stats_struct(struct net_device *netdev,
 	stats->rx_dropped	= vsi_stats->rx_dropped;
 	stats->rx_crc_errors	= vsi_stats->rx_crc_errors;
 	stats->rx_length_errors	= vsi_stats->rx_length_errors;
+
+	return 0;
 }
 
 /**

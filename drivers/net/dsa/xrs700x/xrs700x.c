@@ -166,8 +166,8 @@ static void xrs700x_get_ethtool_stats(struct dsa_switch *ds, int port,
 	mutex_unlock(&p->mib_mutex);
 }
 
-static void xrs700x_get_stats64(struct dsa_switch *ds, int port,
-				struct rtnl_link_stats64 *s)
+static int xrs700x_get_stats64(struct dsa_switch *ds, int port,
+			       struct rtnl_link_stats64 *s)
 {
 	struct xrs700x *priv = ds->priv;
 	struct xrs700x_port *p = &priv->ports[port];
@@ -177,6 +177,8 @@ static void xrs700x_get_stats64(struct dsa_switch *ds, int port,
 		start = u64_stats_fetch_begin(&p->syncp);
 		*s = p->stats64;
 	} while (u64_stats_fetch_retry(&p->syncp, start));
+
+	return 0;
 }
 
 static int xrs700x_setup_regmap_range(struct xrs700x *priv)

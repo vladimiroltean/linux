@@ -1710,8 +1710,8 @@ static netdev_features_t hns3_features_check(struct sk_buff *skb,
 	return features;
 }
 
-static void hns3_nic_get_stats64(struct net_device *netdev,
-				 struct rtnl_link_stats64 *stats)
+static int hns3_nic_get_stats64(struct net_device *netdev,
+				struct rtnl_link_stats64 *stats)
 {
 	struct hns3_nic_priv *priv = netdev_priv(netdev);
 	int queue_num = priv->ae_handle->kinfo.num_tqps;
@@ -1732,7 +1732,7 @@ static void hns3_nic_get_stats64(struct net_device *netdev,
 	u64 rx_drop = 0;
 
 	if (test_bit(HNS3_NIC_STATE_DOWN, &priv->state))
-		return;
+		return 0;
 
 	handle->ae_algo->ops->update_stats(handle, &netdev->stats);
 
@@ -1795,6 +1795,8 @@ static void hns3_nic_get_stats64(struct net_device *netdev,
 	stats->tx_window_errors = netdev->stats.tx_window_errors;
 	stats->rx_compressed = netdev->stats.rx_compressed;
 	stats->tx_compressed = netdev->stats.tx_compressed;
+
+	return 0;
 }
 
 static int hns3_setup_tc(struct net_device *netdev, void *type_data)

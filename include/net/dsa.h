@@ -559,8 +559,8 @@ struct dsa_switch_ops {
 	int	(*get_sset_count)(struct dsa_switch *ds, int port, int sset);
 	void	(*get_ethtool_phy_stats)(struct dsa_switch *ds,
 					 int port, uint64_t *data);
-	void	(*get_stats64)(struct dsa_switch *ds, int port,
-				   struct rtnl_link_stats64 *s);
+	int	(*get_stats64)(struct dsa_switch *ds, int port,
+			       struct rtnl_link_stats64 *s);
 
 	/*
 	 * ethtool Wake-on-LAN

@@ -1212,8 +1212,8 @@ void fm10k_reset_rx_state(struct fm10k_intfc *interface)
  * Obtain 64bit statistics in a way that is safe for both 32bit and 64bit
  * architectures.
  */
-static void fm10k_get_stats64(struct net_device *netdev,
-			      struct rtnl_link_stats64 *stats)
+static int fm10k_get_stats64(struct net_device *netdev,
+			     struct rtnl_link_stats64 *stats)
 {
 	struct fm10k_intfc *interface = netdev_priv(netdev);
 	struct fm10k_ring *ring;
@@ -1258,6 +1258,8 @@ static void fm10k_get_stats64(struct net_device *netdev,
 
 	/* following stats updated by fm10k_service_task() */
 	stats->rx_missed_errors	= netdev->stats.rx_missed_errors;
+
+	return 0;
 }
 
 int fm10k_setup_tc(struct net_device *dev, u8 tc)

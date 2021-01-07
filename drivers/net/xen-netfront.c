@@ -1245,8 +1245,8 @@ static int xennet_change_mtu(struct net_device *dev, int mtu)
 	return 0;
 }
 
-static void xennet_get_stats64(struct net_device *dev,
-			       struct rtnl_link_stats64 *tot)
+static int xennet_get_stats64(struct net_device *dev,
+			      struct rtnl_link_stats64 *tot)
 {
 	struct netfront_info *np = netdev_priv(dev);
 	int cpu;
@@ -1277,6 +1277,8 @@ static void xennet_get_stats64(struct net_device *dev,
 
 	tot->rx_errors  = dev->stats.rx_errors;
 	tot->tx_dropped = dev->stats.tx_dropped;
+
+	return 0;
 }
 
 static void xennet_release_tx_bufs(struct netfront_queue *queue)

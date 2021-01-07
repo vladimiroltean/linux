@@ -350,8 +350,8 @@ static void dpaa_tx_timeout(struct net_device *net_dev, unsigned int txqueue)
 /* Calculates the statistics for the given device by adding the statistics
  * collected by each CPU.
  */
-static void dpaa_get_stats64(struct net_device *net_dev,
-			     struct rtnl_link_stats64 *s)
+static int dpaa_get_stats64(struct net_device *net_dev,
+			    struct rtnl_link_stats64 *s)
 {
 	int numstats = sizeof(struct rtnl_link_stats64) / sizeof(u64);
 	struct dpaa_priv *priv = netdev_priv(net_dev);
@@ -369,6 +369,8 @@ static void dpaa_get_stats64(struct net_device *net_dev,
 		for (j = 0; j < numstats; j++)
 			netstats[j] += cpustats[j];
 	}
+
+	return 0;
 }
 
 static int dpaa_setup_tc(struct net_device *net_dev, enum tc_setup_type type,

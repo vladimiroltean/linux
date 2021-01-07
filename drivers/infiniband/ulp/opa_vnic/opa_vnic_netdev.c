@@ -62,17 +62,20 @@
 			ALIGN((OPA_VNIC_HDR_LEN + OPA_VNIC_SKB_MDATA_LEN), 8)
 
 /* This function is overloaded for opa_vnic specific implementation */
-static void opa_vnic_get_stats64(struct net_device *netdev,
-				 struct rtnl_link_stats64 *stats)
+static int opa_vnic_get_stats64(struct net_device *netdev,
+				struct rtnl_link_stats64 *stats)
 {
 	struct opa_vnic_adapter *adapter = opa_vnic_priv(netdev);
 	struct opa_vnic_stats vstats;
+	int err;
 
 	memset(&vstats, 0, sizeof(vstats));
 	spin_lock(&adapter->stats_lock);
-	adapter->rn_ops->ndo_get_stats64(netdev, &vstats.netstats);
+	err = adapter->rn_ops->ndo_get_stats64(netdev, &vstats.netstats);
 	spin_unlock(&adapter->stats_lock);
 	memcpy(stats, &vstats.netstats, sizeof(*stats));
+
+	return err;
 }
 
 /* opa_netdev_start_xmit - transmit function */

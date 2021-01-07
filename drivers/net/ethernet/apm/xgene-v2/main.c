@@ -606,8 +606,8 @@ out:
 	rtnl_unlock();
 }
 
-static void xge_get_stats64(struct net_device *ndev,
-			    struct rtnl_link_stats64 *storage)
+static int xge_get_stats64(struct net_device *ndev,
+			   struct rtnl_link_stats64 *storage)
 {
 	struct xge_pdata *pdata = netdev_priv(ndev);
 	struct xge_stats *stats = &pdata->stats;
@@ -618,6 +618,8 @@ static void xge_get_stats64(struct net_device *ndev,
 	storage->rx_packets += stats->rx_packets;
 	storage->rx_bytes += stats->rx_bytes;
 	storage->rx_errors += stats->rx_errors;
+
+	return 0;
 }
 
 static const struct net_device_ops xgene_ndev_ops = {

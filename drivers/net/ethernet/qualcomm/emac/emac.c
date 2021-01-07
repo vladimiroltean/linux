@@ -332,8 +332,8 @@ void emac_update_hw_stats(struct emac_adapter *adpt)
 }
 
 /* Provide network statistics info for the interface */
-static void emac_get_stats64(struct net_device *netdev,
-			     struct rtnl_link_stats64 *net_stats)
+static int emac_get_stats64(struct net_device *netdev,
+			    struct rtnl_link_stats64 *net_stats)
 {
 	struct emac_adapter *adpt = netdev_priv(netdev);
 	struct emac_stats *stats = &adpt->stats;
@@ -368,6 +368,8 @@ static void emac_get_stats64(struct net_device *netdev,
 	net_stats->tx_window_errors = stats->tx_late_col;
 
 	spin_unlock(&stats->lock);
+
+	return 0;
 }
 
 static const struct net_device_ops emac_netdev_ops = {

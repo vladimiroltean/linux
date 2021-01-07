@@ -346,7 +346,7 @@ static int mlxsw_sx_port_change_mtu(struct net_device *dev, int mtu)
 	return 0;
 }
 
-static void
+static int
 mlxsw_sx_port_get_stats64(struct net_device *dev,
 			  struct rtnl_link_stats64 *stats)
 {
@@ -375,6 +375,8 @@ mlxsw_sx_port_get_stats64(struct net_device *dev,
 		tx_dropped	+= p->tx_dropped;
 	}
 	stats->tx_dropped	= tx_dropped;
+
+	return 0;
 }
 
 static struct devlink_port *

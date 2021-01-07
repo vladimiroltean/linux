@@ -358,8 +358,8 @@ static int dpaa2_switch_port_fdb_del(struct ndmsg *ndm, struct nlattr *tb[],
 						    addr);
 }
 
-static void dpaa2_switch_port_get_stats(struct net_device *netdev,
-					struct rtnl_link_stats64 *stats)
+static int dpaa2_switch_port_get_stats(struct net_device *netdev,
+				       struct rtnl_link_stats64 *stats)
 {
 	struct ethsw_port_priv *port_priv = netdev_priv(netdev);
 	u64 tmp;
@@ -418,10 +418,8 @@ static void dpaa2_switch_port_get_stats(struct net_device *netdev,
 	if (err)
 		goto error;
 
-	return;
-
 error:
-	netdev_err(netdev, "dpsw_if_get_counter err %d\n", err);
+	return err;
 }
 
 static bool dpaa2_switch_port_has_offload_stats(const struct net_device *netdev,
