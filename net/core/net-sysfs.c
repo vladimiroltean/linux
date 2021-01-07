@@ -588,7 +588,9 @@ static ssize_t netstat_show(const struct device *d,
 	if (dev_isalive(dev)) {
 		struct rtnl_link_stats64 stats;
 
-		dev_get_stats(dev, &stats);
+		ret = dev_get_stats(dev, &stats);
+		if (ret)
+			return ret;
 
 		ret = sprintf(buf, fmt_u64, *(u64 *)(((u8 *)&stats) + offset));
 	}

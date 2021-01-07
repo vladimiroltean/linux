@@ -1201,6 +1201,7 @@ static noinline_for_stack int rtnl_fill_stats(struct sk_buff *skb,
 {
 	struct rtnl_link_stats64 *sp;
 	struct nlattr *attr;
+	int err;
 
 	attr = nla_reserve_64bit(skb, IFLA_STATS64,
 				 sizeof(struct rtnl_link_stats64), IFLA_PAD);
@@ -1208,7 +1209,9 @@ static noinline_for_stack int rtnl_fill_stats(struct sk_buff *skb,
 		return -EMSGSIZE;
 
 	sp = nla_data(attr);
-	dev_get_stats(dev, sp);
+	err = dev_get_stats(dev, sp);
+	if (err)
+		return err;
 
 	attr = nla_reserve(skb, IFLA_STATS,
 			   sizeof(struct rtnl_link_stats));
@@ -1707,6 +1710,7 @@ static int rtnl_fill_ifinfo(struct sk_buff *skb,
 {
 	struct ifinfomsg *ifm;
 	struct nlmsghdr *nlh;
+	int err;
 
 	ASSERT_RTNL();
 	nlh = nlmsg_put(skb, pid, seq, type, sizeof(*ifm), flags);
@@ -1780,8 +1784,9 @@ static int rtnl_fill_ifinfo(struct sk_buff *skb,
 	if (rtnl_phys_switch_id_fill(skb, dev))
 		goto nla_put_failure;
 
-	if (rtnl_fill_stats(skb, dev))
-		goto nla_put_failure;
+	err = rtnl_fill_stats(skb, dev);
+	if (err)
+		goto get_stats_failure;
 
 	if (rtnl_fill_vf(skb, dev, ext_filter_mask))
 		goto nla_put_failure;
@@ -1825,8 +1830,10 @@ static int rtnl_fill_ifinfo(struct sk_buff *skb,
 nla_put_failure_rcu:
 	rcu_read_unlock();
 nla_put_failure:
+	err = -EMSGSIZE;
+get_stats_failure:
 	nlmsg_cancel(skb, nlh);
-	return -EMSGSIZE;
+	return err;
 }
 
 static const struct nla_policy ifla_policy[IFLA_MAX+1] = {
@@ -5135,7 +5142,9 @@ static int rtnl_fill_statsinfo(struct sk_buff *skb, struct net_device *dev,
 			goto nla_put_failure;
 
 		sp = nla_data(attr);
-		dev_get_stats(dev, sp);
+		err = dev_get_stats(dev, sp);
+		if (err)
+			goto get_stats_failure;
 	}
 
 	if (stats_attr_valid(filter_mask, IFLA_STATS_LINK_XSTATS, *idxattr)) {
@@ -5242,13 +5251,15 @@ static int rtnl_fill_statsinfo(struct sk_buff *skb, struct net_device *dev,
 	return 0;
 
 nla_put_failure:
+	err = -EMSGSIZE;
+get_stats_failure:
 	/* not a multi message or no progress mean a real error */
 	if (!(flags & NLM_F_MULTI) || s_prividx == *prividx)
 		nlmsg_cancel(skb, nlh);
 	else
 		nlmsg_end(skb, nlh);
 
-	return -EMSGSIZE;
+	return err;
 }
 
 static size_t if_nlmsg_stats_size(const struct net_device *dev,

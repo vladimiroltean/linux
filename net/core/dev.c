@@ -10403,7 +10403,8 @@ EXPORT_SYMBOL(netdev_stats_to_stats64);
  *	dev->netdev_ops->get_stats64 or dev->netdev_ops->get_stats;
  *	otherwise the internal statistics structure is used.
  */
-int dev_get_stats(struct net_device *dev, struct rtnl_link_stats64 *storage)
+int __must_check dev_get_stats(struct net_device *dev,
+			       struct rtnl_link_stats64 *storage)
 {
 	const struct net_device_ops *ops = dev->netdev_ops;
 	int err = 0;
