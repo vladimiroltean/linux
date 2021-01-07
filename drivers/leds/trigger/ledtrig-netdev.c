@@ -351,6 +351,7 @@ static void netdev_trig_work(struct work_struct *work)
 	unsigned int new_activity;
 	unsigned long interval;
 	int invert;
+	int err;
 
 	/* If we dont have a device, insure we are off */
 	if (!trigger_data->net_dev) {
@@ -363,7 +364,13 @@ static void netdev_trig_work(struct work_struct *work)
 	    !test_bit(NETDEV_LED_RX, &trigger_data->mode))
 		return;
 
-	dev_get_stats(trigger_data->net_dev, &dev_stats);
+	err = dev_get_stats(trigger_data->net_dev, &dev_stats);
+	if (err) {
+		netdev_err(trigger_data->net_dev,
+			   "dev_get_stats returned %d\n", err);
+		return;
+	}
+
 	new_activity =
 	    (test_bit(NETDEV_LED_TX, &trigger_data->mode) ?
 		dev_stats.tx_packets : 0) +
