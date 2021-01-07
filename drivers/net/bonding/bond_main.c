@@ -1757,7 +1757,12 @@ int bond_enslave(struct net_device *bond_dev, struct net_device *slave_dev,
 
 	slave_dev->priv_flags |= IFF_BONDING;
 	/* initialize slave stats */
-	dev_get_stats(new_slave->dev, &new_slave->slave_stats);
+	res = dev_get_stats(new_slave->dev, &new_slave->slave_stats);
+	if (res) {
+		slave_err(bond_dev, slave_dev, "dev_get_stats returned %d\n",
+			  res);
+		goto err_close;
+	}
 
 	if (bond_is_lb(bond)) {
 		/* bond_alb_init_slave() must be called before all other stages since
@@ -2094,7 +2099,13 @@ static int __bond_release_one(struct net_device *bond_dev,
 	bond_sysfs_slave_del(slave);
 
 	/* recompute stats just before removing the slave */
-	bond_get_stats(bond->dev, &bond->bond_stats);
+	err = bond_get_stats(bond->dev, &bond->bond_stats);
+	if (err) {
+		slave_info(bond_dev, slave_dev, "dev_get_stats returned %d\n",
+			   err);
+		unblock_netpoll_tx();
+		return err;
+	}
 
 	bond_upper_dev_unlink(bond, slave);
 	/* unregister rx_handler early so bond_handle_frame wouldn't be called
@@ -3743,7 +3754,7 @@ static int bond_get_stats(struct net_device *bond_dev,
 	struct list_head *iter;
 	struct slave *slave;
 	int nest_level = 0;
-
+	int res = 0;
 
 	rcu_read_lock();
 #ifdef CONFIG_LOCKDEP
@@ -3754,7 +3765,9 @@ static int bond_get_stats(struct net_device *bond_dev,
 	memcpy(stats, &bond->bond_stats, sizeof(*stats));
 
 	bond_for_each_slave_rcu(bond, slave, iter) {
-		dev_get_stats(slave->dev, &temp);
+		res = dev_get_stats(slave->dev, &temp);
+		if (res)
+			goto out;
 
 		bond_fold_stats(stats, &temp, &slave->slave_stats);
 
@@ -3763,10 +3776,11 @@ static int bond_get_stats(struct net_device *bond_dev,
 	}
 
 	memcpy(&bond->bond_stats, stats, sizeof(*stats));
+out:
 	spin_unlock(&bond->stats_lock);
 	rcu_read_unlock();
 
-	return 0;
+	return res;
 }
 
 static int bond_do_ioctl(struct net_device *bond_dev, struct ifreq *ifr, int cmd)

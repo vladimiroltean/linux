@@ -370,7 +370,12 @@ static __inline__ int led_get_net_activity(void)
 
 		in_dev_put(in_dev);
 
-		dev_get_stats(dev, &stats);
+		retval = dev_get_stats(dev, &stats);
+		if (retval) {
+			netif_lists_unlock(&init_net);
+			return retval;
+		}
+
 		rx_total += stats.rx_packets;
 		tx_total += stats.tx_packets;
 	}
