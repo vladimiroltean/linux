@@ -30,7 +30,7 @@ void ovs_vport_del(struct vport *);
 
 struct vport *ovs_vport_locate(const struct net *net, const char *name);
 
-void ovs_vport_get_stats(struct vport *, struct ovs_vport_stats *);
+int ovs_vport_get_stats(struct vport *, struct ovs_vport_stats *);
 
 int ovs_vport_set_options(struct vport *, struct nlattr *options);
 int ovs_vport_get_options(const struct vport *, struct sk_buff *);
