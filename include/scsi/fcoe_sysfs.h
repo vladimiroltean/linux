@@ -16,12 +16,12 @@ struct fcoe_ctlr_device;
 struct fcoe_fcf_device;
 
 struct fcoe_sysfs_function_template {
-	void (*get_fcoe_ctlr_link_fail)(struct fcoe_ctlr_device *);
-	void (*get_fcoe_ctlr_vlink_fail)(struct fcoe_ctlr_device *);
-	void (*get_fcoe_ctlr_miss_fka)(struct fcoe_ctlr_device *);
-	void (*get_fcoe_ctlr_symb_err)(struct fcoe_ctlr_device *);
-	void (*get_fcoe_ctlr_err_block)(struct fcoe_ctlr_device *);
-	void (*get_fcoe_ctlr_fcs_error)(struct fcoe_ctlr_device *);
+	int  (*get_fcoe_ctlr_link_fail)(struct fcoe_ctlr_device *);
+	int  (*get_fcoe_ctlr_vlink_fail)(struct fcoe_ctlr_device *);
+	int  (*get_fcoe_ctlr_miss_fka)(struct fcoe_ctlr_device *);
+	int  (*get_fcoe_ctlr_symb_err)(struct fcoe_ctlr_device *);
+	int  (*get_fcoe_ctlr_err_block)(struct fcoe_ctlr_device *);
+	int  (*get_fcoe_ctlr_fcs_error)(struct fcoe_ctlr_device *);
 	void (*set_fcoe_ctlr_mode)(struct fcoe_ctlr_device *);
 	int  (*set_fcoe_ctlr_enabled)(struct fcoe_ctlr_device *);
 	void (*get_fcoe_fcf_selected)(struct fcoe_fcf_device *);
