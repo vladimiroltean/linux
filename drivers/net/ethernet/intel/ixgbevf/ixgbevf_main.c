@@ -4357,8 +4357,8 @@ static void ixgbevf_get_tx_ring_stats(struct rtnl_link_stats64 *stats,
 	}
 }
 
-static void ixgbevf_get_stats(struct net_device *netdev,
-			      struct rtnl_link_stats64 *stats)
+static int ixgbevf_get_stats(struct net_device *netdev,
+			     struct rtnl_link_stats64 *stats)
 {
 	struct ixgbevf_adapter *adapter = netdev_priv(netdev);
 	unsigned int start;
@@ -4392,6 +4392,8 @@ static void ixgbevf_get_stats(struct net_device *netdev,
 		ixgbevf_get_tx_ring_stats(stats, ring);
 	}
 	rcu_read_unlock();
+
+	return 0;
 }
 
 #define IXGBEVF_MAX_MAC_HDR_LEN		127

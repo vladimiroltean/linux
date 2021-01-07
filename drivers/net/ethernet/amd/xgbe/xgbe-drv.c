@@ -2074,8 +2074,8 @@ static void xgbe_tx_timeout(struct net_device *netdev, unsigned int txqueue)
 	schedule_work(&pdata->restart_work);
 }
 
-static void xgbe_get_stats64(struct net_device *netdev,
-			     struct rtnl_link_stats64 *s)
+static int xgbe_get_stats64(struct net_device *netdev,
+			    struct rtnl_link_stats64 *s)
 {
 	struct xgbe_prv_data *pdata = netdev_priv(netdev);
 	struct xgbe_mmc_stats *pstats = &pdata->mmc_stats;
@@ -2101,6 +2101,8 @@ static void xgbe_get_stats64(struct net_device *netdev,
 	s->tx_dropped = netdev->stats.tx_dropped;
 
 	DBGPR("<--%s\n", __func__);
+
+	return 0;
 }
 
 static int xgbe_vlan_rx_add_vid(struct net_device *netdev, __be16 proto,

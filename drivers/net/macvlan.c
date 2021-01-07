@@ -927,8 +927,8 @@ static void macvlan_uninit(struct net_device *dev)
 		macvlan_port_destroy(port->dev);
 }
 
-static void macvlan_dev_get_stats64(struct net_device *dev,
-				    struct rtnl_link_stats64 *stats)
+static int macvlan_dev_get_stats64(struct net_device *dev,
+				   struct rtnl_link_stats64 *stats)
 {
 	struct macvlan_dev *vlan = netdev_priv(dev);
 
@@ -965,6 +965,8 @@ static void macvlan_dev_get_stats64(struct net_device *dev,
 		stats->rx_dropped	= rx_errors;
 		stats->tx_dropped	= tx_dropped;
 	}
+
+	return 0;
 }
 
 static int macvlan_vlan_rx_add_vid(struct net_device *dev,

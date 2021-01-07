@@ -3645,16 +3645,18 @@ static int macsec_change_mtu(struct net_device *dev, int new_mtu)
 	return 0;
 }
 
-static void macsec_get_stats64(struct net_device *dev,
-			       struct rtnl_link_stats64 *s)
+static int macsec_get_stats64(struct net_device *dev,
+			      struct rtnl_link_stats64 *s)
 {
 	if (!dev->tstats)
-		return;
+		return 0;
 
 	dev_fetch_sw_netstats(s, dev->tstats);
 
 	s->rx_dropped = dev->stats.rx_dropped;
 	s->tx_dropped = dev->stats.tx_dropped;
+
+	return 0;
 }
 
 static int macsec_get_iflink(const struct net_device *dev)

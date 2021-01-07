@@ -1465,9 +1465,8 @@ err:
 	return ret;
 }
 
-static void xgene_enet_get_stats64(
-			struct net_device *ndev,
-			struct rtnl_link_stats64 *stats)
+static int xgene_enet_get_stats64(struct net_device *ndev,
+				  struct rtnl_link_stats64 *stats)
 {
 	struct xgene_enet_pdata *pdata = netdev_priv(ndev);
 	struct xgene_enet_desc_ring *ring;
@@ -1500,6 +1499,8 @@ static void xgene_enet_get_stats64(
 			stats->rx_fifo_errors += ring->rx_fifo_errors;
 		}
 	}
+
+	return 0;
 }
 
 static int xgene_enet_set_mac_address(struct net_device *ndev, void *addr)

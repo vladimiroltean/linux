@@ -55,13 +55,15 @@ static netdev_tx_t vsockmon_xmit(struct sk_buff *skb, struct net_device *dev)
 	return NETDEV_TX_OK;
 }
 
-static void
+static int
 vsockmon_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
 {
 	dev_lstats_read(dev, &stats->rx_packets, &stats->rx_bytes);
 
 	stats->tx_packets = 0;
 	stats->tx_bytes = 0;
+
+	return 0;
 }
 
 static int vsockmon_is_valid_mtu(int new_mtu)

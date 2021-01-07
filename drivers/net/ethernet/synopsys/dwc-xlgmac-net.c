@@ -764,8 +764,8 @@ static netdev_tx_t xlgmac_xmit(struct sk_buff *skb, struct net_device *netdev)
 	return NETDEV_TX_OK;
 }
 
-static void xlgmac_get_stats64(struct net_device *netdev,
-			       struct rtnl_link_stats64 *s)
+static int xlgmac_get_stats64(struct net_device *netdev,
+			      struct rtnl_link_stats64 *s)
 {
 	struct xlgmac_pdata *pdata = netdev_priv(netdev);
 	struct xlgmac_stats *pstats = &pdata->stats;
@@ -787,6 +787,8 @@ static void xlgmac_get_stats64(struct net_device *netdev,
 	s->tx_bytes = pstats->txoctetcount_gb;
 	s->tx_errors = pstats->txframecount_gb - pstats->txframecount_g;
 	s->tx_dropped = netdev->stats.tx_dropped;
+
+	return 0;
 }
 
 static int xlgmac_set_mac_address(struct net_device *netdev, void *addr)

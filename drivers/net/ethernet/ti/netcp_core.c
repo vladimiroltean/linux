@@ -1908,7 +1908,7 @@ static int netcp_setup_tc(struct net_device *dev, enum tc_setup_type type,
 	return 0;
 }
 
-static void
+static int
 netcp_get_stats(struct net_device *ndev, struct rtnl_link_stats64 *stats)
 {
 	struct netcp_intf *netcp = netdev_priv(ndev);
@@ -1937,6 +1937,8 @@ netcp_get_stats(struct net_device *ndev, struct rtnl_link_stats64 *stats)
 	stats->rx_errors = p->rx_errors;
 	stats->rx_dropped = p->rx_dropped;
 	stats->tx_dropped = p->tx_dropped;
+
+	return 0;
 }
 
 static const struct net_device_ops netcp_netdev_ops = {

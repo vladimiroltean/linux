@@ -268,15 +268,18 @@ static int ipoib_change_mtu(struct net_device *dev, int new_mtu)
 	return ret;
 }
 
-static void ipoib_get_stats(struct net_device *dev,
-			    struct rtnl_link_stats64 *stats)
+static int ipoib_get_stats(struct net_device *dev,
+			   struct rtnl_link_stats64 *stats)
 {
 	struct ipoib_dev_priv *priv = ipoib_priv(dev);
+	int err = 0;
 
 	if (priv->rn_ops->ndo_get_stats64)
-		priv->rn_ops->ndo_get_stats64(dev, stats);
+		err = priv->rn_ops->ndo_get_stats64(dev, stats);
 	else
 		netdev_stats_to_stats64(stats, &dev->stats);
+
+	return err;
 }
 
 /* Called with an RCU read lock taken */

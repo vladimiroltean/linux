@@ -8926,8 +8926,8 @@ static void ixgbe_get_ring_stats64(struct rtnl_link_stats64 *stats,
 	}
 }
 
-static void ixgbe_get_stats64(struct net_device *netdev,
-			      struct rtnl_link_stats64 *stats)
+static int ixgbe_get_stats64(struct net_device *netdev,
+			     struct rtnl_link_stats64 *stats)
 {
 	struct ixgbe_adapter *adapter = netdev_priv(netdev);
 	int i;
@@ -8967,6 +8967,8 @@ static void ixgbe_get_stats64(struct net_device *netdev,
 	stats->rx_length_errors	= netdev->stats.rx_length_errors;
 	stats->rx_crc_errors	= netdev->stats.rx_crc_errors;
 	stats->rx_missed_errors	= netdev->stats.rx_missed_errors;
+
+	return 0;
 }
 
 #ifdef CONFIG_IXGBE_DCB

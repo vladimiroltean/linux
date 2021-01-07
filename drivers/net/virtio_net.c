@@ -1741,8 +1741,8 @@ out:
 	return ret;
 }
 
-static void virtnet_stats(struct net_device *dev,
-			  struct rtnl_link_stats64 *tot)
+static int virtnet_stats(struct net_device *dev,
+			 struct rtnl_link_stats64 *tot)
 {
 	struct virtnet_info *vi = netdev_priv(dev);
 	unsigned int start;
@@ -1777,6 +1777,8 @@ static void virtnet_stats(struct net_device *dev,
 	tot->tx_fifo_errors = dev->stats.tx_fifo_errors;
 	tot->rx_length_errors = dev->stats.rx_length_errors;
 	tot->rx_frame_errors = dev->stats.rx_frame_errors;
+
+	return 0;
 }
 
 static void virtnet_ack_link_announce(struct virtnet_info *vi)

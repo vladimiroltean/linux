@@ -1357,8 +1357,8 @@ static void netvsc_get_pcpu_stats(struct net_device *net,
 	}
 }
 
-static void netvsc_get_stats64(struct net_device *net,
-			       struct rtnl_link_stats64 *t)
+static int netvsc_get_stats64(struct net_device *net,
+			      struct rtnl_link_stats64 *t)
 {
 	struct net_device_context *ndev_ctx = netdev_priv(net);
 	struct netvsc_device *nvdev;
@@ -1410,6 +1410,8 @@ static void netvsc_get_stats64(struct net_device *net,
 	}
 out:
 	rcu_read_unlock();
+
+	return 0;
 }
 
 static int netvsc_set_mac_addr(struct net_device *ndev, void *p)

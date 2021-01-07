@@ -1407,8 +1407,8 @@ static int am65_cpsw_nuss_ndo_slave_ioctl(struct net_device *ndev,
 	return phy_mii_ioctl(port->slave.phy, req, cmd);
 }
 
-static void am65_cpsw_nuss_ndo_get_stats(struct net_device *dev,
-					 struct rtnl_link_stats64 *stats)
+static int am65_cpsw_nuss_ndo_get_stats(struct net_device *dev,
+					struct rtnl_link_stats64 *stats)
 {
 	struct am65_cpsw_ndev_priv *ndev_priv = netdev_priv(dev);
 	unsigned int start;
@@ -1439,6 +1439,8 @@ static void am65_cpsw_nuss_ndo_get_stats(struct net_device *dev,
 	stats->rx_errors	= dev->stats.rx_errors;
 	stats->rx_dropped	= dev->stats.rx_dropped;
 	stats->tx_dropped	= dev->stats.tx_dropped;
+
+	return 0;
 }
 
 static const struct net_device_ops am65_cpsw_nuss_netdev_ops = {

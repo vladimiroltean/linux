@@ -1144,8 +1144,8 @@ err_drop:
 	return NETDEV_TX_OK;
 }
 
-static void tbnet_get_stats64(struct net_device *dev,
-			      struct rtnl_link_stats64 *stats)
+static int tbnet_get_stats64(struct net_device *dev,
+			     struct rtnl_link_stats64 *stats)
 {
 	struct tbnet *net = netdev_priv(dev);
 
@@ -1161,6 +1161,8 @@ static void tbnet_get_stats64(struct net_device *dev,
 	stats->rx_over_errors = net->stats.rx_over_errors;
 	stats->rx_crc_errors = net->stats.rx_crc_errors;
 	stats->rx_missed_errors = net->stats.rx_missed_errors;
+
+	return 0;
 }
 
 static const struct net_device_ops tbnet_netdev_ops = {

@@ -89,8 +89,8 @@ static int mhi_ndo_xmit(struct sk_buff *skb, struct net_device *ndev)
 	return NETDEV_TX_OK;
 }
 
-static void mhi_ndo_get_stats64(struct net_device *ndev,
-				struct rtnl_link_stats64 *stats)
+static int mhi_ndo_get_stats64(struct net_device *ndev,
+			       struct rtnl_link_stats64 *stats)
 {
 	struct mhi_net_dev *mhi_netdev = netdev_priv(ndev);
 	unsigned int start;
@@ -110,6 +110,8 @@ static void mhi_ndo_get_stats64(struct net_device *ndev,
 		stats->tx_errors = u64_stats_read(&mhi_netdev->stats.tx_errors);
 		stats->tx_dropped = u64_stats_read(&mhi_netdev->stats.tx_dropped);
 	} while (u64_stats_fetch_retry_irq(&mhi_netdev->stats.tx_syncp, start));
+
+	return 0;
 }
 
 static const struct net_device_ops mhi_netdev_ops = {

@@ -1499,8 +1499,8 @@ static void ave_set_rx_mode(struct net_device *ndev)
 	}
 }
 
-static void ave_get_stats64(struct net_device *ndev,
-			    struct rtnl_link_stats64 *stats)
+static int ave_get_stats64(struct net_device *ndev,
+			   struct rtnl_link_stats64 *stats)
 {
 	struct ave_private *priv = netdev_priv(ndev);
 	unsigned int start;
@@ -1523,6 +1523,8 @@ static void ave_get_stats64(struct net_device *ndev,
 	stats->tx_dropped     = priv->stats_tx.dropped;
 	stats->rx_fifo_errors = priv->stats_rx.fifo_errors;
 	stats->collisions     = priv->stats_tx.collisions;
+
+	return 0;
 }
 
 static int ave_set_mac_address(struct net_device *ndev, void *p)

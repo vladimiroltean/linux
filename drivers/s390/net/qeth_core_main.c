@@ -7141,7 +7141,7 @@ netdev_features_t qeth_features_check(struct sk_buff *skb,
 }
 EXPORT_SYMBOL_GPL(qeth_features_check);
 
-void qeth_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
+int qeth_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
 {
 	struct qeth_card *card = dev->ml_priv;
 	struct qeth_qdio_out_q *queue;
@@ -7170,6 +7170,8 @@ void qeth_get_stats64(struct net_device *dev, struct rtnl_link_stats64 *stats)
 		stats->tx_errors += queue->stats.tx_errors;
 		stats->tx_dropped += queue->stats.tx_dropped;
 	}
+
+	return 0;
 }
 EXPORT_SYMBOL_GPL(qeth_get_stats64);
 

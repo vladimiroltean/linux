@@ -904,8 +904,8 @@ static int ionic_adminq_napi(struct napi_struct *napi, int budget)
 	return work_done;
 }
 
-void ionic_get_stats64(struct net_device *netdev,
-		       struct rtnl_link_stats64 *ns)
+int ionic_get_stats64(struct net_device *netdev,
+		      struct rtnl_link_stats64 *ns)
 {
 	struct ionic_lif *lif = netdev_priv(netdev);
 	struct ionic_lif_stats *ls;
@@ -955,6 +955,8 @@ void ionic_get_stats64(struct net_device *netdev,
 			ns->rx_missed_errors;
 
 	ns->tx_errors = ns->tx_aborted_errors;
+
+	return 0;
 }
 
 static int ionic_lif_addr_add(struct ionic_lif *lif, const u8 *addr)

@@ -5539,7 +5539,7 @@ void ice_update_pf_stats(struct ice_pf *pf)
  * @stats: main device statistics structure
  */
 static
-void ice_get_stats64(struct net_device *netdev, struct rtnl_link_stats64 *stats)
+int ice_get_stats64(struct net_device *netdev, struct rtnl_link_stats64 *stats)
 {
 	struct ice_netdev_priv *np = netdev_priv(netdev);
 	struct rtnl_link_stats64 *vsi_stats;
@@ -5548,7 +5548,7 @@ void ice_get_stats64(struct net_device *netdev, struct rtnl_link_stats64 *stats)
 	vsi_stats = &vsi->net_stats;
 
 	if (!vsi->num_txq || !vsi->num_rxq)
-		return;
+		return 0;
 
 	/* netdev packet/byte stats come from ring counter. These are obtained
 	 * by summing up ring counters (done by ice_update_vsi_ring_stats).
@@ -5573,6 +5573,8 @@ void ice_get_stats64(struct net_device *netdev, struct rtnl_link_stats64 *stats)
 	stats->rx_dropped = vsi_stats->rx_dropped;
 	stats->rx_crc_errors = vsi_stats->rx_crc_errors;
 	stats->rx_length_errors = vsi_stats->rx_length_errors;
+
+	return 0;
 }
 
 /**

@@ -142,7 +142,7 @@ static void mlx5i_grp_sw_update_stats(struct mlx5e_priv *priv)
 	memcpy(&priv->stats.sw, &s, sizeof(s));
 }
 
-void mlx5i_get_stats(struct net_device *dev, struct rtnl_link_stats64 *stats)
+int mlx5i_get_stats(struct net_device *dev, struct rtnl_link_stats64 *stats)
 {
 	struct mlx5e_priv     *priv   = mlx5i_epriv(dev);
 	struct mlx5e_sw_stats *sstats = &priv->stats.sw;
@@ -154,6 +154,8 @@ void mlx5i_get_stats(struct net_device *dev, struct rtnl_link_stats64 *stats)
 	stats->tx_packets = sstats->tx_packets;
 	stats->tx_bytes   = sstats->tx_bytes;
 	stats->tx_dropped = sstats->tx_queue_dropped;
+
+	return 0;
 }
 
 int mlx5i_init_underlay_qp(struct mlx5e_priv *priv)
