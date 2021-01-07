@@ -1633,6 +1633,7 @@ static void fc_rport_recv_rls_req(struct fc_rport_priv *rdata,
 	struct fc_els_lesb *lesb;
 	struct fc_seq_els_data rjt_data;
 	struct fc_host_statistics *hst;
+	int err;
 
 	lockdep_assert_held(&rdata->rp_mutex);
 
@@ -1659,7 +1660,9 @@ static void fc_rport_recv_rls_req(struct fc_rport_priv *rdata,
 	lesb = &rsp->rls_lesb;
 	if (lport->tt.get_lesb) {
 		/* get LESB from LLD if it supports it */
-		lport->tt.get_lesb(lport, lesb);
+		err = lport->tt.get_lesb(lport, lesb);
+		if (err)
+			goto out_rjt;
 	} else {
 		fc_get_host_stats(lport->host);
 		hst = &lport->host_stats;
