@@ -139,8 +139,13 @@ static ssize_t show_fcoe_ctlr_device_##field(struct device *dev, \
 					    char *buf)			\
 {									\
 	struct fcoe_ctlr_device *ctlr = dev_to_ctlr(dev);		\
-	if (ctlr->f->get_fcoe_ctlr_##field)				\
-		ctlr->f->get_fcoe_ctlr_##field(ctlr);			\
+	int err;							\
+									\
+	if (ctlr->f->get_fcoe_ctlr_##field) {				\
+		err = ctlr->f->get_fcoe_ctlr_##field(ctlr);		\
+		if (err)						\
+			return err;					\
+	}								\
 	return snprintf(buf, sz, format_string,				\
 			cast fcoe_ctlr_##field(ctlr));			\
 }

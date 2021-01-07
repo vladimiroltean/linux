@@ -166,15 +166,16 @@ EXPORT_SYMBOL_GPL(fcoe_link_speed_update);
  * Note, the Link Error Status Block (LESB) for FCoE is defined in FC-BB-6
  * Clause 7.11 in v1.04.
  */
-void __fcoe_get_lesb(struct fc_lport *lport,
-		     struct fc_els_lesb *fc_lesb,
-		     struct net_device *netdev)
+int __fcoe_get_lesb(struct fc_lport *lport,
+		    struct fc_els_lesb *fc_lesb,
+		    struct net_device *netdev)
 {
 	struct rtnl_link_stats64 dev_stats;
 	unsigned int cpu;
 	u32 lfc, vlfc, mdac;
 	struct fc_stats *stats;
 	struct fcoe_fc_els_lesb *lesb;
+	int err;
 
 	lfc = 0;
 	vlfc = 0;
@@ -190,8 +191,14 @@ void __fcoe_get_lesb(struct fc_lport *lport,
 	lesb->lesb_link_fail = htonl(lfc);
 	lesb->lesb_vlink_fail = htonl(vlfc);
 	lesb->lesb_miss_fka = htonl(mdac);
-	dev_get_stats(netdev, &dev_stats);
+
+	err = dev_get_stats(netdev, &dev_stats);
+	if (err)
+		return err;
+
 	lesb->lesb_fcs_error = htonl(dev_stats.rx_crc_errors);
+
+	return 0;
 }
 EXPORT_SYMBOL_GPL(__fcoe_get_lesb);
 
@@ -200,12 +207,11 @@ EXPORT_SYMBOL_GPL(__fcoe_get_lesb);
  * @lport: the local port
  * @fc_lesb: the link error status block
  */
-void fcoe_get_lesb(struct fc_lport *lport,
-			 struct fc_els_lesb *fc_lesb)
+int fcoe_get_lesb(struct fc_lport *lport, struct fc_els_lesb *fc_lesb)
 {
 	struct net_device *netdev = fcoe_get_netdev(lport);
 
-	__fcoe_get_lesb(lport, fc_lesb, netdev);
+	return __fcoe_get_lesb(lport, fc_lesb, netdev);
 }
 EXPORT_SYMBOL_GPL(fcoe_get_lesb);
 
@@ -215,14 +221,14 @@ EXPORT_SYMBOL_GPL(fcoe_get_lesb);
  * @ctlr_dev: The given fcoe controller device
  *
  */
-void fcoe_ctlr_get_lesb(struct fcoe_ctlr_device *ctlr_dev)
+int fcoe_ctlr_get_lesb(struct fcoe_ctlr_device *ctlr_dev)
 {
 	struct fcoe_ctlr *fip = fcoe_ctlr_device_priv(ctlr_dev);
 	struct net_device *netdev = fcoe_get_netdev(fip->lp);
 	struct fc_els_lesb *fc_lesb;
 
 	fc_lesb = (struct fc_els_lesb *)(&ctlr_dev->lesb);
-	__fcoe_get_lesb(fip->lp, fc_lesb, netdev);
+	return __fcoe_get_lesb(fip->lp, fc_lesb, netdev);
 }
 EXPORT_SYMBOL_GPL(fcoe_ctlr_get_lesb);
 
