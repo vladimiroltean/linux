@@ -449,6 +449,60 @@ static inline void bond_hw_addr_copy(u8 *dst, const u8 *src, unsigned int len)
 	memcpy(dst, src, len);
 }
 
+/* Helpers for reference counting the struct net_device behind the bond slaves.
+ * These can be used to propagate the net_device_ops from the bond to the
+ * slaves while not holding rcu_read_lock() or the rtnl_mutex.
+ */
+struct bonding_slave_dev {
+	struct net_device *ndev;
+	struct list_head list;
+};
+
+static inline void bond_put_slaves(struct list_head *slaves)
+{
+	struct bonding_slave_dev *s, *tmp;
+
+	list_for_each_entry_safe(s, tmp, slaves, list) {
+		dev_put(s->ndev);
+		list_del(&s->list);
+		kfree(s);
+	}
+}
+
+static inline int bond_get_slaves(struct bonding *bond,
+				  struct list_head *slaves,
+				  int *num_slaves)
+{
+	struct list_head *iter;
+	struct slave *slave;
+	int err = 0;
+
+	INIT_LIST_HEAD(slaves);
+	*num_slaves = 0;
+
+	rcu_read_lock();
+
+	bond_for_each_slave_rcu(bond, slave, iter) {
+		struct bonding_slave_dev *s;
+
+		s = kzalloc(sizeof(*s), GFP_ATOMIC);
+		if (!s) {
+			rcu_read_unlock();
+			bond_put_slaves(slaves);
+			break;
+		}
+
+		s->ndev = slave->dev;
+		dev_hold(s->ndev);
+		list_add_tail(&s->list, slaves);
+		(*num_slaves)++;
+	}
+
+	rcu_read_unlock();
+
+	return err;
+}
+
 #define BOND_PRI_RESELECT_ALWAYS	0
 #define BOND_PRI_RESELECT_BETTER	1
 #define BOND_PRI_RESELECT_FAILURE	2
