@@ -3766,80 +3766,68 @@ static void bond_fold_stats(struct rtnl_link_stats64 *_res,
 	}
 }
 
-#ifdef CONFIG_LOCKDEP
-static int bond_get_lowest_level_rcu(struct net_device *dev)
-{
-	struct net_device *ldev, *next, *now, *dev_stack[MAX_NEST_DEV + 1];
-	struct list_head *niter, *iter, *iter_stack[MAX_NEST_DEV + 1];
-	int cur = 0, max = 0;
-
-	now = dev;
-	iter = &dev->adj_list.lower;
-
-	while (1) {
-		next = NULL;
-		while (1) {
-			ldev = netdev_next_lower_dev_rcu(now, &iter);
-			if (!ldev)
-				break;
-
-			next = ldev;
-			niter = &ldev->adj_list.lower;
-			dev_stack[cur] = now;
-			iter_stack[cur++] = iter;
-			if (max <= cur)
-				max = cur;
-			break;
-		}
-
-		if (!next) {
-			if (!cur)
-				return max;
-			next = dev_stack[--cur];
-			niter = iter_stack[cur];
-		}
-
-		now = next;
-		iter = niter;
-	}
-
-	return max;
-}
-#endif
-
 static int bond_get_stats(struct net_device *bond_dev,
 			  struct rtnl_link_stats64 *stats)
 {
 	struct bonding *bond = netdev_priv(bond_dev);
-	struct rtnl_link_stats64 temp;
-	struct list_head *iter;
-	struct slave *slave;
-	int nest_level = 0;
-	int res = 0;
+	struct rtnl_link_stats64 *dev_stats;
+	struct net_device **dev_array;
+	int i, res, num_slaves;
 
-	rcu_read_lock();
-#ifdef CONFIG_LOCKDEP
-	nest_level = bond_get_lowest_level_rcu(bond_dev);
-#endif
+	res = bond_get_slave_array(bond, &dev_array, &num_slaves);
+	if (res || !num_slaves)
+		return res;
 
-	spin_lock_nested(&bond->stats_lock, nest_level);
-	memcpy(stats, &bond->bond_stats, sizeof(*stats));
-
-	bond_for_each_slave_rcu(bond, slave, iter) {
-		res = dev_get_stats(slave->dev, &temp);
-		if (res)
-			goto out;
-
-		bond_fold_stats(stats, &temp, &slave->slave_stats);
-
-		/* save off the slave stats for the next run */
-		memcpy(&slave->slave_stats, &temp, sizeof(temp));
+	dev_stats = kcalloc(num_slaves, sizeof(*dev_stats), GFP_KERNEL);
+	if (!dev_stats) {
+		net_put_dev_array(dev_array, num_slaves);
+		return -ENOMEM;
 	}
 
-	memcpy(&bond->bond_stats, stats, sizeof(*stats));
-out:
-	spin_unlock(&bond->stats_lock);
+	/* Recurse with no locks taken */
+	for (i = 0; i < num_slaves; i++) {
+		res = dev_get_stats(dev_array[i], &dev_stats[i]);
+		if (res)
+			goto out;
+	}
+
+	spin_lock(&bond->stats_lock);
+
+	memcpy(stats, &bond->bond_stats, sizeof(*stats));
+
+	/* Because we released the RCU lock in bond_get_slaves, the new slave
+	 * array might be different from the original one, so we need to take
+	 * it again and only update the stats of the slaves that still exist.
+	 */
+	rcu_read_lock();
+
+	for (i = 0; i < num_slaves; i++) {
+		struct list_head *iter;
+		struct slave *slave;
+
+		bond_for_each_slave_rcu(bond, slave, iter) {
+			if (slave->dev != dev_array[i])
+				continue;
+
+			bond_fold_stats(stats, &dev_stats[i],
+					&slave->slave_stats);
+
+			/* save off the slave stats for the next run */
+			memcpy(&slave->slave_stats, &dev_stats[i],
+			       sizeof(dev_stats[i]));
+			break;
+		}
+	}
+
 	rcu_read_unlock();
+
+	memcpy(&bond->bond_stats, stats, sizeof(*stats));
+
+	spin_unlock(&bond->stats_lock);
+
+out:
+	kfree(dev_stats);
+	net_put_dev_array(dev_array, num_slaves);
 
 	return res;
 }

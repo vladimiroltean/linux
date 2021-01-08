@@ -453,6 +453,47 @@ static inline void bond_hw_addr_copy(u8 *dst, const u8 *src, unsigned int len)
 	memcpy(dst, src, len);
 }
 
+/* Helper for reference counting the struct net_device behind the bond slaves.
+ * This can be used to propagate the net_device_ops from the bond to the slaves
+ * while not holding rcu_read_lock() or the rtnl_mutex.
+ * Can be paired with the generic net_put_dev_array.
+ */
+static inline int bond_get_slave_array(struct bonding *bond,
+				       struct net_device ***dev_array,
+				       int *dev_count)
+{
+	struct net_device **array;
+	struct list_head *iter;
+	struct slave *slave;
+	int count, i = 0;
+
+	count = READ_ONCE(bond->slave_cnt);
+	if (!count) {
+		*dev_count = 0;
+		return 0;
+	}
+
+	array = kcalloc(count, sizeof(struct net_device *), GFP_KERNEL);
+	if (!array)
+		return -ENOMEM;
+
+	rcu_read_lock();
+
+	bond_for_each_slave_rcu(bond, slave, iter) {
+		dev_hold(slave->dev);
+		array[i++] = slave->dev;
+		if (i == count)
+			break;
+	}
+
+	rcu_read_unlock();
+
+	*dev_count = i;
+	*dev_array = array;
+
+	return 0;
+}
+
 #define BOND_PRI_RESELECT_ALWAYS	0
 #define BOND_PRI_RESELECT_BETTER	1
 #define BOND_PRI_RESELECT_FAILURE	2
