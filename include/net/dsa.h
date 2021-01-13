@@ -155,6 +155,7 @@ struct dsa_switch_tree {
 enum dsa_port_mall_action_type {
 	DSA_PORT_MALL_MIRROR,
 	DSA_PORT_MALL_POLICER,
+	DSA_PORT_MALL_SKBEDIT,
 };
 
 /* TC mirroring entry */
@@ -169,6 +170,10 @@ struct dsa_mall_policer_tc_entry {
 	u64 rate_bytes_per_sec;
 };
 
+struct dsa_mall_skbedit_tc_entry {
+	int priority;
+};
+
 /* TC matchall entry */
 struct dsa_mall_tc_entry {
 	struct list_head list;
@@ -177,6 +182,7 @@ struct dsa_mall_tc_entry {
 	union {
 		struct dsa_mall_mirror_tc_entry mirror;
 		struct dsa_mall_policer_tc_entry policer;
+		struct dsa_mall_skbedit_tc_entry skbedit;
 	};
 };
 
@@ -612,6 +618,8 @@ struct dsa_switch_ops {
 	int	(*port_policer_add)(struct dsa_switch *ds, int port,
 				    struct dsa_mall_policer_tc_entry *policer);
 	void	(*port_policer_del)(struct dsa_switch *ds, int port);
+	int	(*port_priority_set)(struct dsa_switch *ds, int port,
+				     struct dsa_mall_skbedit_tc_entry *skbedit);
 	int	(*port_setup_tc)(struct dsa_switch *ds, int port,
 				 enum tc_setup_type type, void *type_data);
 

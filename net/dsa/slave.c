@@ -1018,6 +1018,66 @@ dsa_slave_add_cls_matchall_police(struct net_device *dev,
 	return err;
 }
 
+static int
+dsa_slave_add_cls_matchall_skbedit(struct net_device *dev,
+				   struct tc_cls_matchall_offload *cls,
+				   bool ingress)
+{
+	struct netlink_ext_ack *extack = cls->common.extack;
+	struct dsa_port *dp = dsa_slave_to_port(dev);
+	struct dsa_slave_priv *p = netdev_priv(dev);
+	struct dsa_mall_skbedit_tc_entry *skbedit;
+	struct dsa_mall_tc_entry *mall_tc_entry;
+	struct dsa_switch *ds = dp->ds;
+	struct flow_action_entry *act;
+	int err;
+
+	if (!ds->ops->port_priority_set) {
+		NL_SET_ERR_MSG_MOD(extack,
+				   "Port priority not implemented");
+		return -EOPNOTSUPP;
+	}
+
+	if (!ingress) {
+		NL_SET_ERR_MSG_MOD(extack,
+				   "Only supported on ingress qdisc");
+		return -EOPNOTSUPP;
+	}
+
+	if (!flow_action_basic_hw_stats_check(&cls->rule->action,
+					      cls->common.extack))
+		return -EOPNOTSUPP;
+
+	list_for_each_entry(mall_tc_entry, &p->mall_tc_list, list) {
+		if (mall_tc_entry->type == DSA_PORT_MALL_SKBEDIT) {
+			NL_SET_ERR_MSG_MOD(extack,
+					   "Only one port priority allowed");
+			return -EEXIST;
+		}
+	}
+
+	act = &cls->rule->action.entries[0];
+
+	mall_tc_entry = kzalloc(sizeof(*mall_tc_entry), GFP_KERNEL);
+	if (!mall_tc_entry)
+		return -ENOMEM;
+
+	mall_tc_entry->cookie = cls->cookie;
+	mall_tc_entry->type = DSA_PORT_MALL_SKBEDIT;
+	skbedit = &mall_tc_entry->skbedit;
+	skbedit->priority = act->priority;
+
+	err = ds->ops->port_priority_set(ds, dp->index, skbedit);
+	if (err) {
+		kfree(mall_tc_entry);
+		return err;
+	}
+
+	list_add_tail(&mall_tc_entry->list, &p->mall_tc_list);
+
+	return err;
+}
+
 static int dsa_slave_add_cls_matchall(struct net_device *dev,
 				      struct tc_cls_matchall_offload *cls,
 				      bool ingress)
@@ -1031,6 +1091,9 @@ static int dsa_slave_add_cls_matchall(struct net_device *dev,
 	else if (flow_offload_has_one_action(&cls->rule->action) &&
 		 cls->rule->action.entries[0].id == FLOW_ACTION_POLICE)
 		err = dsa_slave_add_cls_matchall_police(dev, cls, ingress);
+	else if (flow_offload_has_one_action(&cls->rule->action) &&
+		 cls->rule->action.entries[0].id == FLOW_ACTION_PRIORITY)
+		err = dsa_slave_add_cls_matchall_skbedit(dev, cls, ingress);
 
 	return err;
 }
@@ -1057,6 +1120,15 @@ static void dsa_slave_del_cls_matchall(struct net_device *dev,
 	case DSA_PORT_MALL_POLICER:
 		if (ds->ops->port_policer_del)
 			ds->ops->port_policer_del(ds, dp->index);
+		break;
+	case DSA_PORT_MALL_SKBEDIT:
+		if (ds->ops->port_priority_set) {
+			struct dsa_mall_skbedit_tc_entry *skbedit;
+
+			skbedit = &mall_tc_entry->skbedit;
+			skbedit->priority = 0;
+			ds->ops->port_priority_set(ds, dp->index, skbedit);
+		}
 		break;
 	default:
 		WARN_ON(1);
