@@ -41,11 +41,15 @@ struct frame_info {
 	u32 timestamp;	/* rew_val */
 };
 
+enum ocelot_port_tc_type {
+	OCELOT_PORT_TC_POLICE,
+};
+
 struct ocelot_port_tc {
 	bool block_shared;
 	unsigned long offload_cnt;
-
-	unsigned long police_id;
+	unsigned long cookie;
+	enum ocelot_port_tc_type type;
 };
 
 struct ocelot_port_private {

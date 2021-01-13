@@ -30,13 +30,54 @@ int ocelot_setup_tc_cls_flower(struct ocelot_port_private *priv,
 	}
 }
 
+static int ocelot_setup_tc_cls_matchall_police(struct ocelot_port_private *priv,
+					       struct tc_cls_matchall_offload *f)
+{
+	struct flow_action_entry *action = &f->rule->action.entries[0];
+	struct netlink_ext_ack *extack = f->common.extack;
+	struct ocelot *ocelot = priv->port.ocelot;
+	struct ocelot_policer pol = {0};
+	int port = priv->chip_port;
+
+	if (priv->tc.block_shared) {
+		NL_SET_ERR_MSG_MOD(extack,
+				   "Rate limit is not supported on shared blocks");
+		return -EOPNOTSUPP;
+	}
+
+	if (priv->tc.police_id && priv->tc.police_id != f->cookie) {
+		NL_SET_ERR_MSG_MOD(extack,
+				   "Only one policer per port is supported");
+		return -EEXIST;
+	}
+
+	pol.rate = (u32)div_u64(action->police.rate_bytes_ps, 1000) * 8;
+	pol.burst = action->police.burst;
+
+	err = ocelot_port_policer_add(ocelot, port, &pol);
+	if (err) {
+		NL_SET_ERR_MSG_MOD(extack, "Could not add policer");
+		return err;
+	}
+
+	priv->tc.police_id = f->cookie;
+
+	return 0;
+}
+
+static void
+ocelot_destroy_tc_cls_matchall_police(struct ocelot_port_private *priv,
+				      struct tc_cls_matchall_offload *f)
+{
+
+}
+
 static int ocelot_setup_tc_cls_matchall(struct ocelot_port_private *priv,
 					struct tc_cls_matchall_offload *f,
 					bool ingress)
 {
 	struct netlink_ext_ack *extack = f->common.extack;
 	struct ocelot *ocelot = priv->port.ocelot;
-	struct ocelot_policer pol = { 0 };
 	struct flow_action_entry *action;
 	int port = priv->chip_port;
 	int err;
@@ -54,34 +95,18 @@ static int ocelot_setup_tc_cls_matchall(struct ocelot_port_private *priv,
 			return -EOPNOTSUPP;
 		}
 
-		if (priv->tc.block_shared) {
-			NL_SET_ERR_MSG_MOD(extack,
-					   "Rate limit is not supported on shared blocks");
-			return -EOPNOTSUPP;
-		}
-
 		action = &f->rule->action.entries[0];
 
-		if (action->id != FLOW_ACTION_POLICE) {
+		switch (action->id) {
+		case FLOW_ACTION_POLICE:
+			err = ocelot_setup_tc_cls_matchall_police(priv, f);
+			if (err)
+				return err;
+			break;
+		default:
 			NL_SET_ERR_MSG_MOD(extack, "Unsupported action");
 			return -EOPNOTSUPP;
 		}
-
-		if (priv->tc.police_id && priv->tc.police_id != f->cookie) {
-			NL_SET_ERR_MSG_MOD(extack,
-					   "Only one policer per port is supported");
-			return -EEXIST;
-		}
-
-		pol.rate = (u32)div_u64(action->police.rate_bytes_ps, 1000) * 8;
-		pol.burst = action->police.burst;
-
-		err = ocelot_port_policer_add(ocelot, port, &pol);
-		if (err) {
-			NL_SET_ERR_MSG_MOD(extack, "Could not add policer");
-			return err;
-		}
-
 		priv->tc.police_id = f->cookie;
 		priv->tc.offload_cnt++;
 		return 0;
