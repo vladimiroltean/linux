@@ -739,6 +739,20 @@ static void felix_port_policer_del(struct dsa_switch *ds, int port)
 	ocelot_port_policer_del(ocelot, port);
 }
 
+static int felix_port_priority_set(struct dsa_switch *ds, int port,
+				   struct dsa_mall_skbedit_tc_entry *skbedit)
+{
+	struct ocelot *ocelot = ds->priv;
+
+	ocelot_rmw_gix(ocelot,
+		       ANA_PORT_QOS_CFG_QOS_DEFAULT_VAL(skbedit->priority),
+		       ANA_PORT_QOS_CFG_QOS_DEFAULT_VAL_M,
+		       ANA_PORT_QOS_CFG,
+		       port);
+
+	return 0;
+}
+
 static int felix_port_setup_tc(struct dsa_switch *ds, int port,
 			       enum tc_setup_type type,
 			       void *type_data)
@@ -786,6 +800,7 @@ const struct dsa_switch_ops felix_switch_ops = {
 	.port_max_mtu		= felix_get_max_mtu,
 	.port_policer_add	= felix_port_policer_add,
 	.port_policer_del	= felix_port_policer_del,
+	.port_priority_set	= felix_port_priority_set,
 	.cls_flower_add		= felix_cls_flower_add,
 	.cls_flower_del		= felix_cls_flower_del,
 	.cls_flower_stats	= felix_cls_flower_stats,
