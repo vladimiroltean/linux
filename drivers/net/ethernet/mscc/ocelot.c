@@ -244,16 +244,15 @@ int ocelot_port_vlan_filtering(struct ocelot *ocelot, int port,
 EXPORT_SYMBOL(ocelot_port_vlan_filtering);
 
 int ocelot_vlan_prepare(struct ocelot *ocelot, int port, u16 vid, bool pvid,
-			bool untagged)
+			bool untagged, struct netlink_ext_ack *extack)
 {
 	struct ocelot_port *ocelot_port = ocelot->ports[port];
 
 	/* Deny changing the native VLAN, but always permit deleting it */
 	if (untagged && ocelot_port->native_vlan.vid != vid &&
 	    ocelot_port->native_vlan.valid) {
-		dev_err(ocelot->dev,
-			"Port already has a native VLAN: %d\n",
-			ocelot_port->native_vlan.vid);
+		NL_SET_ERR_MSG_MOD(extack,
+				   "Port supports at most one native (egress-untagged) VLAN");
 		return -EBUSY;
 	}
 
@@ -262,15 +261,17 @@ int ocelot_vlan_prepare(struct ocelot *ocelot, int port, u16 vid, bool pvid,
 EXPORT_SYMBOL(ocelot_vlan_prepare);
 
 int ocelot_vlan_add(struct ocelot *ocelot, int port, u16 vid, bool pvid,
-		    bool untagged)
+		    bool untagged, struct netlink_ext_ack *extack)
 {
 	int ret;
 
 	/* Make the port a member of the VLAN */
 	ocelot->vlan_mask[vid] |= BIT(port);
 	ret = ocelot_vlant_set_mask(ocelot, vid, ocelot->vlan_mask[vid]);
-	if (ret)
+	if (ret) {
+		NL_SET_ERR_MSG_MOD(extack, "Failed to set mask in VLAN table");
 		return ret;
+	}
 
 	/* Default ingress vlan classification */
 	if (pvid) {

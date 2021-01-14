@@ -206,19 +206,20 @@ static void ocelot_port_adjust_link(struct net_device *dev)
 	ocelot_adjust_link(ocelot, port, dev->phydev);
 }
 
-static int ocelot_vlan_vid_prepare(struct net_device *dev, u16 vid, bool pvid,
-				   bool untagged)
+static int ocelot_vlan_vid_prepare(struct net_device *dev, u16 vid,
+				   bool pvid, bool untagged,
+				   struct netlink_ext_ack *extack)
 {
 	struct ocelot_port_private *priv = netdev_priv(dev);
 	struct ocelot_port *ocelot_port = &priv->port;
 	struct ocelot *ocelot = ocelot_port->ocelot;
 	int port = priv->chip_port;
 
-	return ocelot_vlan_prepare(ocelot, port, vid, pvid, untagged);
+	return ocelot_vlan_prepare(ocelot, port, vid, pvid, untagged, extack);
 }
 
 static int ocelot_vlan_vid_add(struct net_device *dev, u16 vid, bool pvid,
-			       bool untagged)
+			       bool untagged, struct netlink_ext_ack *extack)
 {
 	struct ocelot_port_private *priv = netdev_priv(dev);
 	struct ocelot_port *ocelot_port = &priv->port;
@@ -226,7 +227,7 @@ static int ocelot_vlan_vid_add(struct net_device *dev, u16 vid, bool pvid,
 	int port = priv->chip_port;
 	int ret;
 
-	ret = ocelot_vlan_add(ocelot, port, vid, pvid, untagged);
+	ret = ocelot_vlan_add(ocelot, port, vid, pvid, untagged, extack);
 	if (ret)
 		return ret;
 
@@ -645,7 +646,7 @@ static int ocelot_port_fdb_dump(struct sk_buff *skb,
 static int ocelot_vlan_rx_add_vid(struct net_device *dev, __be16 proto,
 				  u16 vid)
 {
-	return ocelot_vlan_vid_add(dev, vid, false, false);
+	return ocelot_vlan_vid_add(dev, vid, false, false, NULL);
 }
 
 static int ocelot_vlan_rx_kill_vid(struct net_device *dev, __be16 proto,
@@ -883,17 +884,18 @@ static int ocelot_port_attr_set(struct net_device *dev,
 }
 
 static int ocelot_port_obj_add_vlan(struct net_device *dev,
-				    const struct switchdev_obj_port_vlan *vlan)
+				    const struct switchdev_obj_port_vlan *vlan,
+				    struct netlink_ext_ack *extack)
 {
 	bool untagged = vlan->flags & BRIDGE_VLAN_INFO_UNTAGGED;
 	bool pvid = vlan->flags & BRIDGE_VLAN_INFO_PVID;
 	int ret;
 
-	ret = ocelot_vlan_vid_prepare(dev, vlan->vid, pvid, untagged);
+	ret = ocelot_vlan_vid_prepare(dev, vlan->vid, pvid, untagged, extack);
 	if (ret)
 		return ret;
 
-	return ocelot_vlan_vid_add(dev, vlan->vid, pvid, untagged);
+	return ocelot_vlan_vid_add(dev, vlan->vid, pvid, untagged, extack);
 }
 
 static int ocelot_port_obj_add_mdb(struct net_device *dev,
@@ -926,8 +928,8 @@ static int ocelot_port_obj_add(struct net_device *dev,
 
 	switch (obj->id) {
 	case SWITCHDEV_OBJ_ID_PORT_VLAN:
-		ret = ocelot_port_obj_add_vlan(dev,
-					       SWITCHDEV_OBJ_PORT_VLAN(obj));
+		ret = ocelot_port_obj_add_vlan(dev, SWITCHDEV_OBJ_PORT_VLAN(obj),
+					       extack);
 		break;
 	case SWITCHDEV_OBJ_ID_PORT_MDB:
 		ret = ocelot_port_obj_add_mdb(dev, SWITCHDEV_OBJ_PORT_MDB(obj));
