@@ -306,7 +306,8 @@ static int dsa_slave_port_attr_set(struct net_device *dev,
 /* Must be called under rcu_read_lock() */
 static int
 dsa_slave_vlan_check_for_8021q_uppers(struct net_device *slave,
-				      const struct switchdev_obj_port_vlan *vlan)
+				      const struct switchdev_obj_port_vlan *vlan,
+				      struct netlink_ext_ack *extack)
 {
 	struct net_device *upper_dev;
 	struct list_head *iter;
@@ -318,8 +319,11 @@ dsa_slave_vlan_check_for_8021q_uppers(struct net_device *slave,
 			continue;
 
 		vid = vlan_dev_vlan_id(upper_dev);
-		if (vid == vlan->vid)
+		if (vid == vlan->vid) {
+			NL_SET_ERR_MSG_MOD(extack,
+					   "There already exists an 8021q upper interface with this VID");
 			return -EBUSY;
+		}
 	}
 
 	return 0;
@@ -349,13 +353,13 @@ static int dsa_slave_vlan_add(struct net_device *dev,
 	 */
 	if (br_vlan_enabled(dp->bridge_dev)) {
 		rcu_read_lock();
-		err = dsa_slave_vlan_check_for_8021q_uppers(dev, &vlan);
+		err = dsa_slave_vlan_check_for_8021q_uppers(dev, &vlan, extack);
 		rcu_read_unlock();
 		if (err)
 			return err;
 	}
 
-	err = dsa_port_vlan_add(dp, &vlan);
+	err = dsa_port_vlan_add(dp, &vlan, extack);
 	if (err)
 		return err;
 
@@ -365,7 +369,7 @@ static int dsa_slave_vlan_add(struct net_device *dev,
 	 */
 	vlan.flags &= ~BRIDGE_VLAN_INFO_PVID;
 
-	err = dsa_port_vlan_add(dp->cpu_dp, &vlan);
+	err = dsa_port_vlan_add(dp->cpu_dp, &vlan, extack);
 	if (err)
 		return err;
 
@@ -1284,12 +1288,12 @@ static int dsa_slave_vlan_rx_add_vid(struct net_device *dev, __be16 proto,
 	int ret;
 
 	/* User port... */
-	ret = dsa_port_vlan_add(dp, &vlan);
+	ret = dsa_port_vlan_add(dp, &vlan, NULL);
 	if (ret)
 		return ret;
 
 	/* And CPU port... */
-	ret = dsa_port_vlan_add(dp->cpu_dp, &vlan);
+	ret = dsa_port_vlan_add(dp->cpu_dp, &vlan, NULL);
 	if (ret)
 		return ret;
 

@@ -375,7 +375,8 @@ int rtl8366_vlan_filtering(struct dsa_switch *ds, int port, bool vlan_filtering)
 EXPORT_SYMBOL_GPL(rtl8366_vlan_filtering);
 
 int rtl8366_vlan_add(struct dsa_switch *ds, int port,
-		     const struct switchdev_obj_port_vlan *vlan)
+		     const struct switchdev_obj_port_vlan *vlan,
+		     struct netlink_ext_ack *extack)
 {
 	bool untagged = !!(vlan->flags & BRIDGE_VLAN_INFO_UNTAGGED);
 	bool pvid = !!(vlan->flags & BRIDGE_VLAN_INFO_PVID);
@@ -384,8 +385,10 @@ int rtl8366_vlan_add(struct dsa_switch *ds, int port,
 	u32 untag = 0;
 	int ret;
 
-	if (!smi->ops->is_vlan_valid(smi, vlan->vid))
+	if (!smi->ops->is_vlan_valid(smi, vlan->vid)) {
+		NL_SET_ERR_MSG_MOD(extack, "VID not valid");
 		return -EINVAL;
+	}
 
 	/* Enable VLAN in the hardware
 	 * FIXME: what's with this 4k business?
@@ -409,7 +412,7 @@ int rtl8366_vlan_add(struct dsa_switch *ds, int port,
 
 	ret = rtl8366_set_vlan(smi, vlan->vid, member, untag, 0);
 	if (ret) {
-		dev_err(smi->dev, "failed to set up VLAN %04x", vlan->vid);
+		NL_SET_ERR_MSG_MOD(extack, "failed to set up VLAN");
 		return ret;
 	}
 
@@ -418,8 +421,7 @@ int rtl8366_vlan_add(struct dsa_switch *ds, int port,
 
 	ret = rtl8366_set_pvid(smi, port, vlan->vid);
 	if (ret) {
-		dev_err(smi->dev, "failed to set PVID on port %d to VLAN %04x",
-			port, vlan->vid);
+		NL_SET_ERR_MSG_MOD(extack, "failed to set PVID on port");
 		return ret;
 	}
 

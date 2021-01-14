@@ -961,8 +961,8 @@ static int gswip_vlan_add_unaware(struct gswip_priv *priv,
 
 static int gswip_vlan_add_aware(struct gswip_priv *priv,
 				struct net_device *bridge, int port,
-				u16 vid, bool untagged,
-				bool pvid)
+				u16 vid, bool untagged, bool pvid,
+				struct netlink_ext_ack *extack)
 {
 	struct gswip_pce_table_entry vlan_mapping = {0,};
 	unsigned int max_ports = priv->hw_info->max_ports;
@@ -977,7 +977,8 @@ static int gswip_vlan_add_aware(struct gswip_priv *priv,
 	for (i = max_ports; i < ARRAY_SIZE(priv->vlans); i++) {
 		if (priv->vlans[i].bridge == bridge) {
 			if (fid != -1 && fid != priv->vlans[i].fid)
-				dev_err(priv->dev, "one bridge with multiple flow ids\n");
+				NL_SET_ERR_MSG_MOD(extack,
+						   "one bridge with multiple flow ids");
 			fid = priv->vlans[i].fid;
 			if (priv->vlans[i].vid == vid) {
 				idx = i;
@@ -1005,8 +1006,7 @@ static int gswip_vlan_add_aware(struct gswip_priv *priv,
 		vlan_mapping.table = GSWIP_TABLE_VLAN_MAPPING;
 		err = gswip_pce_table_entry_read(priv, &vlan_mapping);
 		if (err) {
-			dev_err(priv->dev, "failed to read VLAN mapping: %d\n",
-				err);
+			NL_SET_ERR_MSG_MOD(extack, "failed to read VLAN mapping");
 			return err;
 		}
 	}
@@ -1022,7 +1022,7 @@ static int gswip_vlan_add_aware(struct gswip_priv *priv,
 		vlan_mapping.val[2] |= BIT(port);
 	err = gswip_pce_table_entry_write(priv, &vlan_mapping);
 	if (err) {
-		dev_err(priv->dev, "failed to write VLAN mapping: %d\n", err);
+		NL_SET_ERR_MSG_MOD(extack, "failed to write VLAN mapping");
 		/* In case an Active VLAN was creaetd delete it again */
 		if (active_vlan_created)
 			gswip_vlan_active_remove(priv, idx);
@@ -1128,7 +1128,8 @@ static void gswip_port_bridge_leave(struct dsa_switch *ds, int port,
 }
 
 static int gswip_port_vlan_prepare(struct dsa_switch *ds, int port,
-				   const struct switchdev_obj_port_vlan *vlan)
+				   const struct switchdev_obj_port_vlan *vlan,
+				   struct netlink_ext_ack *extack)
 {
 	struct gswip_priv *priv = ds->priv;
 	struct net_device *bridge = dsa_to_port(ds, port)->bridge_dev;
@@ -1163,15 +1164,18 @@ static int gswip_port_vlan_prepare(struct dsa_switch *ds, int port,
 			}
 		}
 
-		if (idx == -1)
+		if (idx == -1) {
+			NL_SET_ERR_MSG_MOD(extack, "No space for VLAN");
 			return -ENOSPC;
+		}
 	}
 
 	return 0;
 }
 
 static int gswip_port_vlan_add(struct dsa_switch *ds, int port,
-			       const struct switchdev_obj_port_vlan *vlan)
+			       const struct switchdev_obj_port_vlan *vlan,
+			       struct netlink_ext_ack *extack)
 {
 	struct gswip_priv *priv = ds->priv;
 	struct net_device *bridge = dsa_to_port(ds, port)->bridge_dev;
@@ -1179,7 +1183,7 @@ static int gswip_port_vlan_add(struct dsa_switch *ds, int port,
 	bool pvid = vlan->flags & BRIDGE_VLAN_INFO_PVID;
 	int err;
 
-	err = gswip_port_vlan_prepare(ds, port, vlan);
+	err = gswip_port_vlan_prepare(ds, port, vlan, extack);
 	if (err)
 		return err;
 
@@ -1192,7 +1196,7 @@ static int gswip_port_vlan_add(struct dsa_switch *ds, int port,
 		return 0;
 
 	return gswip_vlan_add_aware(priv, bridge, port, vlan->vid,
-				    untagged, pvid);
+				    untagged, pvid, extack);
 }
 
 static int gswip_port_vlan_del(struct dsa_switch *ds, int port,

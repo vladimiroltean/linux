@@ -70,6 +70,7 @@ struct dsa_notifier_lag_info {
 /* DSA_NOTIFIER_VLAN_* */
 struct dsa_notifier_vlan_info {
 	const struct switchdev_obj_port_vlan *vlan;
+	struct netlink_ext_ack *extack;
 	int sw_index;
 	int port;
 };
@@ -169,7 +170,8 @@ int dsa_port_pre_bridge_flags(const struct dsa_port *dp, unsigned long flags);
 int dsa_port_bridge_flags(const struct dsa_port *dp, unsigned long flags);
 int dsa_port_mrouter(struct dsa_port *dp, bool mrouter);
 int dsa_port_vlan_add(struct dsa_port *dp,
-		      const struct switchdev_obj_port_vlan *vlan);
+		      const struct switchdev_obj_port_vlan *vlan,
+		      struct netlink_ext_ack *extack);
 int dsa_port_vlan_del(struct dsa_port *dp,
 		      const struct switchdev_obj_port_vlan *vlan);
 int dsa_port_link_register_of(struct dsa_port *dp);

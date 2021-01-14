@@ -1385,23 +1385,30 @@ int b53_vlan_filtering(struct dsa_switch *ds, int port, bool vlan_filtering)
 EXPORT_SYMBOL(b53_vlan_filtering);
 
 static int b53_vlan_prepare(struct dsa_switch *ds, int port,
-			    const struct switchdev_obj_port_vlan *vlan)
+			    const struct switchdev_obj_port_vlan *vlan,
+			    struct netlink_ext_ack *extack)
 {
 	struct b53_device *dev = ds->priv;
 
-	if ((is5325(dev) || is5365(dev)) && vlan->vid == 0)
+	if ((is5325(dev) || is5365(dev)) && vlan->vid == 0) {
+		NL_SET_ERR_MSG_MOD(extack, "Device does not support VID 0");
 		return -EOPNOTSUPP;
+	}
 
 	/* Port 7 on 7278 connects to the ASP's UniMAC which is not capable of
 	 * receiving VLAN tagged frames at all, we can still allow the port to
 	 * be configured for egress untagged.
 	 */
 	if (dev->chip_id == BCM7278_DEVICE_ID && port == 7 &&
-	    !(vlan->flags & BRIDGE_VLAN_INFO_UNTAGGED))
+	    !(vlan->flags & BRIDGE_VLAN_INFO_UNTAGGED)) {
+		NL_SET_ERR_MSG_MOD(extack, "ASP is not capable of VLAN-tagged traffic");
 		return -EINVAL;
+	}
 
-	if (vlan->vid > dev->num_vlans)
+	if (vlan->vid > dev->num_vlans) {
+		NL_SET_ERR_MSG_MOD(extack, "Device cannot use this VLAN ID");
 		return -ERANGE;
+	}
 
 	b53_enable_vlan(dev, true, ds->vlan_filtering);
 
@@ -1409,7 +1416,8 @@ static int b53_vlan_prepare(struct dsa_switch *ds, int port,
 }
 
 int b53_vlan_add(struct dsa_switch *ds, int port,
-		 const struct switchdev_obj_port_vlan *vlan)
+		 const struct switchdev_obj_port_vlan *vlan,
+		 struct netlink_ext_ack *extack)
 {
 	struct b53_device *dev = ds->priv;
 	bool untagged = vlan->flags & BRIDGE_VLAN_INFO_UNTAGGED;
@@ -1417,7 +1425,7 @@ int b53_vlan_add(struct dsa_switch *ds, int port,
 	struct b53_vlan *vl;
 	int err;
 
-	err = b53_vlan_prepare(ds, port, vlan);
+	err = b53_vlan_prepare(ds, port, vlan, extack);
 	if (err)
 		return err;
 
