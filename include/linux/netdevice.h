@@ -4008,6 +4008,72 @@ static inline void dev_hold(struct net_device *dev)
 	this_cpu_inc(*dev->pcpu_refcnt);
 }
 
+/**
+ *	net_get_dev_array - get reference to devices in namespace
+ *	@net: network namespace to search for network interfaces
+ *	@dev_array: pointer where an allocated array will be returned
+ *	@dev_count: pointer where the array count will be returned
+ *
+ * Gets a temporary reference on all network interfaces from a namespace.
+ */
+static inline int net_get_dev_array(struct net *net,
+				    struct net_device ***dev_array,
+				    int *dev_count)
+{
+	struct net_device *dev, **array;
+	int count, i = 0;
+
+	count = READ_ONCE(net->dev_count);
+	if (!count) {
+		*dev_count = 0;
+		*dev_array = NULL; /* Make it work with kfree */
+		return 0;
+	}
+
+	array = kcalloc(count, sizeof(struct net_device *), GFP_KERNEL);
+	if (!array)
+		return -ENOMEM;
+
+	rcu_read_lock();
+
+	for_each_netdev_rcu(net, dev) {
+		dev_hold(dev);
+		array[i++] = dev;
+		/* In case of a concurrent list_netdevice(), just ignore it. */
+		if (i == count)
+			break;
+	}
+
+	rcu_read_unlock();
+
+	/* In case of a concurrent unlist_netdevice(), the initial
+	 * net->dev_count may have been higher than what we got
+	 * while holding rcu_read_lock().
+	 */
+	*dev_count = i;
+	*dev_array = array;
+
+	return 0;
+}
+
+/**
+ *	net_put_dev_array - release reference to devices in namespace
+ *	@dev_array: pointer to array of interfaces
+ *	@dev_count: number of elements of @dev_array
+ *
+ * Releases the temporary references held by net_get_dev_array
+ */
+static inline void net_put_dev_array(struct net_device **dev_array,
+				     int dev_count)
+{
+	int i;
+
+	for (i = 0; i < dev_count; i++)
+		dev_put(dev_array[i]);
+
+	kfree(dev_array);
+}
+
 /* Carrier loss detection, dial on demand. The functions netif_carrier_on
  * and _off may be called from IRQ context, but it is caller
  * who is responsible for serialization of these calls.

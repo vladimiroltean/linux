@@ -183,6 +183,9 @@ struct net {
 	struct sock		*crypto_nlsk;
 #endif
 	struct sock		*diag_nlsk;
+
+	/* Holds the length of the dev_base_head list */
+	unsigned long		dev_count;
 } __randomize_layout;
 
 #include <linux/seq_file_net.h>

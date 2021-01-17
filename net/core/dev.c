@@ -368,6 +368,7 @@ static void list_netdevice(struct net_device *dev)
 	netdev_name_node_add(net, dev->name_node);
 	hlist_add_head_rcu(&dev->index_hlist,
 			   dev_index_hash(net, dev->ifindex));
+	WRITE_ONCE(net->dev_count, READ_ONCE(net->dev_count) + 1);
 	write_unlock_bh(&dev_base_lock);
 
 	dev_base_seq_inc(net);
@@ -378,10 +379,13 @@ static void list_netdevice(struct net_device *dev)
  */
 static void unlist_netdevice(struct net_device *dev)
 {
+	struct net *net = dev_net(dev);
+
 	ASSERT_RTNL();
 
 	/* Unlink dev from the device chain */
 	write_lock_bh(&dev_base_lock);
+	WRITE_ONCE(net->dev_count, READ_ONCE(net->dev_count) - 1);
 	list_del_rcu(&dev->dev_list);
 	netdev_name_node_del(dev->name_node);
 	hlist_del_rcu(&dev->index_hlist);
