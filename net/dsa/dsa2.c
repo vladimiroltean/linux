@@ -667,6 +667,47 @@ static const struct devlink_ops dsa_devlink_ops = {
 	.sb_occ_tc_port_bind_get	= dsa_devlink_sb_occ_tc_port_bind_get,
 };
 
+static int dsa_switch_inform_initial_tag_proto(struct dsa_switch *ds)
+{
+	enum dsa_tag_protocol proto = ds->dst->tag_ops->proto;
+	struct dsa_port *dp;
+	int err;
+
+	if (!ds->ops->set_tag_protocol)
+		return 0;
+
+	list_for_each_entry(dp, &ds->dst->ports, list) {
+		if ((dsa_is_cpu_port(ds, dp->index) ||
+		     dsa_is_dsa_port(ds, dp->index)) && dp->ds == ds) {
+			rtnl_lock();
+			err = ds->ops->set_tag_protocol(ds, dp->index, proto);
+			rtnl_unlock();
+			if (err)
+				return err;
+		}
+	}
+
+	return 0;
+}
+
+static void dsa_switch_inform_tag_proto_gone(struct dsa_switch *ds)
+{
+	enum dsa_tag_protocol proto = ds->dst->tag_ops->proto;
+	struct dsa_port *dp;
+
+	if (!ds->ops->del_tag_protocol)
+		return;
+
+	list_for_each_entry(dp, &ds->dst->ports, list) {
+		if ((dsa_is_cpu_port(ds, dp->index) ||
+		     dsa_is_dsa_port(ds, dp->index)) && dp->ds == ds) {
+			rtnl_lock();
+			ds->ops->del_tag_protocol(ds, dp->index, proto);
+			rtnl_unlock();
+		}
+	}
+}
+
 static int dsa_switch_setup(struct dsa_switch *ds)
 {
 	struct dsa_devlink_priv *dl_priv;
@@ -717,26 +758,39 @@ static int dsa_switch_setup(struct dsa_switch *ds)
 	if (err < 0)
 		goto unregister_notifier;
 
+	/* Notify the switches of their tagging protocol after the .setup()
+	 * method, but before we start registering the user ports, whose MTU
+	 * configuration on the CPU port might depend upon the tagger.
+	 */
+	err = dsa_switch_inform_initial_tag_proto(ds);
+	if (err)
+		goto teardown;
+
 	devlink_params_publish(ds->devlink);
 
 	if (!ds->slave_mii_bus && ds->ops->phy_read) {
 		ds->slave_mii_bus = devm_mdiobus_alloc(ds->dev);
 		if (!ds->slave_mii_bus) {
 			err = -ENOMEM;
-			goto unregister_notifier;
+			goto teardown_tag_proto;
 		}
 
 		dsa_slave_mii_bus_init(ds);
 
 		err = mdiobus_register(ds->slave_mii_bus);
 		if (err < 0)
-			goto unregister_notifier;
+			goto teardown_tag_proto;
 	}
 
 	ds->setup = true;
 
 	return 0;
 
+teardown_tag_proto:
+	dsa_switch_inform_tag_proto_gone(ds);
+teardown:
+	if (ds->ops->teardown)
+		ds->ops->teardown(ds);
 unregister_notifier:
 	dsa_switch_unregister_notifier(ds);
 unregister_devlink_ports:
@@ -761,6 +815,7 @@ static void dsa_switch_teardown(struct dsa_switch *ds)
 	if (ds->slave_mii_bus && ds->ops->phy_read)
 		mdiobus_unregister(ds->slave_mii_bus);
 
+	dsa_switch_inform_tag_proto_gone(ds);
 	dsa_switch_unregister_notifier(ds);
 
 	if (ds->ops->teardown)
@@ -941,6 +996,62 @@ static void dsa_tree_teardown(struct dsa_switch_tree *dst)
 	dst->setup = false;
 }
 
+/* Since the dsa/tagging sysfs device attribute is per master, the assumption
+ * is that all DSA switches within a tree share the same tagger, otherwise
+ * they would have formed disjoint trees (different "dsa,member" values).
+ */
+int dsa_tree_change_tag_proto(struct dsa_switch_tree *dst,
+			      struct net_device *master,
+			      const struct dsa_device_ops *tag_ops,
+			      const struct dsa_device_ops *old_tag_ops)
+{
+	struct dsa_notifier_tag_proto_info info;
+	struct dsa_port *dp;
+	int err = -EBUSY;
+
+	if (!rtnl_trylock())
+		return restart_syscall();
+
+	/* At the moment we don't allow changing the tag protocol under
+	 * traffic. The rtnl_mutex also happens to serialize concurrent
+	 * attempts to change the tagging protocol. If we ever lift the IFF_UP
+	 * restriction, there needs to be another mutex which serializes this.
+	 */
+	if (master->flags & IFF_UP)
+		goto out_unlock;
+
+	list_for_each_entry(dp, &dst->ports, list) {
+		if (!dsa_is_user_port(dp->ds, dp->index))
+			continue;
+
+		if (dp->slave->flags & IFF_UP)
+			goto out_unlock;
+	}
+
+	info.tag_ops = old_tag_ops;
+	err = dsa_tree_notify(dst, DSA_NOTIFIER_TAG_PROTO_DEL, &info);
+	if (err)
+		goto out_unlock;
+
+	info.tag_ops = tag_ops;
+	err = dsa_tree_notify(dst, DSA_NOTIFIER_TAG_PROTO_SET, &info);
+	if (err)
+		goto out_unwind_tagger;
+
+	dst->tag_ops = tag_ops;
+
+	rtnl_unlock();
+
+	return 0;
+
+out_unwind_tagger:
+	info.tag_ops = old_tag_ops;
+	dsa_tree_notify(dst, DSA_NOTIFIER_TAG_PROTO_SET, &info);
+out_unlock:
+	rtnl_unlock();
+	return err;
+}
+
 static struct dsa_port *dsa_port_touch(struct dsa_switch *ds, int index)
 {
 	struct dsa_switch_tree *dst = ds->dst;
@@ -1032,9 +1143,7 @@ static int dsa_port_parse_cpu(struct dsa_port *dp, struct net_device *master)
 		return -EINVAL;
 	}
 	dst->tag_ops = tag_ops;
-	dp->filter = tag_ops->filter;
-	dp->rcv = tag_ops->rcv;
-	dp->tag_ops = tag_ops;
+	dsa_port_set_tag_protocol(dp, tag_ops);
 	dp->dst = dst;
 
 	return 0;
