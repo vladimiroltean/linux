@@ -141,6 +141,12 @@ struct dsa_switch_tree {
 	bool setup;
 
 	/*
+	 * Used to serialize concurrent attempts to change the tagging
+	 * protocol via the "tagging" device attribute.
+	 */
+	struct mutex tagger_lock;
+
+	/*
 	 * Configuration data for the platform device that owns
 	 * this dsa switch tree instance.
 	 */
@@ -480,9 +486,24 @@ static inline bool dsa_port_is_vlan_filtering(const struct dsa_port *dp)
 typedef int dsa_fdb_dump_cb_t(const unsigned char *addr, u16 vid,
 			      bool is_static, void *data);
 struct dsa_switch_ops {
+	/*
+	 * Tagging protocol helpers.
+	 * Switches that support a single tagging protocol should implement
+	 * only @get_tag_protocol and hardcode the protocol that they support.
+	 * Switches which can operate using multiple tagging protocols should
+	 * report in @get_tag_protocol the tagger in current use. They can
+	 * optionally set up the tagging protocol in @set_tag_protocol and
+	 * perform teardown (memory deallocation, etc) in @del_tag_protocol.
+	 * The framework guarantees paired calls to the last two functions.
+	 * For all of these helpers, @port is the CPU port that gets set up.
+	 */
 	enum dsa_tag_protocol (*get_tag_protocol)(struct dsa_switch *ds,
 						  int port,
 						  enum dsa_tag_protocol mprot);
+	int	(*set_tag_protocol)(struct dsa_switch *ds, int port,
+				    enum dsa_tag_protocol proto);
+	void	(*del_tag_protocol)(struct dsa_switch *ds, int port,
+				    enum dsa_tag_protocol proto);
 
 	int	(*setup)(struct dsa_switch *ds);
 	void	(*teardown)(struct dsa_switch *ds);
