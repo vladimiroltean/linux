@@ -664,6 +664,11 @@ static int dsa_switch_setup(struct dsa_switch *ds)
 		}
 	}
 
+	/* The DSA_NOTIFIER_TAG_PROTO_* notifiers use this mutex,
+	 * so initialize it first.
+	 */
+	mutex_init(&ds->tagger_lock);
+
 	err = dsa_switch_register_notifier(ds);
 	if (err)
 		goto unregister_devlink_ports;
@@ -673,6 +678,22 @@ static int dsa_switch_setup(struct dsa_switch *ds)
 	err = ds->ops->setup(ds);
 	if (err < 0)
 		goto unregister_notifier;
+
+	/* Iterate through ports list again, so that we notify the switch of
+	 * its tagging protocol after setup(), but before we start registering
+	 * the user ports, whose MTU configuration will depend upon the tagger.
+	 */
+	list_for_each_entry(dp, &ds->dst->ports, list) {
+		if (dp->ds != ds || !dsa_is_cpu_port(ds, dp->index))
+			continue;
+
+		if (ds->ops->set_tag_protocol) {
+			err = ds->ops->set_tag_protocol(ds, dp->index,
+							dp->tag_ops->proto);
+			if (err)
+				goto teardown;
+		}
+	}
 
 	devlink_params_publish(ds->devlink);
 
@@ -694,6 +715,9 @@ static int dsa_switch_setup(struct dsa_switch *ds)
 
 	return 0;
 
+teardown:
+	if (ds->ops->teardown)
+		ds->ops->teardown(ds);
 unregister_notifier:
 	dsa_switch_unregister_notifier(ds);
 unregister_devlink_ports:
@@ -717,6 +741,15 @@ static void dsa_switch_teardown(struct dsa_switch *ds)
 
 	if (ds->slave_mii_bus && ds->ops->phy_read)
 		mdiobus_unregister(ds->slave_mii_bus);
+
+	list_for_each_entry(dp, &ds->dst->ports, list) {
+		if (dp->ds != ds || !dsa_is_cpu_port(ds, dp->index))
+			continue;
+
+		if (ds->ops->del_tag_protocol)
+			ds->ops->del_tag_protocol(ds, dp->index,
+						  dp->tag_ops->proto);
+	}
 
 	dsa_switch_unregister_notifier(ds);
 
@@ -898,6 +931,53 @@ static void dsa_tree_teardown(struct dsa_switch_tree *dst)
 	dst->setup = false;
 }
 
+/* Since the dsa/tagging sysfs device attribute is per master, the assumption
+ * is that all DSA switches within a tree share the same tagger, otherwise
+ * they would have formed disjoint trees (different "dsa,member" values).
+ */
+int dsa_tree_change_tag_proto(struct dsa_switch_tree *dst,
+			      struct net_device *master,
+			      const struct dsa_device_ops *tag_ops,
+			      const struct dsa_device_ops *old_tag_ops)
+{
+	struct dsa_notifier_tag_proto_info info = {
+		.tree_index = dst->index,
+	};
+	struct dsa_port *dp;
+	int err;
+
+	/* At the moment we don't allow changing the tag protocol under
+	 * traffic. May revisit in the future.
+	 */
+	if (master->flags & IFF_UP)
+		return -EBUSY;
+
+	list_for_each_entry(dp, &dst->ports, list) {
+		if (!dsa_is_user_port(dp->ds, dp->index))
+			continue;
+
+		if (dp->slave->flags & IFF_UP)
+			return -EBUSY;
+	}
+
+	info.tag_ops = old_tag_ops;
+	err = dsa_broadcast(DSA_NOTIFIER_TAG_PROTO_DEL, &info);
+	if (err)
+		return err;
+
+	info.tag_ops = tag_ops;
+	err = dsa_broadcast(DSA_NOTIFIER_TAG_PROTO_SET, &info);
+	if (err)
+		goto out_unwind_tagger;
+
+	return 0;
+
+out_unwind_tagger:
+	info.tag_ops = old_tag_ops;
+	dsa_broadcast(DSA_NOTIFIER_TAG_PROTO_SET, &info);
+	return err;
+}
+
 static struct dsa_port *dsa_port_touch(struct dsa_switch *ds, int index)
 {
 	struct dsa_switch_tree *dst = ds->dst;
@@ -983,10 +1063,8 @@ static int dsa_port_parse_cpu(struct dsa_port *dp, struct net_device *master)
 
 	dp->master = master;
 	dp->type = DSA_PORT_TYPE_CPU;
-	dp->filter = tag_ops->filter;
-	dp->rcv = tag_ops->rcv;
-	dp->tag_ops = tag_ops;
 	dp->dst = dst;
+	dsa_port_set_tag_protocol(dp, tag_ops);
 
 	return 0;
 }
