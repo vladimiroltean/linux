@@ -878,15 +878,36 @@ EXPORT_SYMBOL(ocelot_get_ts_info);
 
 void ocelot_apply_bridge_fwd_mask(struct ocelot *ocelot)
 {
+	unsigned long cpu_fwd_mask = 0;
 	int port;
+
+	/* If a DSA tag_8021q CPU exists, it needs to be unconditionally
+	 * (i.e. regardless of whether the port is bridged or standalone)
+	 * included in the regular forwarding path, as opposed to the
+	 * hardware-based CPU port module which can be a destination for
+	 * packets even if it isn't part of PGID_SRC.
+	 */
+	for (port = 0; port < ocelot->num_phys_ports; port++)
+		if (ocelot->ports[port]->is_dsa_8021q_cpu)
+			cpu_fwd_mask |= BIT(port);
 
 	/* Apply FWD mask. The loop is needed to add/remove the current port as
 	 * a source for the other ports.
 	 */
 	for (port = 0; port < ocelot->num_phys_ports; port++) {
-		if (ocelot->bridge_fwd_mask & BIT(port)) {
-			unsigned long mask = ocelot->bridge_fwd_mask & ~BIT(port);
+		/* Standalone ports forward only to DSA tag_8021q CPU ports */
+		unsigned long mask = cpu_fwd_mask;
+
+		/* The DSA tag_8021q CPU ports need to be able to forward
+		 * packets to all other ports except for themselves
+		 */
+		if (ocelot->ports[port]->is_dsa_8021q_cpu) {
+			mask = GENMASK(ocelot->num_phys_ports - 1, 0);
+			mask &= ~cpu_fwd_mask;
+		} else if (ocelot->bridge_fwd_mask & BIT(port)) {
 			int lag;
+
+			mask |= ocelot->bridge_fwd_mask & ~BIT(port);
 
 			for (lag = 0; lag < ocelot->num_phys_ports; lag++) {
 				unsigned long bond_mask = ocelot->lags[lag];
@@ -899,13 +920,9 @@ void ocelot_apply_bridge_fwd_mask(struct ocelot *ocelot)
 					break;
 				}
 			}
-
-			ocelot_write_rix(ocelot, mask,
-					 ANA_PGID_PGID, PGID_SRC + port);
-		} else {
-			ocelot_write_rix(ocelot, 0,
-					 ANA_PGID_PGID, PGID_SRC + port);
 		}
+
+		ocelot_write_rix(ocelot, mask, ANA_PGID_PGID, PGID_SRC + port);
 	}
 }
 EXPORT_SYMBOL(ocelot_apply_bridge_fwd_mask);
