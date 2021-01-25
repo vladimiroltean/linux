@@ -1026,6 +1026,12 @@ static int dsa_port_parse_cpu(struct dsa_port *dp, struct net_device *master)
 
 	dp->master = master;
 	dp->type = DSA_PORT_TYPE_CPU;
+	if (dst->tag_ops && dst->tag_ops != tag_ops) {
+		dev_err(ds->dev,
+			"A DSA switch tree can have only one tagging protocol\n");
+		return -EINVAL;
+	}
+	dst->tag_ops = tag_ops;
 	dp->filter = tag_ops->filter;
 	dp->rcv = tag_ops->rcv;
 	dp->tag_ops = tag_ops;
