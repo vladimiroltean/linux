@@ -2084,6 +2084,36 @@ static int dsa_slave_netdevice_event(struct notifier_block *nb,
 		err = dsa_port_lag_change(dp, info->lower_state_info);
 		return notifier_from_errno(err);
 	}
+	case NETDEV_GOING_DOWN: {
+		struct dsa_port *dp, *cpu_dp;
+		struct dsa_switch_tree *dst;
+		int err = 0;
+
+		if (!netdev_uses_dsa(dev))
+			return NOTIFY_DONE;
+
+		cpu_dp = dev->dsa_ptr;
+		dst = cpu_dp->ds->dst;
+
+		list_for_each_entry(dp, &dst->ports, list) {
+			if (dsa_is_user_port(dp->ds, dp->index)) {
+				struct net_device *slave = dp->slave;
+
+				if (!(slave->flags & IFF_UP))
+					continue;
+
+				err = dev_change_flags(slave,
+						       slave->flags & ~IFF_UP,
+						       NULL);
+				if (err)
+					break;
+			}
+		}
+
+		return notifier_from_errno(err);
+	}
+	default:
+		break;
 	}
 
 	return NOTIFY_DONE;
