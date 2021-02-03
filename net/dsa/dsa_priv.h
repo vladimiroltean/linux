@@ -205,6 +205,8 @@ static inline bool dsa_port_offloads_netdev(struct dsa_port *dp,
 					    struct net_device *dev)
 {
 	/* Switchdev offloading can be configured on: */
+	if (!dp->bridge_dev)
+		return false;
 
 	if (dev == dp->slave)
 		/* DSA ports directly connected to a bridge, and event
