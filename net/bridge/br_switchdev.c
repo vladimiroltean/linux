@@ -82,16 +82,7 @@ int br_switchdev_set_port_flag(struct net_bridge_port *p,
 	/* We run from atomic context here */
 	err = call_switchdev_notifiers(SWITCHDEV_PORT_ATTR_SET, p->dev,
 				       &info.info, extack);
-	err = notifier_to_errno(err);
-	if (err == -EOPNOTSUPP)
-		return 0;
-
-	if (err) {
-		NL_SET_ERR_MSG_MOD(extack, "bridge flag offload is not supported");
-		return -EOPNOTSUPP;
-	}
-
-	return 0;
+	return notifier_to_errno(err);
 }
 
 static void

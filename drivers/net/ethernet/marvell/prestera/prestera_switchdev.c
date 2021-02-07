@@ -587,7 +587,7 @@ static int prestera_port_attr_br_flags_set(struct prestera_port *port,
 	int err;
 
 	if (val.mask & ~(BR_LEARNING | BR_FLOOD | BR_MCAST_FLOOD))
-		err = -EINVAL;
+		err = -EOPNOTSUPP;
 
 	br_port = prestera_bridge_port_by_dev(port->sw->swdev, dev);
 	if (!br_port)

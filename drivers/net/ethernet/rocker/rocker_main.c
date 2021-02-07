@@ -1591,7 +1591,7 @@ rocker_world_port_attr_bridge_flags_set(struct rocker_port *rocker_port,
 		return err;
 
 	if (val.mask & ~brport_flags_s)
-		return -EINVAL;
+		return -EOPNOTSUPP;
 
 	return wops->port_attr_bridge_flags_set(rocker_port, val.flags);
 }

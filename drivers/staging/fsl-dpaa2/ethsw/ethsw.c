@@ -915,7 +915,7 @@ static int dpaa2_switch_port_attr_br_flags_set(struct net_device *netdev,
 	int err = 0;
 
 	if (val.mask & ~(BR_LEARNING | BR_FLOOD))
-		return -EINVAL;
+		return -EOPNOTSUPP;
 
 	/* Learning is enabled per switch */
 	err = dpaa2_switch_set_learning(port_priv->ethsw_data,

@@ -63,7 +63,7 @@ static int cpsw_port_attr_br_flags_set(struct cpsw_priv *priv,
 	bool unreg_mcast_add = false;
 
 	if (val.mask & ~(BR_LEARNING | BR_MCAST_FLOOD))
-		return -EINVAL;
+		return -EOPNOTSUPP;
 
 	if (val.flags & BR_MCAST_FLOOD)
 		unreg_mcast_add = true;
