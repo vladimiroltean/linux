@@ -382,39 +382,34 @@ int dsa_port_ageing_time(struct dsa_port *dp, clock_t ageing_clock)
 	return 0;
 }
 
-int dsa_port_pre_bridge_flags(const struct dsa_port *dp, unsigned long flags)
+int dsa_port_pre_bridge_flags(const struct dsa_port *dp, unsigned long mask)
 {
 	struct dsa_switch *ds = dp->ds;
 
-	if (!ds->ops->port_egress_floods ||
-	    (flags & ~(BR_FLOOD | BR_MCAST_FLOOD)))
+	if (!ds->ops->port_pre_bridge_flags)
 		return -EINVAL;
 
-	return 0;
+	return ds->ops->port_pre_bridge_flags(ds, dp->index, mask);
 }
 
 int dsa_port_bridge_flags(const struct dsa_port *dp, unsigned long flags)
 {
 	struct dsa_switch *ds = dp->ds;
-	int port = dp->index;
-	int err = 0;
 
-	if (ds->ops->port_egress_floods)
-		err = ds->ops->port_egress_floods(ds, port, flags & BR_FLOOD,
-						  flags & BR_MCAST_FLOOD);
+	if (!ds->ops->port_bridge_flags)
+		return -EINVAL;
 
-	return err;
+	return ds->ops->port_bridge_flags(ds, dp->index, flags);
 }
 
 int dsa_port_mrouter(struct dsa_port *dp, bool mrouter)
 {
 	struct dsa_switch *ds = dp->ds;
-	int port = dp->index;
 
-	if (!ds->ops->port_egress_floods)
+	if (!ds->ops->port_set_mrouter)
 		return -EOPNOTSUPP;
 
-	return ds->ops->port_egress_floods(ds, port, true, mrouter);
+	return ds->ops->port_set_mrouter(ds, dp->index, mrouter);
 }
 
 int dsa_port_mtu_change(struct dsa_port *dp, int new_mtu,
