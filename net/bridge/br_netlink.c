@@ -869,7 +869,8 @@ static void br_set_port_flag(struct net_bridge_port *p, struct nlattr *tb[],
 }
 
 /* Process bridge protocol info on port */
-static int br_setport(struct net_bridge_port *p, struct nlattr *tb[])
+static int br_setport(struct net_bridge_port *p, struct nlattr *tb[],
+		      struct netlink_ext_ack *extack)
 {
 	unsigned long old_flags, mask = 0;
 	bool br_vlan_tunnel_old;
@@ -904,7 +905,7 @@ static int br_setport(struct net_bridge_port *p, struct nlattr *tb[])
 
 	spin_unlock_bh(&p->br->lock);
 
-	err = br_switchdev_set_port_flag(p, p->flags, mask);
+	err = br_switchdev_set_port_flag(p, p->flags, mask, extack);
 	if (err) {
 		spin_lock_bh(&p->br->lock);
 		p->flags = old_flags;
@@ -1027,7 +1028,7 @@ int br_setlink(struct net_device *dev, struct nlmsghdr *nlh, u16 flags,
 			if (err)
 				return err;
 
-			err = br_setport(p, tb);
+			err = br_setport(p, tb, extack);
 		} else {
 			/* Binary compatibility with old RSTP */
 			if (nla_len(protinfo) < sizeof(u8))
@@ -1117,7 +1118,7 @@ static int br_port_slave_changelink(struct net_device *brdev,
 	if (!data)
 		return 0;
 
-	return br_setport(br_port_get_rtnl(dev), data);
+	return br_setport(br_port_get_rtnl(dev), data, extack);
 }
 
 static int br_port_fill_slave_info(struct sk_buff *skb,
