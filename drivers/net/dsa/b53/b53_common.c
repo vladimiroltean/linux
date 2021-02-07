@@ -1948,19 +1948,14 @@ int b53_br_egress_floods(struct dsa_switch *ds, int port,
 }
 EXPORT_SYMBOL(b53_br_egress_floods);
 
-static int b53_pre_br_flags(struct dsa_switch *ds, int port,
-			    unsigned long mask)
+static int b53_br_flags(struct dsa_switch *ds, int port,
+			struct switchdev_brport_flags val)
 {
-	if (mask & ~(BR_FLOOD | BR_MCAST_FLOOD))
+	if (val.mask & ~(BR_FLOOD | BR_MCAST_FLOOD))
 		return -EINVAL;
 
-	return 0;
-}
-
-static int b53_br_flags(struct dsa_switch *ds, int port, unsigned long flags)
-{
-	return b53_br_egress_floods(ds, port, flags & BR_FLOOD,
-				    flags & BR_MCAST_FLOOD);
+	return b53_br_egress_floods(ds, port, val.flags & BR_FLOOD,
+				    val.flags & BR_MCAST_FLOOD);
 }
 
 static int b53_set_mrouter(struct dsa_switch *ds, int port, bool mrouter)
@@ -2208,7 +2203,6 @@ static const struct dsa_switch_ops b53_switch_ops = {
 	.port_bridge_join	= b53_br_join,
 	.port_bridge_leave	= b53_br_leave,
 	.port_bridge_flags	= b53_br_flags,
-	.port_pre_bridge_flags	= b53_pre_br_flags,
 	.port_set_mrouter	= b53_set_mrouter,
 	.port_stp_state_set	= b53_br_set_stp_state,
 	.port_fast_age		= b53_br_fast_age,

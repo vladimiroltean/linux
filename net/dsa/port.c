@@ -382,24 +382,15 @@ int dsa_port_ageing_time(struct dsa_port *dp, clock_t ageing_clock)
 	return 0;
 }
 
-int dsa_port_pre_bridge_flags(const struct dsa_port *dp, unsigned long mask)
-{
-	struct dsa_switch *ds = dp->ds;
-
-	if (!ds->ops->port_pre_bridge_flags)
-		return -EINVAL;
-
-	return ds->ops->port_pre_bridge_flags(ds, dp->index, mask);
-}
-
-int dsa_port_bridge_flags(const struct dsa_port *dp, unsigned long flags)
+int dsa_port_bridge_flags(const struct dsa_port *dp,
+			  struct switchdev_brport_flags val)
 {
 	struct dsa_switch *ds = dp->ds;
 
 	if (!ds->ops->port_bridge_flags)
 		return -EINVAL;
 
-	return ds->ops->port_bridge_flags(ds, dp->index, flags);
+	return ds->ops->port_bridge_flags(ds, dp->index, val);
 }
 
 int dsa_port_mrouter(struct dsa_port *dp, bool mrouter)
