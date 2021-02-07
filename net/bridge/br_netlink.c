@@ -854,7 +854,8 @@ static int br_set_port_state(struct net_bridge_port *p, u8 state)
 
 /* Set/clear or port flags based on attribute */
 static int br_set_port_flag(struct net_bridge_port *p, struct nlattr *tb[],
-			    int attrtype, unsigned long mask)
+			    int attrtype, unsigned long mask,
+			    struct netlink_ext_ack *extack)
 {
 	unsigned long flags;
 	int err;
@@ -867,7 +868,7 @@ static int br_set_port_flag(struct net_bridge_port *p, struct nlattr *tb[],
 	else
 		flags = p->flags & ~mask;
 
-	err = br_switchdev_set_port_flag(p, flags, mask);
+	err = br_switchdev_set_port_flag(p, flags, mask, extack);
 	if (err)
 		return err;
 
@@ -876,58 +877,71 @@ static int br_set_port_flag(struct net_bridge_port *p, struct nlattr *tb[],
 }
 
 /* Process bridge protocol info on port */
-static int br_setport(struct net_bridge_port *p, struct nlattr *tb[])
+static int br_setport(struct net_bridge_port *p, struct nlattr *tb[],
+		      struct netlink_ext_ack *extack)
 {
 	unsigned long old_flags = p->flags;
 	bool br_vlan_tunnel_old = false;
 	int err;
 
-	err = br_set_port_flag(p, tb, IFLA_BRPORT_MODE, BR_HAIRPIN_MODE);
+	err = br_set_port_flag(p, tb, IFLA_BRPORT_MODE, BR_HAIRPIN_MODE,
+			       extack);
 	if (err)
 		return err;
 
-	err = br_set_port_flag(p, tb, IFLA_BRPORT_GUARD, BR_BPDU_GUARD);
+	err = br_set_port_flag(p, tb, IFLA_BRPORT_GUARD, BR_BPDU_GUARD,
+			       extack);
 	if (err)
 		return err;
 
-	err = br_set_port_flag(p, tb, IFLA_BRPORT_FAST_LEAVE, BR_MULTICAST_FAST_LEAVE);
+	err = br_set_port_flag(p, tb, IFLA_BRPORT_FAST_LEAVE,
+			       BR_MULTICAST_FAST_LEAVE, extack);
 	if (err)
 		return err;
 
-	err = br_set_port_flag(p, tb, IFLA_BRPORT_PROTECT, BR_ROOT_BLOCK);
+	err = br_set_port_flag(p, tb, IFLA_BRPORT_PROTECT, BR_ROOT_BLOCK,
+			       extack);
 	if (err)
 		return err;
 
-	err = br_set_port_flag(p, tb, IFLA_BRPORT_LEARNING, BR_LEARNING);
+	err = br_set_port_flag(p, tb, IFLA_BRPORT_LEARNING, BR_LEARNING,
+			       extack);
 	if (err)
 		return err;
 
-	err = br_set_port_flag(p, tb, IFLA_BRPORT_UNICAST_FLOOD, BR_FLOOD);
+	err = br_set_port_flag(p, tb, IFLA_BRPORT_UNICAST_FLOOD, BR_FLOOD,
+			       extack);
 	if (err)
 		return err;
 
-	err = br_set_port_flag(p, tb, IFLA_BRPORT_MCAST_FLOOD, BR_MCAST_FLOOD);
+	err = br_set_port_flag(p, tb, IFLA_BRPORT_MCAST_FLOOD, BR_MCAST_FLOOD,
+			       extack);
 	if (err)
 		return err;
 
-	err = br_set_port_flag(p, tb, IFLA_BRPORT_MCAST_TO_UCAST, BR_MULTICAST_TO_UNICAST);
+	err = br_set_port_flag(p, tb, IFLA_BRPORT_MCAST_TO_UCAST,
+			       BR_MULTICAST_TO_UNICAST, extack);
 	if (err)
 		return err;
 
-	err = br_set_port_flag(p, tb, IFLA_BRPORT_BCAST_FLOOD, BR_BCAST_FLOOD);
+	err = br_set_port_flag(p, tb, IFLA_BRPORT_BCAST_FLOOD,
+			       BR_BCAST_FLOOD, extack);
 	if (err)
 		return err;
 
-	err = br_set_port_flag(p, tb, IFLA_BRPORT_PROXYARP, BR_PROXYARP);
+	err = br_set_port_flag(p, tb, IFLA_BRPORT_PROXYARP, BR_PROXYARP,
+			       extack);
 	if (err)
 		return err;
 
-	err = br_set_port_flag(p, tb, IFLA_BRPORT_PROXYARP_WIFI, BR_PROXYARP_WIFI);
+	err = br_set_port_flag(p, tb, IFLA_BRPORT_PROXYARP_WIFI,
+			       BR_PROXYARP_WIFI, extack);
 	if (err)
 		return err;
 
 	br_vlan_tunnel_old = (p->flags & BR_VLAN_TUNNEL) ? true : false;
-	err = br_set_port_flag(p, tb, IFLA_BRPORT_VLAN_TUNNEL, BR_VLAN_TUNNEL);
+	err = br_set_port_flag(p, tb, IFLA_BRPORT_VLAN_TUNNEL, BR_VLAN_TUNNEL,
+			       extack);
 	if (err)
 		return err;
 
@@ -983,11 +997,12 @@ static int br_setport(struct net_bridge_port *p, struct nlattr *tb[])
 	}
 
 	err = br_set_port_flag(p, tb, IFLA_BRPORT_NEIGH_SUPPRESS,
-			       BR_NEIGH_SUPPRESS);
+			       BR_NEIGH_SUPPRESS, extack);
 	if (err)
 		return err;
 
-	err = br_set_port_flag(p, tb, IFLA_BRPORT_ISOLATED, BR_ISOLATED);
+	err = br_set_port_flag(p, tb, IFLA_BRPORT_ISOLATED, BR_ISOLATED,
+			       extack);
 	if (err)
 		return err;
 
@@ -1046,7 +1061,7 @@ int br_setlink(struct net_device *dev, struct nlmsghdr *nlh, u16 flags,
 				return err;
 
 			spin_lock_bh(&p->br->lock);
-			err = br_setport(p, tb);
+			err = br_setport(p, tb, extack);
 			spin_unlock_bh(&p->br->lock);
 		} else {
 			/* Binary compatibility with old RSTP */
@@ -1141,7 +1156,7 @@ static int br_port_slave_changelink(struct net_device *brdev,
 		return 0;
 
 	spin_lock_bh(&br->lock);
-	ret = br_setport(br_port_get_rtnl(dev), data);
+	ret = br_setport(br_port_get_rtnl(dev), data, extack);
 	spin_unlock_bh(&br->lock);
 
 	return ret;
