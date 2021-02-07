@@ -55,8 +55,7 @@ bool nbp_switchdev_allowed_egress(const struct net_bridge_port *p,
 }
 
 /* Flags that can be offloaded to hardware */
-#define BR_PORT_FLAGS_HW_OFFLOAD (BR_LEARNING | BR_FLOOD | \
-				  BR_MCAST_FLOOD | BR_BCAST_FLOOD)
+#define BR_PORT_FLAGS_HW_OFFLOAD	BR_PORT_DEFAULT_FLAGS
 
 int br_switchdev_set_port_flag(struct net_bridge_port *p,
 			       unsigned long flags,

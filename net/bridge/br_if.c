@@ -89,6 +89,23 @@ void br_port_carrier_check(struct net_bridge_port *p, bool *notified)
 	spin_unlock_bh(&br->lock);
 }
 
+/* If @mask has multiple bits set at once, offload them one by one to
+ * switchdev, to allow it to reject only what it doesn't support and accept
+ * what it does.
+ */
+static void nbp_flags_notify(struct net_bridge_port *p, unsigned long flags,
+			     unsigned long mask)
+{
+	int flag;
+
+	for_each_set_bit(flag, &mask, 32)
+		br_switchdev_set_port_flag(p, flags & BIT(flag),
+					   BIT(flag), NULL);
+
+	p->flags &= ~mask;
+	p->flags |= flags;
+}
+
 static void br_port_set_promisc(struct net_bridge_port *p)
 {
 	int err = 0;
@@ -343,6 +360,8 @@ static void del_nbp(struct net_bridge_port *p)
 		update_headroom(br, get_max_headroom(br));
 	netdev_reset_rx_headroom(dev);
 
+	nbp_flags_notify(p, BR_PORT_DEFAULT_FLAGS & ~BR_LEARNING,
+			 BR_PORT_DEFAULT_FLAGS);
 	nbp_vlan_flush(p);
 	br_fdb_delete_by_port(br, p, 0, 1);
 	switchdev_deferred_process();
@@ -428,7 +447,7 @@ static struct net_bridge_port *new_nbp(struct net_bridge *br,
 	p->path_cost = port_cost(dev);
 	p->priority = 0x8000 >> BR_PORT_BITS;
 	p->port_no = index;
-	p->flags = BR_LEARNING | BR_FLOOD | BR_MCAST_FLOOD | BR_BCAST_FLOOD;
+	nbp_flags_notify(p, BR_PORT_DEFAULT_FLAGS, BR_PORT_DEFAULT_FLAGS);
 	br_init_port(p);
 	br_set_state(p, BR_STATE_DISABLED);
 	br_stp_port_timer_init(p);

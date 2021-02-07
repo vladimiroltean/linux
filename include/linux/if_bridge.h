@@ -58,6 +58,9 @@ struct br_ip_list {
 #define BR_MRP_LOST_CONT	BIT(18)
 #define BR_MRP_LOST_IN_CONT	BIT(19)
 
+#define BR_PORT_DEFAULT_FLAGS	(BR_FLOOD | BR_MCAST_FLOOD | BR_BCAST_FLOOD | \
+				 BR_LEARNING)
+
 #define BR_DEFAULT_AGEING_TIME	(300 * HZ)
 
 extern void brioctl_set(int (*ioctl_hook)(struct net *, unsigned int, void __user *));
