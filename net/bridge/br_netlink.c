@@ -852,28 +852,20 @@ static int br_set_port_state(struct net_bridge_port *p, u8 state)
 	return 0;
 }
 
-/* Set/clear or port flags based on attribute */
+/* Set/clear or port flags based on netlink attribute */
 static int br_set_port_flag(struct net_bridge_port *p, struct nlattr *tb[],
 			    int attrtype, unsigned long mask,
 			    struct netlink_ext_ack *extack)
 {
-	unsigned long flags;
-	int err;
+	unsigned long flags = 0;
 
 	if (!tb[attrtype])
 		return 0;
 
 	if (nla_get_u8(tb[attrtype]))
-		flags = p->flags | mask;
-	else
-		flags = p->flags & ~mask;
+		flags = mask;
 
-	err = br_switchdev_set_port_flag(p, flags, mask, extack);
-	if (err)
-		return err;
-
-	p->flags = flags;
-	return 0;
+	return nbp_flags_change(p, flags, mask, extack);
 }
 
 /* Process bridge protocol info on port */
