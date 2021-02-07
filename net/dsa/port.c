@@ -382,28 +382,18 @@ int dsa_port_ageing_time(struct dsa_port *dp, clock_t ageing_clock)
 	return 0;
 }
 
-int dsa_port_pre_bridge_flags(const struct dsa_port *dp, unsigned long flags)
-{
-	struct dsa_switch *ds = dp->ds;
-
-	if (!ds->ops->port_egress_floods ||
-	    (flags & ~(BR_FLOOD | BR_MCAST_FLOOD)))
-		return -EINVAL;
-
-	return 0;
-}
-
-int dsa_port_bridge_flags(const struct dsa_port *dp, unsigned long flags)
+int dsa_port_bridge_flags(const struct dsa_port *dp,
+			  struct switchdev_brport_flags flags)
 {
 	struct dsa_switch *ds = dp->ds;
 	int port = dp->index;
-	int err = 0;
 
-	if (ds->ops->port_egress_floods)
-		err = ds->ops->port_egress_floods(ds, port, flags & BR_FLOOD,
-						  flags & BR_MCAST_FLOOD);
+	if (!ds->ops->port_egress_floods ||
+	    (flags.mask & ~(BR_FLOOD | BR_MCAST_FLOOD)))
+		return -EINVAL;
 
-	return err;
+	return ds->ops->port_egress_floods(ds, port, flags.val & BR_FLOOD,
+					   flags.val & BR_MCAST_FLOOD);
 }
 
 int dsa_port_mrouter(struct dsa_port *dp, bool mrouter)
