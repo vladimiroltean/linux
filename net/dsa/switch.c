@@ -203,9 +203,13 @@ static int dsa_switch_lag_change(struct dsa_switch *ds,
 static int dsa_switch_lag_join(struct dsa_switch *ds,
 			       struct dsa_notifier_lag_info *info)
 {
-	if (ds->index == info->sw_index && ds->ops->port_lag_join)
+	if (ds->index == info->sw_index) {
+		if (!ds->ops->port_lag_join)
+			return -EOPNOTSUPP;
+
 		return ds->ops->port_lag_join(ds, info->port, info->lag,
 					      info->info);
+	}
 
 	if (ds->index != info->sw_index && ds->ops->crosschip_lag_join)
 		return ds->ops->crosschip_lag_join(ds, info->sw_index,
