@@ -60,8 +60,6 @@
 
 	sja1105_switch0: ethernet-switch@0 {
 		reg = <0x0>;
-		#address-cells = <1>;
-		#size-cells = <0>;
 		compatible = "nxp,sja1105s";
 		dsa,member = <1 1>;
 		/* 20 MHz */
@@ -118,8 +116,6 @@
 	/* Daughter card 1 */
 	sja1105_switch1: ethernet-switch@1 {
 		reg = <0x1>;
-		#address-cells = <1>;
-		#size-cells = <0>;
 		compatible = "nxp,sja1105s";
 		dsa,member = <2 2>;
 		/* 20 MHz */
