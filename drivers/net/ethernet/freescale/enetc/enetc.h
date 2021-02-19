@@ -76,6 +76,7 @@ struct enetc_bdr {
 	dma_addr_t bd_dma_base;
 	u8 tsd_enable; /* Time specific departure */
 	bool ext_en; /* enable h/w descriptor extensions */
+	struct sk_buff_head skb_queue;
 } ____cacheline_aligned_in_smp;
 
 static inline void enetc_bdr_idx_inc(struct enetc_bdr *bdr, int *i)

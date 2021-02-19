@@ -12,44 +12,6 @@
 #define ENETC_MAX_SKB_FRAGS	13
 #define ENETC_TXBDS_MAX_NEEDED	ENETC_TXBDS_NEEDED(ENETC_MAX_SKB_FRAGS + 1)
 
-static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
-			      int active_offloads);
-
-netdev_tx_t enetc_xmit(struct sk_buff *skb, struct net_device *ndev)
-{
-	struct enetc_ndev_priv *priv = netdev_priv(ndev);
-	struct enetc_bdr *tx_ring;
-	int count;
-
-	tx_ring = priv->tx_ring[skb->queue_mapping];
-
-	if (unlikely(skb_shinfo(skb)->nr_frags > ENETC_MAX_SKB_FRAGS))
-		if (unlikely(skb_linearize(skb)))
-			goto drop_packet_err;
-
-	count = skb_shinfo(skb)->nr_frags + 1; /* fragments + head */
-	if (enetc_bd_unused(tx_ring) < ENETC_TXBDS_NEEDED(count)) {
-		netif_stop_subqueue(ndev, tx_ring->index);
-		return NETDEV_TX_BUSY;
-	}
-
-	enetc_lock_mdio();
-	count = enetc_map_tx_buffs(tx_ring, skb, priv->active_offloads);
-	enetc_unlock_mdio();
-
-	if (unlikely(!count))
-		goto drop_packet_err;
-
-	if (enetc_bd_unused(tx_ring) < ENETC_TXBDS_MAX_NEEDED)
-		netif_stop_subqueue(ndev, tx_ring->index);
-
-	return NETDEV_TX_OK;
-
-drop_packet_err:
-	dev_kfree_skb_any(skb);
-	return NETDEV_TX_OK;
-}
-
 static void enetc_unmap_tx_buff(struct enetc_bdr *tx_ring,
 				struct enetc_tx_swbd *tx_swbd)
 {
@@ -201,9 +163,6 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 
 	skb_tx_timestamp(skb);
 
-	/* let H/W know BD ring has been updated */
-	enetc_wr_reg_hot(tx_ring->tpir, i); /* includes wmb() */
-
 	return count;
 
 dma_err:
@@ -218,6 +177,57 @@ dma_err:
 	} while (count--);
 
 	return 0;
+}
+
+netdev_tx_t enetc_xmit(struct sk_buff *skb, struct net_device *ndev)
+{
+	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	struct enetc_bdr *tx_ring;
+	int ret = NETDEV_TX_OK;
+	int count;
+
+	tx_ring = priv->tx_ring[skb->queue_mapping];
+
+	__skb_queue_tail(&tx_ring->skb_queue, skb);
+
+	if (netdev_xmit_more())
+		return NETDEV_TX_OK;
+
+	enetc_lock_mdio();
+
+	while ((skb = __skb_dequeue(&tx_ring->skb_queue)) != NULL) {
+		if (unlikely(skb_shinfo(skb)->nr_frags > ENETC_MAX_SKB_FRAGS)) {
+			if (unlikely(skb_linearize(skb))) {
+				dev_kfree_skb_any(skb);
+				continue;
+			}
+		}
+
+		count = skb_shinfo(skb)->nr_frags + 1; /* fragments + head */
+		if (enetc_bd_unused(tx_ring) < ENETC_TXBDS_NEEDED(count)) {
+			netif_stop_subqueue(ndev, tx_ring->index);
+			__skb_queue_purge(&tx_ring->skb_queue);
+			ret = NETDEV_TX_BUSY;
+			break;
+		}
+
+		count = enetc_map_tx_buffs(tx_ring, skb, priv->active_offloads);
+
+		if (unlikely(!count)) {
+			dev_kfree_skb_any(skb);
+			continue;
+		}
+
+		if (enetc_bd_unused(tx_ring) < ENETC_TXBDS_MAX_NEEDED)
+			netif_stop_subqueue(ndev, tx_ring->index);
+	}
+
+	/* let H/W know BD ring has been updated */
+	enetc_wr_reg_hot(tx_ring->tpir, tx_ring->next_to_use); /* includes wmb() */
+
+	enetc_unlock_mdio();
+
+	return ret;
 }
 
 static irqreturn_t enetc_msix(int irq, void *data)
@@ -1409,7 +1419,10 @@ void enetc_start(struct net_device *ndev)
 int enetc_open(struct net_device *ndev)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
-	int err;
+	int i, err;
+
+	for (i = 0; i < priv->num_tx_rings; i++)
+		skb_queue_head_init(&priv->tx_ring[i]->skb_queue);
 
 	err = enetc_setup_irqs(priv);
 	if (err)
@@ -1475,6 +1488,9 @@ void enetc_stop(struct net_device *ndev)
 		netif_carrier_off(ndev);
 
 	enetc_clear_interrupts(priv);
+
+	for (i = 0; i < priv->num_tx_rings; i++)
+		skb_queue_purge(&priv->tx_ring[i]->skb_queue);
 }
 
 int enetc_close(struct net_device *ndev)
