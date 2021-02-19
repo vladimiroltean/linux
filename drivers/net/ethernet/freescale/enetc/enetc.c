@@ -644,7 +644,10 @@ static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring,
 			       struct napi_struct *napi, int work_limit)
 {
 	int rx_frm_cnt = 0, rx_byte_cnt = 0;
+	struct list_head rx_list;
 	int cleaned_cnt, i;
+
+	INIT_LIST_HEAD(&rx_list);
 
 	cleaned_cnt = enetc_bd_unused(rx_ring);
 	/* next descriptor to process */
@@ -653,6 +656,7 @@ static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring,
 	while (likely(rx_frm_cnt < work_limit)) {
 		union enetc_rx_bd *rxbd;
 		struct sk_buff *skb;
+		u16 parse_summary;
 		u32 bd_status;
 		u16 size;
 
@@ -675,6 +679,8 @@ static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring,
 		skb = enetc_map_rx_buff_to_skb(rx_ring, i, size);
 		if (!skb)
 			break;
+
+		parse_summary = le16_to_cpu(rxbd->r.parse_summary);
 
 		enetc_get_offloads(rx_ring, rxbd, skb);
 
@@ -725,12 +731,17 @@ static int enetc_clean_rx_ring(struct enetc_bdr *rx_ring,
 
 		enetc_process_skb(rx_ring, skb);
 
-		napi_gro_receive(napi, skb);
+		if (enetc_packet_is_tcp(parse_summary))
+			napi_gro_receive(napi, skb);
+		else
+			list_add_tail(&skb->list, &rx_list);
 
 		rx_frm_cnt++;
 	}
 
 	rx_ring->next_to_clean = i;
+
+	netif_receive_skb_list(&rx_list);
 
 	rx_ring->stats.packets += rx_frm_cnt;
 	rx_ring->stats.bytes += rx_byte_cnt;

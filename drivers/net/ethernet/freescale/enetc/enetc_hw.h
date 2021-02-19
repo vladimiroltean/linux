@@ -539,6 +539,15 @@ static inline void enetc_clear_tx_bd(union enetc_tx_bd *txbd)
 #define ENETC_TXBD_E_FLAGS_VLAN_INS	BIT(0)
 #define ENETC_TXBD_E_FLAGS_TWO_STEP_PTP	BIT(2)
 
+/* Parse summary bits */
+#define ENETC_PARSE_ERROR		BIT(15)
+#define ENETC_PARSE_L3_MASK		GENMASK(6, 5)
+#define ENETC_PARSE_L3_IPV4		(0 << 5)
+#define ENETC_PARSE_L3_IPV6		(1 << 5)
+#define ENETC_PARSE_L4_MASK		GENMASK(4, 0)
+#define ENETC_PARSE_L4_TCP		16
+#define ENETC_PARSE_L4_UDP		17
+
 union enetc_rx_bd {
 	struct {
 		__le64 addr;
@@ -606,6 +615,15 @@ struct enetc_cmd_rfse {
 
 #define ENETC_RFSE_EN	BIT(15)
 #define ENETC_RFSE_MODE_BD	2
+
+static inline bool enetc_packet_is_tcp(u16 parse_summary)
+{
+	if ((parse_summary & ENETC_PARSE_L3_MASK) != ENETC_PARSE_L3_IPV4 &&
+	    (parse_summary & ENETC_PARSE_L3_MASK) != ENETC_PARSE_L3_IPV6)
+		return false;
+
+	return (parse_summary & ENETC_PARSE_L4_MASK) == ENETC_PARSE_L4_TCP;
+}
 
 static inline void enetc_get_primary_mac_addr(struct enetc_hw *hw, u8 *addr)
 {
