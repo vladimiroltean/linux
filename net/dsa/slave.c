@@ -55,13 +55,16 @@ static int dsa_host_mdb_add(struct dsa_port *dp,
 
 	a = dsa_host_addr_find(&cpu_dp->host_mdb, mdb->addr, mdb->vid);
 	if (a) {
+		dev_err(dp->ds->dev, "%s: port %d added mdb addr %pM vid %d just incrementing refcount\n", __func__, dp->index, mdb->addr, mdb->vid);
 		refcount_inc(&a->refcount);
 		return 0;
 	}
 
 	a = kzalloc(sizeof(*a), GFP_KERNEL);
-	if (!a)
+	if (!a) {
+		dev_err(dp->ds->dev, "%s: port %d added mdb addr %pM vid %d ENOMEM\n", __func__, dp->index, mdb->addr, mdb->vid);
 		return -ENOMEM;
+	}
 
 	err = dsa_port_host_mdb_add(dp, mdb);
 	if (err) {
@@ -73,6 +76,7 @@ static int dsa_host_mdb_add(struct dsa_port *dp,
 	a->vid = mdb->vid;
 	refcount_set(&a->refcount, 1);
 	list_add_tail(&a->list, &cpu_dp->host_mdb);
+	dev_err(dp->ds->dev, "%s: port %d added mdb addr %pM vid %d\n", __func__, dp->index, mdb->addr, mdb->vid);
 
 	return 0;
 }
@@ -90,16 +94,21 @@ static int dsa_host_mdb_del(struct dsa_port *dp,
 		return -EOPNOTSUPP;
 
 	a = dsa_host_addr_find(&cpu_dp->host_mdb, mdb->addr, mdb->vid);
-	if (!a)
+	if (!a) {
+		dev_err(dp->ds->dev, "%s: port %d mdb addr %pM vid %d not found\n", __func__, dp->index, mdb->addr, mdb->vid);
 		return -ENOENT;
+	}
 
-	if (!refcount_dec_and_test(&a->refcount))
+	if (!refcount_dec_and_test(&a->refcount)) {
+		dev_err(dp->ds->dev, "%s: port %d mdb addr %pM vid %d just decrementing refcount\n", __func__, dp->index, mdb->addr, mdb->vid);
 		return 0;
+	}
 
 	err = dsa_port_host_mdb_del(dp, mdb);
 	if (err)
 		return err;
 
+	dev_err(dp->ds->dev, "%s: port %d deleted mdb addr %pM vid %d\n", __func__, dp->index, mdb->addr, mdb->vid);
 	list_del(&a->list);
 	kfree(a);
 
