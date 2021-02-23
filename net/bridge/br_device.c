@@ -179,8 +179,25 @@ static int br_dev_open(struct net_device *dev)
 	return 0;
 }
 
-static void br_dev_set_multicast_list(struct net_device *dev)
+static int br_dev_sync_uc(struct net_device *dev, const unsigned char *addr)
 {
+	struct net_bridge *br = netdev_priv(dev);
+
+	return br_fdb_insert(br, NULL, addr, 0);
+}
+
+static int br_dev_unsync_uc(struct net_device *dev, const unsigned char *addr)
+{
+	struct net_bridge *br = netdev_priv(dev);
+
+	br_fdb_find_delete_local(br, NULL, addr, 0);
+
+	return 0;
+}
+
+static void br_dev_set_rx_mode(struct net_device *dev)
+{
+	__dev_uc_sync(dev, br_dev_sync_uc, br_dev_unsync_uc);
 }
 
 static void br_dev_change_rx_flags(struct net_device *dev, int change)
@@ -399,7 +416,7 @@ static const struct net_device_ops br_netdev_ops = {
 	.ndo_start_xmit		 = br_dev_xmit,
 	.ndo_get_stats64	 = dev_get_tstats64,
 	.ndo_set_mac_address	 = br_set_mac_address,
-	.ndo_set_rx_mode	 = br_dev_set_multicast_list,
+	.ndo_set_rx_mode	 = br_dev_set_rx_mode,
 	.ndo_change_rx_flags	 = br_dev_change_rx_flags,
 	.ndo_change_mtu		 = br_change_mtu,
 	.ndo_do_ioctl		 = br_dev_ioctl,
@@ -436,7 +453,7 @@ void br_dev_setup(struct net_device *dev)
 	dev->needs_free_netdev = true;
 	dev->ethtool_ops = &br_ethtool_ops;
 	SET_NETDEV_DEVTYPE(dev, &br_type);
-	dev->priv_flags = IFF_EBRIDGE | IFF_NO_QUEUE;
+	dev->priv_flags = IFF_EBRIDGE | IFF_NO_QUEUE | IFF_UNICAST_FLT;
 
 	dev->features = COMMON_FEATURES | NETIF_F_LLTX | NETIF_F_NETNS_LOCAL |
 			NETIF_F_HW_VLAN_CTAG_TX | NETIF_F_HW_VLAN_STAG_TX;
