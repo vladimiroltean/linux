@@ -2317,7 +2317,8 @@ bool dsa_slave_dev_check(const struct net_device *dev)
 }
 EXPORT_SYMBOL_GPL(dsa_slave_dev_check);
 
-/* Circular reference */
+/* Circular references */
+static struct notifier_block dsa_slave_switchdev_notifier;
 static struct notifier_block dsa_slave_switchdev_blocking_notifier;
 
 static int dsa_slave_changeupper(struct net_device *dev,
@@ -2333,6 +2334,8 @@ static int dsa_slave_changeupper(struct net_device *dev,
 			err = dsa_port_bridge_join(dp, bridge_dev);
 			if (!err) {
 				dsa_bridge_mtu_normalization(dp);
+				br_fdb_replay(bridge_dev, dev,
+					      &dsa_slave_switchdev_notifier);
 				br_mdb_replay(bridge_dev, dev,
 					      &dsa_slave_switchdev_blocking_notifier);
 			}
@@ -2397,6 +2400,8 @@ dsa_slave_lag_changeupper(struct net_device *dev,
 	}
 
 	if (info->linking && netif_is_bridge_master(info->upper_dev) && !err) {
+		br_fdb_replay(info->upper_dev, dev,
+			      &dsa_slave_switchdev_notifier);
 		br_mdb_replay(info->upper_dev, dev,
 			      &dsa_slave_switchdev_blocking_notifier);
 	}
