@@ -328,6 +328,7 @@ static struct dsa_port *dsa_tree_find_first_cpu(struct dsa_switch_tree *dst)
 
 static void dsa_setup_cpu_port(struct dsa_port *cpu_dp)
 {
+	INIT_LIST_HEAD(&cpu_dp->host_fdb);
 	INIT_LIST_HEAD(&cpu_dp->host_mdb);
 }
 
@@ -354,6 +355,11 @@ static int dsa_tree_setup_default_cpu(struct dsa_switch_tree *dst)
 static void dsa_teardown_cpu_port(struct dsa_port *cpu_dp)
 {
 	struct dsa_host_addr *a, *tmp;
+
+	list_for_each_entry_safe(a, tmp, &cpu_dp->host_fdb, list) {
+		list_del(&a->list);
+		kfree(a);
+	}
 
 	list_for_each_entry_safe(a, tmp, &cpu_dp->host_mdb, list) {
 		list_del(&a->list);
