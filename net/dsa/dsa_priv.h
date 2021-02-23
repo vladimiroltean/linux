@@ -117,10 +117,12 @@ struct dsa_switchdev_event_work {
 	struct dsa_switch *ds;
 	int port;
 	struct work_struct work;
-	unsigned long event;
-	/* Specific for SWITCHDEV_FDB_ADD_TO_DEVICE and
-	 * SWITCHDEV_FDB_DEL_TO_DEVICE
-	 */
+	enum dsa_switchdev_event {
+		DSA_EVENT_FDB_ADD,
+		DSA_EVENT_FDB_DEL,
+		DSA_EVENT_MDB_ADD,
+		DSA_EVENT_MDB_DEL,
+	} event;
 	unsigned char addr[ETH_ALEN];
 	u16 vid;
 	bool host_addr;

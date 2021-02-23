@@ -171,6 +171,220 @@ static int dsa_host_fdb_del(struct dsa_port *dp, const unsigned char *addr,
 	return 0;
 }
 
+static void
+dsa_fdb_offload_notify(struct dsa_switchdev_event_work *switchdev_work)
+{
+	struct dsa_switch *ds = switchdev_work->ds;
+	struct switchdev_notifier_fdb_info info;
+	struct dsa_port *dp;
+
+	if (!dsa_is_user_port(ds, switchdev_work->port))
+		return;
+
+	info.addr = switchdev_work->addr;
+	info.vid = switchdev_work->vid;
+	info.offloaded = true;
+	dp = dsa_to_port(ds, switchdev_work->port);
+	call_switchdev_notifiers(SWITCHDEV_FDB_OFFLOADED,
+				 dp->slave, &info.info, NULL);
+}
+
+#define work_to_ctx(w) \
+	container_of((w), struct dsa_switchdev_event_work, work)
+
+static void dsa_slave_switchdev_event_work(struct work_struct *work)
+{
+	struct dsa_switchdev_event_work *switchdev_work = work_to_ctx(work);
+	struct dsa_switch *ds = switchdev_work->ds;
+	struct dsa_port *dp;
+	int err;
+
+	dp = dsa_to_port(ds, switchdev_work->port);
+
+	rtnl_lock();
+	switch (switchdev_work->event) {
+	case DSA_EVENT_FDB_ADD:
+		if (switchdev_work->host_addr)
+			err = dsa_host_fdb_add(dp, switchdev_work->addr,
+					       switchdev_work->vid);
+		else
+			err = dsa_port_fdb_add(dp, switchdev_work->addr,
+					       switchdev_work->vid);
+		if (err) {
+			dev_err(ds->dev,
+				"port %d failed to add %pM vid %d to fdb: %d\n",
+				dp->index, switchdev_work->addr,
+				switchdev_work->vid, err);
+			break;
+		}
+		dsa_fdb_offload_notify(switchdev_work);
+		break;
+
+	case DSA_EVENT_FDB_DEL:
+		if (switchdev_work->host_addr)
+			err = dsa_host_fdb_del(dp, switchdev_work->addr,
+					       switchdev_work->vid);
+		else
+			err = dsa_port_fdb_del(dp, switchdev_work->addr,
+					       switchdev_work->vid);
+		if (err) {
+			dev_err(ds->dev,
+				"port %d failed to delete %pM vid %d from fdb: %d\n",
+				dp->index, switchdev_work->addr,
+				switchdev_work->vid, err);
+		}
+
+		break;
+
+	case DSA_EVENT_MDB_ADD: {
+		struct switchdev_obj_port_mdb mdb;
+
+		ether_addr_copy(mdb.addr, switchdev_work->addr);
+		mdb.vid = switchdev_work->vid;
+
+		if (switchdev_work->host_addr)
+			err = dsa_host_mdb_add(dp, &mdb);
+		else
+			err = dsa_port_mdb_add(dp, &mdb);
+		if (err) {
+			dev_err(ds->dev,
+				"port %d failed to add %pM vid %d to mdb: %d\n",
+				dp->index, mdb.addr, mdb.vid, err);
+			break;
+		}
+		dsa_fdb_offload_notify(switchdev_work);
+		break;
+	}
+	case DSA_EVENT_MDB_DEL: {
+		struct switchdev_obj_port_mdb mdb;
+
+		ether_addr_copy(mdb.addr, switchdev_work->addr);
+		mdb.vid = switchdev_work->vid;
+
+		if (switchdev_work->host_addr)
+			err = dsa_host_mdb_del(dp, &mdb);
+		else
+			err = dsa_port_mdb_del(dp, &mdb);
+		if (err) {
+			dev_err(ds->dev,
+				"port %d failed to delete %pM vid %d from mdb: %d\n",
+				dp->index, mdb.addr, mdb.vid, err);
+		}
+		break;
+	}
+	default:
+		break;
+	}
+	rtnl_unlock();
+
+	kfree(switchdev_work);
+	dev_put(dp->slave);
+}
+
+
+static int dsa_slave_schedule_switchdev_work(struct net_device *dev,
+					     enum dsa_switchdev_event event,
+					     const unsigned char *addr, u16 vid,
+					     bool host_addr)
+{
+	struct dsa_switchdev_event_work *switchdev_work;
+	struct dsa_port *dp = dsa_slave_to_port(dev);
+
+	if (!dp->ds->ops->port_fdb_add || !dp->ds->ops->port_fdb_del)
+		return -EOPNOTSUPP;
+
+	switchdev_work = kzalloc(sizeof(*switchdev_work), GFP_ATOMIC);
+	if (!switchdev_work)
+		return -ENOMEM;
+
+	INIT_WORK(&switchdev_work->work, dsa_slave_switchdev_event_work);
+	switchdev_work->ds = dp->ds;
+	switchdev_work->port = dp->index;
+	switchdev_work->event = event;
+
+	ether_addr_copy(switchdev_work->addr, addr);
+	switchdev_work->vid = vid;
+	switchdev_work->host_addr = host_addr;
+
+	/* Hold a reference on the slave for dsa_fdb_offload_notify */
+	dev_hold(dev);
+	dsa_schedule_work(&switchdev_work->work);
+
+	return 0;
+}
+
+static int dsa_slave_sync_uc(struct net_device *dev,
+			     const unsigned char *addr)
+{
+	int err;
+
+	err = dsa_slave_schedule_switchdev_work(dev, DSA_EVENT_FDB_ADD,
+						addr, 0, true);
+	if (err == -EOPNOTSUPP) {
+		struct dsa_port *dp = dsa_slave_to_port(dev);
+
+		dev_uc_add(dp->cpu_dp->master, addr);
+
+		return 0;
+	}
+
+	return err;
+}
+
+static int dsa_slave_unsync_uc(struct net_device *dev,
+			       const unsigned char *addr)
+{
+	int err;
+
+	err = dsa_slave_schedule_switchdev_work(dev, DSA_EVENT_FDB_DEL,
+						addr, 0, true);
+	if (err == -EOPNOTSUPP) {
+		struct dsa_port *dp = dsa_slave_to_port(dev);
+
+		dev_uc_del(dp->cpu_dp->master, addr);
+
+		return 0;
+	}
+
+	return err;
+}
+
+static int dsa_slave_sync_mc(struct net_device *dev,
+			     const unsigned char *addr)
+{
+	int err;
+
+	err = dsa_slave_schedule_switchdev_work(dev, DSA_EVENT_MDB_ADD,
+						addr, 0, true);
+	if (err == -EOPNOTSUPP) {
+		struct dsa_port *dp = dsa_slave_to_port(dev);
+
+		dev_mc_add(dp->cpu_dp->master, addr);
+
+		return 0;
+	}
+
+	return err;
+}
+
+static int dsa_slave_unsync_mc(struct net_device *dev,
+			       const unsigned char *addr)
+{
+	int err;
+
+	err = dsa_slave_schedule_switchdev_work(dev, DSA_EVENT_MDB_DEL,
+						addr, 0, true);
+	if (err == -EOPNOTSUPP) {
+		struct dsa_port *dp = dsa_slave_to_port(dev);
+
+		dev_mc_del(dp->cpu_dp->master, addr);
+
+		return 0;
+	}
+
+	return err;
+}
+
 /* slave mii_bus handling ***************************************************/
 static int dsa_slave_phy_read(struct mii_bus *bus, int addr, int reg)
 {
@@ -263,8 +477,9 @@ static int dsa_slave_close(struct net_device *dev)
 
 	dsa_port_disable_rt(dp);
 
-	dev_mc_unsync(master, dev);
-	dev_uc_unsync(master, dev);
+	__dev_uc_sync(dev, dsa_slave_sync_uc, dsa_slave_unsync_uc);
+	__dev_mc_sync(dev, dsa_slave_sync_mc, dsa_slave_unsync_mc);
+
 	if (dev->flags & IFF_ALLMULTI)
 		dev_set_allmulti(master, -1);
 	if (dev->flags & IFF_PROMISC)
@@ -290,10 +505,8 @@ static void dsa_slave_change_rx_flags(struct net_device *dev, int change)
 
 static void dsa_slave_set_rx_mode(struct net_device *dev)
 {
-	struct net_device *master = dsa_slave_to_master(dev);
-
-	dev_mc_sync(master, dev);
-	dev_uc_sync(master, dev);
+	__dev_uc_sync(dev, dsa_slave_sync_uc, dsa_slave_unsync_uc);
+	__dev_mc_sync(dev, dsa_slave_sync_mc, dsa_slave_unsync_mc);
 }
 
 static int dsa_slave_set_mac_address(struct net_device *dev, void *a)
@@ -1970,6 +2183,8 @@ int dsa_slave_create(struct dsa_port *port)
 	else
 		eth_hw_addr_inherit(slave_dev, master);
 	slave_dev->priv_flags |= IFF_NO_QUEUE;
+	if (ds->ops->port_fdb_add && ds->ops->port_fdb_del)
+		slave_dev->priv_flags |= IFF_UNICAST_FLT;
 	slave_dev->netdev_ops = &dsa_slave_netdev_ops;
 	if (ds->ops->port_max_mtu)
 		slave_dev->max_mtu = ds->ops->port_max_mtu(ds, port->index);
@@ -2290,75 +2505,6 @@ static int dsa_slave_netdevice_event(struct notifier_block *nb,
 	return NOTIFY_DONE;
 }
 
-static void
-dsa_fdb_offload_notify(struct dsa_switchdev_event_work *switchdev_work)
-{
-	struct dsa_switch *ds = switchdev_work->ds;
-	struct switchdev_notifier_fdb_info info;
-	struct dsa_port *dp;
-
-	if (!dsa_is_user_port(ds, switchdev_work->port))
-		return;
-
-	info.addr = switchdev_work->addr;
-	info.vid = switchdev_work->vid;
-	info.offloaded = true;
-	dp = dsa_to_port(ds, switchdev_work->port);
-	call_switchdev_notifiers(SWITCHDEV_FDB_OFFLOADED,
-				 dp->slave, &info.info, NULL);
-}
-
-static void dsa_slave_switchdev_event_work(struct work_struct *work)
-{
-	struct dsa_switchdev_event_work *switchdev_work =
-		container_of(work, struct dsa_switchdev_event_work, work);
-	struct dsa_switch *ds = switchdev_work->ds;
-	struct dsa_port *dp;
-	int err;
-
-	dp = dsa_to_port(ds, switchdev_work->port);
-
-	rtnl_lock();
-	switch (switchdev_work->event) {
-	case SWITCHDEV_FDB_ADD_TO_DEVICE:
-		if (switchdev_work->host_addr)
-			err = dsa_host_fdb_add(dp, switchdev_work->addr,
-					       switchdev_work->vid);
-		else
-			err = dsa_port_fdb_add(dp, switchdev_work->addr,
-					       switchdev_work->vid);
-		if (err) {
-			dev_err(ds->dev,
-				"port %d failed to add %pM vid %d to fdb: %d\n",
-				dp->index, switchdev_work->addr,
-				switchdev_work->vid, err);
-			break;
-		}
-		dsa_fdb_offload_notify(switchdev_work);
-		break;
-
-	case SWITCHDEV_FDB_DEL_TO_DEVICE:
-		if (switchdev_work->host_addr)
-			err = dsa_host_fdb_del(dp, switchdev_work->addr,
-					       switchdev_work->vid);
-		else
-			err = dsa_port_fdb_del(dp, switchdev_work->addr,
-					       switchdev_work->vid);
-		if (err) {
-			dev_err(ds->dev,
-				"port %d failed to delete %pM vid %d from fdb: %d\n",
-				dp->index, switchdev_work->addr,
-				switchdev_work->vid, err);
-		}
-
-		break;
-	}
-	rtnl_unlock();
-
-	kfree(switchdev_work);
-	dev_put(dp->slave);
-}
-
 static int dsa_lower_dev_walk(struct net_device *lower_dev,
 			      struct netdev_nested_priv *priv)
 {
@@ -2387,7 +2533,7 @@ static int dsa_slave_switchdev_event(struct notifier_block *unused,
 {
 	struct net_device *dev = switchdev_notifier_info_to_dev(ptr);
 	const struct switchdev_notifier_fdb_info *fdb_info;
-	struct dsa_switchdev_event_work *switchdev_work;
+	enum dsa_switchdev_event dsa_event;
 	bool host_addr = false;
 	struct dsa_port *dp;
 	int err;
@@ -2441,28 +2587,19 @@ static int dsa_slave_switchdev_event(struct notifier_block *unused,
 				return NOTIFY_DONE;
 		}
 
-		if (!dp->ds->ops->port_fdb_add || !dp->ds->ops->port_fdb_del)
-			return NOTIFY_DONE;
+		if (event == SWITCHDEV_FDB_ADD_TO_DEVICE)
+			dsa_event = DSA_EVENT_FDB_ADD;
+		else
+			dsa_event = DSA_EVENT_FDB_DEL;
 
-		switchdev_work = kzalloc(sizeof(*switchdev_work), GFP_ATOMIC);
-		if (!switchdev_work)
-			return NOTIFY_BAD;
+		err = dsa_slave_schedule_switchdev_work(dp->slave, dsa_event,
+							fdb_info->addr,
+							fdb_info->vid,
+							host_addr);
+		if (err == -EOPNOTSUPP)
+			return NOTIFY_OK;
 
-		INIT_WORK(&switchdev_work->work,
-			  dsa_slave_switchdev_event_work);
-		switchdev_work->ds = dp->ds;
-		switchdev_work->port = dp->index;
-		switchdev_work->event = event;
-
-		ether_addr_copy(switchdev_work->addr,
-				fdb_info->addr);
-		switchdev_work->vid = fdb_info->vid;
-		switchdev_work->host_addr = host_addr;
-
-		/* Hold a reference on the slave for dsa_fdb_offload_notify */
-		dev_hold(dev);
-		dsa_schedule_work(&switchdev_work->work);
-		break;
+		return notifier_from_errno(err);
 	default:
 		return NOTIFY_DONE;
 	}
