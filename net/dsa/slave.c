@@ -48,6 +48,8 @@ static int dsa_host_mdb_add(struct dsa_port *dp,
 	struct dsa_host_addr *a;
 	int err;
 
+	dev_mc_add(cpu_dp->master, mdb->addr);
+
 	if (!dp->ds->ops->port_mdb_add || !dp->ds->ops->port_mdb_del)
 		return -EOPNOTSUPP;
 
@@ -82,6 +84,8 @@ static int dsa_host_mdb_del(struct dsa_port *dp,
 	struct dsa_host_addr *a;
 	int err;
 
+	dev_mc_del(cpu_dp->master, mdb->addr);
+
 	if (!dp->ds->ops->port_mdb_add || !dp->ds->ops->port_mdb_del)
 		return -EOPNOTSUPP;
 
@@ -108,6 +112,8 @@ static int dsa_host_fdb_add(struct dsa_port *dp, const unsigned char *addr,
 	struct dsa_port *cpu_dp = dp->cpu_dp;
 	struct dsa_host_addr *a;
 	int err;
+
+	dev_uc_add(cpu_dp->master, addr);
 
 	if (!dp->ds->ops->port_fdb_add || !dp->ds->ops->port_fdb_del)
 		return -EOPNOTSUPP;
@@ -142,6 +148,8 @@ static int dsa_host_fdb_del(struct dsa_port *dp, const unsigned char *addr,
 	struct dsa_port *cpu_dp = dp->cpu_dp;
 	struct dsa_host_addr *a;
 	int err;
+
+	dev_uc_del(cpu_dp->master, addr);
 
 	if (!dp->ds->ops->port_fdb_add || !dp->ds->ops->port_fdb_del)
 		return -EOPNOTSUPP;
