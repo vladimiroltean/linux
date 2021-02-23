@@ -293,6 +293,7 @@ struct dsa_port {
 	/* List of MAC addresses that must be extracted from the fabric
 	 * through this CPU port. Valid only for DSA_PORT_TYPE_CPU.
 	 */
+	struct list_head	host_fdb;
 	struct list_head	host_mdb;
 
 	bool setup;
