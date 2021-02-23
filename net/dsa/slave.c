@@ -223,11 +223,9 @@ static int dsa_slave_open(struct net_device *dev)
 		goto out;
 	}
 
-	if (!ether_addr_equal(dev->dev_addr, master->dev_addr)) {
-		err = dev_uc_add(master, dev->dev_addr);
-		if (err < 0)
-			goto out;
-	}
+	err = dsa_host_fdb_add(dp, dev->dev_addr, 0);
+	if (err && err != -EOPNOTSUPP)
+		goto out;
 
 	if (dev->flags & IFF_ALLMULTI) {
 		err = dev_set_allmulti(master, 1);
@@ -253,8 +251,7 @@ clear_allmulti:
 	if (dev->flags & IFF_ALLMULTI)
 		dev_set_allmulti(master, -1);
 del_unicast:
-	if (!ether_addr_equal(dev->dev_addr, master->dev_addr))
-		dev_uc_del(master, dev->dev_addr);
+	dsa_host_fdb_del(dp, dev->dev_addr, 0);
 out:
 	return err;
 }
@@ -273,8 +270,7 @@ static int dsa_slave_close(struct net_device *dev)
 	if (dev->flags & IFF_PROMISC)
 		dev_set_promiscuity(master, -1);
 
-	if (!ether_addr_equal(dev->dev_addr, master->dev_addr))
-		dev_uc_del(master, dev->dev_addr);
+	dsa_host_fdb_del(dp, dev->dev_addr, 0);
 
 	return 0;
 }
@@ -302,26 +298,18 @@ static void dsa_slave_set_rx_mode(struct net_device *dev)
 
 static int dsa_slave_set_mac_address(struct net_device *dev, void *a)
 {
-	struct net_device *master = dsa_slave_to_master(dev);
+	struct dsa_port *dp = dsa_slave_to_port(dev);
 	struct sockaddr *addr = a;
 	int err;
 
 	if (!is_valid_ether_addr(addr->sa_data))
 		return -EADDRNOTAVAIL;
 
-	if (!(dev->flags & IFF_UP))
-		goto out;
+	err = dsa_host_fdb_add(dp, addr->sa_data, 0);
+	if (err && err != -EOPNOTSUPP)
+		return err;
 
-	if (!ether_addr_equal(addr->sa_data, master->dev_addr)) {
-		err = dev_uc_add(master, addr->sa_data);
-		if (err < 0)
-			return err;
-	}
-
-	if (!ether_addr_equal(dev->dev_addr, master->dev_addr))
-		dev_uc_del(master, dev->dev_addr);
-
-out:
+	dsa_host_fdb_del(dp, dev->dev_addr, 0);
 	ether_addr_copy(dev->dev_addr, addr->sa_data);
 
 	return 0;
