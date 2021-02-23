@@ -206,6 +206,7 @@ struct switchdev_notifier_info {
 
 struct switchdev_notifier_fdb_info {
 	struct switchdev_notifier_info info; /* must be first */
+	struct list_head list;
 	const unsigned char *addr;
 	u16 vid;
 	u8 added_by_user:1,
