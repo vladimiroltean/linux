@@ -643,6 +643,7 @@ static void br_mdb_switchdev_host_port(struct net_device *dev,
 		ipv6_eth_mc_map(&mp->addr.dst.ip6, mdb.addr);
 #endif
 
+	netdev_err(dev, "%s: addr %pM vid %d\n", __func__, mdb.addr, mdb.vid);
 	mdb.obj.orig_dev = dev;
 	switch (type) {
 	case RTM_NEWMDB:
@@ -658,7 +659,17 @@ static void br_mdb_switchdev_host(struct net_device *dev,
 				  struct net_bridge_mdb_entry *mp, int type)
 {
 	struct net_device *lower_dev;
+	unsigned char addr[ETH_ALEN];
 	struct list_head *iter;
+
+	if (mp->addr.proto == htons(ETH_P_IP))
+		ip_eth_mc_map(mp->addr.dst.ip4, addr);
+#if IS_ENABLED(CONFIG_IPV6)
+	else
+		ipv6_eth_mc_map(&mp->addr.dst.ip6, addr);
+#endif
+
+	netdev_err(dev, "%s: addr %pM vid %d\n", __func__, addr, mp->addr.vid);
 
 	netdev_for_each_lower_dev(dev, lower_dev, iter)
 		br_mdb_switchdev_host_port(dev, lower_dev, mp, type);

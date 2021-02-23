@@ -857,8 +857,10 @@ int ocelot_fdb_add(struct ocelot *ocelot, int port,
 {
 	int pgid = port;
 
-	if (port == ocelot->npi)
+	if (port == ocelot->npi) {
+		dev_err(ocelot->dev, "%s: addr %pM vid %d\n", __func__, addr, vid);
 		pgid = PGID_CPU;
+	}
 
 	return ocelot_mact_learn(ocelot, pgid, addr, vid, ENTRYTYPE_LOCKED);
 }
@@ -867,6 +869,8 @@ EXPORT_SYMBOL(ocelot_fdb_add);
 int ocelot_fdb_del(struct ocelot *ocelot, int port,
 		   const unsigned char *addr, u16 vid)
 {
+	if (port == ocelot->npi)
+		dev_err(ocelot->dev, "%s: addr %pM vid %d\n", __func__, addr, vid);
 	return ocelot_mact_forget(ocelot, addr, vid);
 }
 EXPORT_SYMBOL(ocelot_fdb_del);
@@ -1480,8 +1484,10 @@ int ocelot_port_mdb_del(struct ocelot *ocelot, int port,
 		port = ocelot->num_phys_ports;
 
 	mc = ocelot_multicast_get(ocelot, mdb->addr, vid);
-	if (!mc)
+	if (!mc) {
+		dev_err(ocelot->dev, "%s: cannot find mdb addr %pM vid %d\n", __func__, mdb->addr, vid);
 		return -ENOENT;
+	}
 
 	ocelot_encode_ports_to_mdb(addr, mc);
 	ocelot_mact_forget(ocelot, addr, vid);
