@@ -1930,7 +1930,7 @@ static int dpaa2_switch_port_bridge_join(struct net_device *netdev,
 	if (err)
 		goto err_egress_flood;
 
-	return 0;
+	return switchdev_bridge_port_offload(netdev, netdev, extack);
 
 err_egress_flood:
 	dpaa2_switch_port_set_fdb(port_priv, NULL);
@@ -1955,6 +1955,13 @@ static int dpaa2_switch_port_restore_rxvlan(struct net_device *vdev, int vid, vo
 		vlan_proto = vlan_dev_vlan_proto(vdev);
 
 	return dpaa2_switch_port_vlan_add(arg, vlan_proto, vid);
+}
+
+static int dpaa2_switch_port_pre_bridge_leave(struct net_device *netdev,
+					      struct net_device *upper_dev,
+					      struct netlink_ext_ack *extack)
+{
+	return switchdev_bridge_port_unoffload(netdev, netdev, extack);
 }
 
 static int dpaa2_switch_port_bridge_leave(struct net_device *netdev)
@@ -2077,6 +2084,11 @@ static int dpaa2_switch_port_netdevice_event(struct notifier_block *nb,
 								extack);
 		if (err)
 			goto out;
+
+		if (!info->linking)
+			err = dpaa2_switch_port_pre_bridge_leave(netdev,
+								 upper_dev,
+								 extack);
 
 		break;
 	case NETDEV_CHANGEUPPER:

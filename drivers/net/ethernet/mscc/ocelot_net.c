@@ -1216,6 +1216,10 @@ static int ocelot_netdevice_bridge_join(struct net_device *dev,
 
 	ocelot_port_bridge_join(ocelot, port, bridge);
 
+	err = switchdev_bridge_port_offload(brport_dev, dev, extack);
+	if (err)
+		goto err_switchdev_offload;
+
 	err = ocelot_switchdev_sync(ocelot, port, brport_dev, bridge, extack);
 	if (err)
 		goto err_switchdev_sync;
@@ -1223,8 +1227,17 @@ static int ocelot_netdevice_bridge_join(struct net_device *dev,
 	return 0;
 
 err_switchdev_sync:
+	switchdev_bridge_port_unoffload(brport_dev, dev, extack);
+err_switchdev_offload:
 	ocelot_port_bridge_leave(ocelot, port, bridge);
 	return err;
+}
+
+static int ocelot_netdevice_pre_bridge_leave(struct net_device *dev,
+					     struct net_device *brport_dev,
+					     struct netlink_ext_ack *extack)
+{
+	return switchdev_bridge_port_unoffload(brport_dev, dev, extack);
 }
 
 static int ocelot_netdevice_bridge_leave(struct net_device *dev,
@@ -1277,6 +1290,19 @@ static int ocelot_netdevice_lag_join(struct net_device *dev,
 err_bridge_join:
 	ocelot_port_lag_leave(ocelot, port, bond);
 	return err;
+}
+
+static int ocelot_netdevice_pre_lag_leave(struct net_device *dev,
+					  struct net_device *bond,
+					  struct netlink_ext_ack *extack)
+{
+	struct net_device *bridge_dev;
+
+	bridge_dev = netdev_master_upper_dev_get(bond);
+	if (!bridge_dev || !netif_is_bridge_master(bridge_dev))
+		return 0;
+
+	return ocelot_netdevice_pre_bridge_leave(dev, bond, extack);
 }
 
 static int ocelot_netdevice_lag_leave(struct net_device *dev,
@@ -1356,6 +1382,50 @@ ocelot_netdevice_lag_changeupper(struct net_device *dev,
 }
 
 static int
+ocelot_netdevice_prechangeupper(struct net_device *dev,
+				struct net_device *brport_dev,
+				struct netdev_notifier_changeupper_info *info)
+{
+	struct netlink_ext_ack *extack;
+	int err = 0;
+
+	extack = netdev_notifier_info_to_extack(&info->info);
+
+	if (netif_is_bridge_master(info->upper_dev) && !info->linking)
+		err = ocelot_netdevice_pre_bridge_leave(dev, brport_dev,
+							extack);
+
+	if (netif_is_lag_master(info->upper_dev) && !info->linking)
+		err = ocelot_netdevice_pre_lag_leave(dev, info->upper_dev,
+						     extack);
+
+	return notifier_from_errno(err);
+}
+
+static int
+ocelot_netdevice_lag_prechangeupper(struct net_device *dev,
+				    struct netdev_notifier_changeupper_info *info)
+{
+	struct net_device *lower;
+	struct list_head *iter;
+	int err = NOTIFY_DONE;
+
+	netdev_for_each_lower_dev(dev, lower, iter) {
+		struct ocelot_port_private *priv = netdev_priv(lower);
+		struct ocelot_port *ocelot_port = &priv->port;
+
+		if (ocelot_port->bond != dev)
+			return NOTIFY_OK;
+
+		err = ocelot_netdevice_prechangeupper(dev, lower, info);
+		if (err)
+			return notifier_from_errno(err);
+	}
+
+	return NOTIFY_DONE;
+}
+
+static int
 ocelot_netdevice_changelowerstate(struct net_device *dev,
 				  struct netdev_lag_lower_state_info *info)
 {
@@ -1382,6 +1452,17 @@ static int ocelot_netdevice_event(struct notifier_block *unused,
 	struct net_device *dev = netdev_notifier_info_to_dev(ptr);
 
 	switch (event) {
+	case NETDEV_PRECHANGEUPPER: {
+		struct netdev_notifier_changeupper_info *info = ptr;
+
+		if (ocelot_netdevice_dev_check(dev))
+			return ocelot_netdevice_prechangeupper(dev, dev, info);
+
+		if (netif_is_lag_master(dev))
+			return ocelot_netdevice_lag_prechangeupper(dev, info);
+
+		break;
+	}
 	case NETDEV_CHANGEUPPER: {
 		struct netdev_notifier_changeupper_info *info = ptr;
 

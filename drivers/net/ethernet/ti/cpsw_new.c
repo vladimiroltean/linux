@@ -11,6 +11,7 @@
 #include <linux/module.h>
 #include <linux/irqreturn.h>
 #include <linux/interrupt.h>
+#include <linux/if_bridge.h>
 #include <linux/if_ether.h>
 #include <linux/etherdevice.h>
 #include <linux/net_tstamp.h>
@@ -1499,10 +1500,12 @@ static void cpsw_port_offload_fwd_mark_update(struct cpsw_common *cpsw)
 }
 
 static int cpsw_netdevice_port_link(struct net_device *ndev,
-				    struct net_device *br_ndev)
+				    struct net_device *br_ndev,
+				    struct netlink_ext_ack *extack)
 {
 	struct cpsw_priv *priv = netdev_priv(ndev);
 	struct cpsw_common *cpsw = priv->cpsw;
+	int err;
 
 	if (!cpsw->br_members) {
 		cpsw->hw_bridge_dev = br_ndev;
@@ -1514,11 +1517,21 @@ static int cpsw_netdevice_port_link(struct net_device *ndev,
 			return -EOPNOTSUPP;
 	}
 
+	err = switchdev_bridge_port_offload(ndev, ndev, extack);
+	if (err)
+		return err;
+
 	cpsw->br_members |= BIT(priv->emac_port);
 
 	cpsw_port_offload_fwd_mark_update(cpsw);
 
 	return NOTIFY_DONE;
+}
+
+static int cpsw_netdevice_port_pre_unlink(struct net_device *ndev,
+					  struct netlink_ext_ack *extack)
+{
+	return switchdev_bridge_port_unoffload(ndev, ndev, extack);
 }
 
 static void cpsw_netdevice_port_unlink(struct net_device *ndev)
@@ -1538,6 +1551,7 @@ static void cpsw_netdevice_port_unlink(struct net_device *ndev)
 static int cpsw_netdevice_event(struct notifier_block *unused,
 				unsigned long event, void *ptr)
 {
+	struct netlink_ext_ack *extack = netdev_notifier_info_to_extack(ptr);
 	struct net_device *ndev = netdev_notifier_info_to_dev(ptr);
 	struct netdev_notifier_changeupper_info *info;
 	int ret = NOTIFY_DONE;
@@ -1546,13 +1560,21 @@ static int cpsw_netdevice_event(struct notifier_block *unused,
 		return NOTIFY_DONE;
 
 	switch (event) {
+	case NETDEV_PRECHANGEUPPER:
+		info = ptr;
+
+		if (netif_is_bridge_master(info->upper_dev) && !info->linking)
+			ret = cpsw_netdevice_port_pre_unlink(ndev, extack);
+
+		break;
 	case NETDEV_CHANGEUPPER:
 		info = ptr;
 
 		if (netif_is_bridge_master(info->upper_dev)) {
 			if (info->linking)
 				ret = cpsw_netdevice_port_link(ndev,
-							       info->upper_dev);
+							       info->upper_dev,
+							       extack);
 			else
 				cpsw_netdevice_port_unlink(ndev);
 		}

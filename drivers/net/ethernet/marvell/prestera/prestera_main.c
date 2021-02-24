@@ -540,7 +540,8 @@ static void prestera_lag_destroy(struct prestera_switch *sw,
 }
 
 static int prestera_lag_port_add(struct prestera_port *port,
-				 struct net_device *lag_dev)
+				 struct net_device *lag_dev,
+				 struct netlink_ext_ack *extack)
 {
 	struct prestera_switch *sw = port->sw;
 	struct prestera_lag *lag;
@@ -572,7 +573,22 @@ static int prestera_lag_port_add(struct prestera_port *port,
 
 		br_dev = netdev_master_upper_dev_get(lag_dev);
 
-		return prestera_bridge_port_join(br_dev, port);
+		return prestera_bridge_port_join(br_dev, port, extack);
+	}
+
+	return 0;
+}
+
+static int prestera_pre_lag_leave(struct prestera_port *port,
+				 struct net_device *lag_dev,
+				 struct netlink_ext_ack *extack)
+{
+	if (netif_is_bridge_port(lag_dev)) {
+		struct net_device *br_dev;
+
+		br_dev = netdev_master_upper_dev_get(lag_dev);
+
+		return prestera_pre_bridge_port_leave(br_dev, port, extack);
 	}
 
 	return 0;
@@ -766,17 +782,25 @@ static int prestera_netdev_port_event(struct net_device *lower,
 		if (err)
 			return err;
 
+		if (netif_is_bridge_master(upper) && !info->linking)
+			return prestera_pre_bridge_port_leave(upper, port,
+							      extack);
+		else if (netif_is_lag_master(upper) && !info->linking)
+			return prestera_pre_lag_leave(port, upper, extack);
+
 		break;
 
 	case NETDEV_CHANGEUPPER:
 		if (netif_is_bridge_master(upper)) {
 			if (info->linking)
-				return prestera_bridge_port_join(upper, port);
+				return prestera_bridge_port_join(upper, port,
+								 extack);
 			else
 				prestera_bridge_port_leave(upper, port);
 		} else if (netif_is_lag_master(upper)) {
 			if (info->linking)
-				return prestera_lag_port_add(port, upper);
+				return prestera_lag_port_add(port, upper,
+							     extack);
 			else
 				prestera_lag_port_del(port);
 		}

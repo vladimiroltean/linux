@@ -93,9 +93,11 @@ static int sparx5_port_attr_set(struct net_device *dev, const void *ctx,
 }
 
 static int sparx5_port_bridge_join(struct sparx5_port *port,
-				   struct net_device *bridge)
+				   struct net_device *bridge,
+				   struct netlink_ext_ack *extack)
 {
 	struct sparx5 *sparx5 = port->sparx5;
+	struct net_device *ndev = port->ndev;
 
 	if (bitmap_empty(sparx5->bridge_mask, SPX5_PORTS))
 		/* First bridged port */
@@ -112,9 +114,17 @@ static int sparx5_port_bridge_join(struct sparx5_port *port,
 	/* Port enters in bridge mode therefor don't need to copy to CPU
 	 * frames for multicast in case the bridge is not requesting them
 	 */
-	__dev_mc_unsync(port->ndev, sparx5_mc_unsync);
+	__dev_mc_unsync(ndev, sparx5_mc_unsync);
 
-	return 0;
+	return switchdev_bridge_port_offload(ndev, ndev, extack);
+}
+
+static int sparx5_port_pre_bridge_leave(struct sparx5_port *port,
+					struct netlink_ext_ack *extack)
+{
+	struct net_device *ndev = port->ndev;
+
+	return switchdev_bridge_port_unoffload(ndev, ndev, extack);
 }
 
 static void sparx5_port_bridge_leave(struct sparx5_port *port,
@@ -135,15 +145,35 @@ static void sparx5_port_bridge_leave(struct sparx5_port *port,
 	__dev_mc_sync(port->ndev, sparx5_mc_sync, sparx5_mc_unsync);
 }
 
+static int
+sparx5_port_prechangeupper(struct net_device *dev,
+			   struct netdev_notifier_changeupper_info *info)
+{
+	struct sparx5_port *port = netdev_priv(dev);
+	struct netlink_ext_ack *extack;
+	int err = 0;
+
+	extack = netdev_notifier_info_to_extack(&info->info);
+
+	if (netif_is_bridge_master(info->upper_dev) && !info->linking)
+		err = sparx5_port_pre_bridge_leave(port, extack);
+
+	return err;
+}
+
 static int sparx5_port_changeupper(struct net_device *dev,
 				   struct netdev_notifier_changeupper_info *info)
 {
 	struct sparx5_port *port = netdev_priv(dev);
+	struct netlink_ext_ack *extack;
 	int err = 0;
+
+	extack = netdev_notifier_info_to_extack(&info->info);
 
 	if (netif_is_bridge_master(info->upper_dev)) {
 		if (info->linking)
-			err = sparx5_port_bridge_join(port, info->upper_dev);
+			err = sparx5_port_bridge_join(port, info->upper_dev,
+						      extack);
 		else
 			sparx5_port_bridge_leave(port, info->upper_dev);
 
@@ -177,6 +207,9 @@ static int sparx5_netdevice_port_event(struct net_device *dev,
 		return 0;
 
 	switch (event) {
+	case NETDEV_PRECHANGEUPPER:
+		err = sparx5_port_prechangeupper(dev, ptr);
+		break;
 	case NETDEV_CHANGEUPPER:
 		err = sparx5_port_changeupper(dev, ptr);
 		break;
