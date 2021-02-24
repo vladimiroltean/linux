@@ -546,3 +546,21 @@ int switchdev_handle_port_attr_set(struct net_device *dev,
 	return err;
 }
 EXPORT_SYMBOL_GPL(switchdev_handle_port_attr_set);
+
+/* Let the bridge know that this port is offloaded, so that it can use the
+ * port parent id obtained by recursion to determine the bridge port's
+ * switchdev mark.
+ */
+int switchdev_bridge_port_offload_notify(struct net_device *dev)
+{
+	struct switchdev_notifier_brport_info info;
+	int err;
+
+	err = dev_get_port_parent_id(dev, &info.ppid, true);
+	if (err)
+		return err;
+
+	return call_switchdev_notifiers(SWITCHDEV_BRPORT_OFFLOADED, dev,
+					&info.info, NULL);
+}
+EXPORT_SYMBOL(switchdev_bridge_port_offload_notify);

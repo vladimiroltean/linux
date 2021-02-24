@@ -1518,6 +1518,8 @@ static int dpaa2_switch_port_bridge_join(struct net_device *netdev,
 	if (err)
 		goto err_egress_flood;
 
+	switchdev_bridge_port_offload_notify(netdev);
+
 	return 0;
 
 err_egress_flood:

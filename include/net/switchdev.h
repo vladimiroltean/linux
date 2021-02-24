@@ -197,11 +197,18 @@ enum switchdev_notifier_type {
 	SWITCHDEV_VXLAN_FDB_ADD_TO_DEVICE,
 	SWITCHDEV_VXLAN_FDB_DEL_TO_DEVICE,
 	SWITCHDEV_VXLAN_FDB_OFFLOADED,
+
+	SWITCHDEV_BRPORT_OFFLOADED,
 };
 
 struct switchdev_notifier_info {
 	struct net_device *dev;
 	struct netlink_ext_ack *extack;
+};
+
+struct switchdev_notifier_brport_info {
+	struct switchdev_notifier_info info; /* must be first */
+	struct netdev_phys_item_id ppid;
 };
 
 struct switchdev_notifier_fdb_info {
@@ -284,6 +291,9 @@ int switchdev_handle_port_attr_set(struct net_device *dev,
 			int (*set_cb)(struct net_device *dev,
 				      const struct switchdev_attr *attr,
 				      struct netlink_ext_ack *extack));
+
+int switchdev_bridge_port_offload_notify(struct net_device *dev);
+
 #else
 
 static inline void switchdev_deferred_process(void)
@@ -380,6 +390,12 @@ switchdev_handle_port_attr_set(struct net_device *dev,
 {
 	return 0;
 }
+
+static inline int switchdev_bridge_port_offload_notify(struct net_device *dev)
+{
+	return 0;
+}
+
 #endif
 
 #endif /* _LINUX_SWITCHDEV_H_ */

@@ -2326,6 +2326,8 @@ int mlxsw_sp_port_bridge_join(struct mlxsw_sp_port *mlxsw_sp_port,
 	if (err)
 		goto err_port_join;
 
+	switchdev_bridge_port_offload_notify(brport_dev);
+
 	return 0;
 
 err_port_join:

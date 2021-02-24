@@ -443,6 +443,8 @@ static int prestera_port_bridge_join(struct prestera_port *port,
 		goto err_brport_create;
 	}
 
+	switchdev_bridge_port_offload_notify(port->dev);
+
 	if (bridge->vlan_enabled)
 		return 0;
 
