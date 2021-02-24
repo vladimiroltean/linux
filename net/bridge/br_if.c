@@ -111,9 +111,13 @@ static void br_port_clear_promisc(struct net_bridge_port *p)
 	/* Check if the port is already non-promisc or if it doesn't
 	 * support UNICAST filtering.  Without unicast filtering support
 	 * we'll end up re-enabling promisc mode anyway, so just check for
-	 * it here.
+	 * it here. Also, a switchdev offloading this port needs to be
+	 * promiscuous by definition, so don't even attempt to get it out of
+	 * promiscuous mode or sync unicast FDB entries to it, since that is
+	 * pointless and not necessary.
 	 */
-	if (!br_promisc_port(p) || !(p->dev->priv_flags & IFF_UNICAST_FLT))
+	if (!br_promisc_port(p) || !(p->dev->priv_flags & IFF_UNICAST_FLT) ||
+	    p->offloaded)
 		return;
 
 	/* Since we'll be clearing the promisc mode, program the port
