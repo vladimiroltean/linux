@@ -2592,6 +2592,8 @@ static int ofdpa_port_bridge_join(struct ofdpa_port *ofdpa_port,
 
 	ofdpa_port->bridge_dev = bridge;
 
+	switchdev_bridge_port_offload_notify(ofdpa_port->dev);
+
 	return ofdpa_port_vlan_add(ofdpa_port, OFDPA_UNTAGGED_VID, 0);
 }
 

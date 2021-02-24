@@ -1111,10 +1111,14 @@ static int ocelot_port_obj_del(struct net_device *dev,
 	return ret;
 }
 
-static int ocelot_netdevice_bridge_join(struct ocelot *ocelot, int port,
+static int ocelot_netdevice_bridge_join(struct net_device *dev,
 					struct net_device *bridge)
 {
+	struct ocelot_port_private *priv = netdev_priv(dev);
+	struct ocelot_port *ocelot_port = &priv->port;
+	struct ocelot *ocelot = ocelot_port->ocelot;
 	struct switchdev_brport_flags flags;
+	int port = priv->chip_port;
 	int err;
 
 	flags.mask = BR_LEARNING | BR_FLOOD | BR_MCAST_FLOOD | BR_BCAST_FLOOD;
@@ -1124,15 +1128,20 @@ static int ocelot_netdevice_bridge_join(struct ocelot *ocelot, int port,
 	if (err)
 		return err;
 
+	switchdev_bridge_port_offload_notify(dev);
 	ocelot_port_bridge_flags(ocelot, port, flags);
 
 	return 0;
 }
 
-static int ocelot_netdevice_bridge_leave(struct ocelot *ocelot, int port,
+static int ocelot_netdevice_bridge_leave(struct net_device *dev,
 					 struct net_device *bridge)
 {
+	struct ocelot_port_private *priv = netdev_priv(dev);
+	struct ocelot_port *ocelot_port = &priv->port;
+	struct ocelot *ocelot = ocelot_port->ocelot;
 	struct switchdev_brport_flags flags;
+	int port = priv->chip_port;
 	int err;
 
 	flags.mask = BR_LEARNING | BR_FLOOD | BR_MCAST_FLOOD | BR_BCAST_FLOOD;
@@ -1146,7 +1155,8 @@ static int ocelot_netdevice_bridge_leave(struct ocelot *ocelot, int port,
 }
 
 static int ocelot_netdevice_changeupper(struct net_device *dev,
-					struct netdev_notifier_changeupper_info *info)
+					struct netdev_notifier_changeupper_info *info,
+					bool notify)
 {
 	struct ocelot_port_private *priv = netdev_priv(dev);
 	struct ocelot_port *ocelot_port = &priv->port;
@@ -1156,11 +1166,11 @@ static int ocelot_netdevice_changeupper(struct net_device *dev,
 
 	if (netif_is_bridge_master(info->upper_dev)) {
 		if (info->linking) {
-			err = ocelot_netdevice_bridge_join(ocelot, port,
-							   info->upper_dev);
+			err = ocelot_netdevice_bridge_join(dev, info->upper_dev);
+			if (!err && notify)
+				switchdev_bridge_port_offload_notify(dev);
 		} else {
-			err = ocelot_netdevice_bridge_leave(ocelot, port,
-							    info->upper_dev);
+			err = ocelot_netdevice_bridge_leave(dev, info->upper_dev);
 		}
 	}
 	if (netif_is_lag_master(info->upper_dev)) {
@@ -1182,6 +1192,12 @@ static int ocelot_netdevice_changeupper(struct net_device *dev,
 	return notifier_from_errno(err);
 }
 
+/* Treat CHANGEUPPER events on an offloaded LAG as individual CHANGEUPPER
+ * events for the lower physical ports of the LAG.
+ * If the LAG upper isn't offloaded, ignore its CHANGEUPPER events.
+ * In case the LAG joined a bridge, notify that we are offloading it and can do
+ * forwarding in hardware towards it.
+ */
 static int
 ocelot_netdevice_lag_changeupper(struct net_device *dev,
 				 struct netdev_notifier_changeupper_info *info)
@@ -1191,10 +1207,19 @@ ocelot_netdevice_lag_changeupper(struct net_device *dev,
 	int err = NOTIFY_DONE;
 
 	netdev_for_each_lower_dev(dev, lower, iter) {
-		err = ocelot_netdevice_changeupper(lower, info);
+		struct ocelot_port_private *priv = netdev_priv(lower);
+		struct ocelot_port *ocelot_port = &priv->port;
+
+		if (ocelot_port->bond != dev)
+			return NOTIFY_OK;
+
+		err = ocelot_netdevice_changeupper(lower, info, false);
 		if (err)
 			return notifier_from_errno(err);
 	}
+
+	if (info->linking && netif_is_bridge_master(info->upper_dev))
+		switchdev_bridge_port_offload_notify(dev);
 
 	return NOTIFY_DONE;
 }
@@ -1230,7 +1255,7 @@ static int ocelot_netdevice_event(struct notifier_block *unused,
 		struct netdev_notifier_changeupper_info *info = ptr;
 
 		if (ocelot_netdevice_dev_check(dev))
-			return ocelot_netdevice_changeupper(dev, info);
+			return ocelot_netdevice_changeupper(dev, info, true);
 
 		if (netif_is_lag_master(dev))
 			return ocelot_netdevice_lag_changeupper(dev, info);

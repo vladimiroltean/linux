@@ -1522,6 +1522,7 @@ static int cpsw_netdevice_port_link(struct net_device *ndev,
 	cpsw->br_members |= BIT(priv->emac_port);
 
 	cpsw_port_offload_fwd_mark_update(cpsw);
+	switchdev_bridge_port_offload_notify(ndev);
 
 	return NOTIFY_DONE;
 }

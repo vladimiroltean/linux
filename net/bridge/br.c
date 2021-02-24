@@ -151,9 +151,10 @@ static int br_switchdev_event(struct notifier_block *unused,
 			      unsigned long event, void *ptr)
 {
 	struct net_device *dev = switchdev_notifier_info_to_dev(ptr);
+	struct switchdev_notifier_brport_info *brport_info;
+	struct switchdev_notifier_fdb_info *fdb_info;
 	struct net_bridge_port *p;
 	struct net_bridge *br;
-	struct switchdev_notifier_fdb_info *fdb_info;
 	int err = NOTIFY_DONE;
 
 	p = br_port_get_rtnl_rcu(dev);
@@ -190,6 +191,10 @@ static int br_switchdev_event(struct notifier_block *unused,
 		fdb_info = ptr;
 		/* Don't delete static entries */
 		br_fdb_delete_by_port(br, p, fdb_info->vid, 0);
+		break;
+	case SWITCHDEV_BRPORT_OFFLOADED:
+		brport_info = ptr;
+		nbp_switchdev_mark_set(p, brport_info->ppid);
 		break;
 	}
 

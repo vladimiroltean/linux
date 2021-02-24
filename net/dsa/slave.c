@@ -2295,7 +2295,8 @@ static struct notifier_block dsa_slave_switchdev_notifier;
 static struct notifier_block dsa_slave_switchdev_blocking_notifier;
 
 static int dsa_slave_changeupper(struct net_device *dev,
-				 struct netdev_notifier_changeupper_info *info)
+				 struct netdev_notifier_changeupper_info *info,
+				 bool notify)
 {
 	struct dsa_port *dp = dsa_slave_to_port(dev);
 	int err = NOTIFY_DONE;
@@ -2305,6 +2306,8 @@ static int dsa_slave_changeupper(struct net_device *dev,
 
 		if (info->linking) {
 			err = dsa_port_bridge_join(dp, bridge_dev);
+			if (!err && notify)
+				switchdev_bridge_port_offload_notify(dev);
 			if (!err) {
 				dsa_bridge_mtu_normalization(dp);
 				br_fdb_replay(bridge_dev, dev,
@@ -2364,22 +2367,23 @@ dsa_slave_lag_changeupper(struct net_device *dev,
 
 		dp = dsa_slave_to_port(lower);
 		if (!dp->lag_dev)
-			/* Software LAG */
-			continue;
+			/* Software LAG, ignore all its CHANGEUPPER events */
+			return NOTIFY_DONE;
 
-		err = dsa_slave_changeupper(lower, info);
+		err = dsa_slave_changeupper(lower, info, false);
 		if (notifier_to_errno(err))
-			break;
+			return err;
 	}
 
-	if (info->linking && netif_is_bridge_master(info->upper_dev) && !err) {
+	if (info->linking && netif_is_bridge_master(info->upper_dev)) {
+		switchdev_bridge_port_offload_notify(dev);
 		br_fdb_replay(info->upper_dev, dev,
 			      &dsa_slave_switchdev_notifier);
 		br_mdb_replay(info->upper_dev, dev,
 			      &dsa_slave_switchdev_blocking_notifier);
 	}
 
-	return err;
+	return NOTIFY_OK;
 }
 
 static int
@@ -2475,7 +2479,7 @@ static int dsa_slave_netdevice_event(struct notifier_block *nb,
 	}
 	case NETDEV_CHANGEUPPER:
 		if (dsa_slave_dev_check(dev))
-			return dsa_slave_changeupper(dev, ptr);
+			return dsa_slave_changeupper(dev, ptr, true);
 
 		if (netif_is_lag_master(dev))
 			return dsa_slave_lag_changeupper(dev, ptr);

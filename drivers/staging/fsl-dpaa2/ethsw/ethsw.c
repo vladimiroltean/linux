@@ -1237,6 +1237,8 @@ static int dpaa2_switch_port_bridge_join(struct net_device *netdev,
 	if (!err)
 		port_priv->bridge_dev = upper_dev;
 
+	switchdev_bridge_port_offload_notify(netdev);
+
 	return err;
 }
 

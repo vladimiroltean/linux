@@ -27,6 +27,7 @@
 #include <linux/sys_soc.h>
 #include <linux/dma/ti-cppi5.h>
 #include <linux/dma/k3-udma-glue.h>
+#include <net/switchdev.h>
 
 #include "cpsw_ale.h"
 #include "cpsw_sl.h"
@@ -2096,6 +2097,7 @@ static int am65_cpsw_netdevice_port_link(struct net_device *ndev, struct net_dev
 	common->br_members |= BIT(priv->port->port_id);
 
 	am65_cpsw_port_offload_fwd_mark_update(common);
+	switchdev_bridge_port_offload_notify(ndev);
 
 	return NOTIFY_DONE;
 }
