@@ -389,6 +389,8 @@ int dsa_port_vlan_filtering(struct dsa_port *dp, bool vlan_filtering,
 	bool apply;
 	int err;
 
+	dev_err(ds->dev, "%s: port %d, vlan_filtering %d\n", __func__, dp->index, vlan_filtering);
+
 	if (!ds->ops->port_vlan_filtering)
 		return -EOPNOTSUPP;
 

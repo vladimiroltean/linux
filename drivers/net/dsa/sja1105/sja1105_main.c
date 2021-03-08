@@ -2863,6 +2863,8 @@ static int sja1105_vlan_add(struct dsa_switch *ds, int port,
 	bool vlan_table_changed = false;
 	int rc;
 
+	dev_err(ds->dev, "%s: port %d vlan %d\n", __func__, port, vlan->vid);
+
 	/* If the user wants best-effort VLAN filtering (aka vlan_filtering
 	 * bridge plus tagging), be sure to at least deny alterations to the
 	 * configuration done by dsa_8021q.
@@ -2893,6 +2895,8 @@ static int sja1105_vlan_del(struct dsa_switch *ds, int port,
 	struct sja1105_private *priv = ds->priv;
 	bool vlan_table_changed = false;
 	int rc;
+
+	dev_err(ds->dev, "%s: port %d vlan %d\n", __func__, port, vlan->vid);
 
 	rc = sja1105_vlan_del_one(ds, port, vlan->vid, &priv->bridge_vlans);
 	if (rc > 0)
