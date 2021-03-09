@@ -363,19 +363,8 @@ static int dsa_slave_vlan_add(struct net_device *dev,
 
 	vlan = *SWITCHDEV_OBJ_PORT_VLAN(obj);
 
-	/* Deny adding a bridge VLAN when there is already an 802.1Q upper with
-	 * the same VID.
-	 */
-	if (br_vlan_enabled(dp->bridge_dev)) {
-		rcu_read_lock();
-		err = dsa_slave_vlan_check_for_8021q_uppers(dev, &vlan);
-		rcu_read_unlock();
-		if (err) {
-			NL_SET_ERR_MSG_MOD(extack,
-					   "Port already has a VLAN upper with this VID");
-			return err;
-		}
-	}
+	if (!dsa_port_can_apply_bridge_vlan(dp, vlan.vid, extack))
+		return -EBUSY;
 
 	err = dsa_port_vlan_add(dp, &vlan, extack);
 	if (err)
@@ -2083,28 +2072,14 @@ dsa_slave_check_8021q_upper(struct net_device *dev,
 			    struct netdev_notifier_changeupper_info *info)
 {
 	struct dsa_port *dp = dsa_slave_to_port(dev);
-	struct net_device *br = dp->bridge_dev;
-	struct bridge_vlan_info br_info;
 	struct netlink_ext_ack *extack;
-	int err = NOTIFY_DONE;
 	u16 vid;
-
-	if (!br || !br_vlan_enabled(br))
-		return NOTIFY_DONE;
 
 	extack = netdev_notifier_info_to_extack(&info->info);
 	vid = vlan_dev_vlan_id(info->upper_dev);
 
-	/* br_vlan_get_info() returns -EINVAL or -ENOENT if the
-	 * device, respectively the VID is not found, returning
-	 * 0 means success, which is a failure for us here.
-	 */
-	err = br_vlan_get_info(br, vid, &br_info);
-	if (err == 0) {
-		NL_SET_ERR_MSG_MOD(extack,
-				   "This VLAN is already configured by the bridge");
+	if (!dsa_port_can_apply_stacked_vlan(dp, vid, extack))
 		return notifier_from_errno(-EBUSY);
-	}
 
 	return NOTIFY_DONE;
 }

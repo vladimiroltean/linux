@@ -188,6 +188,10 @@ int dsa_port_lag_change(struct dsa_port *dp,
 int dsa_port_lag_join(struct dsa_port *dp, struct net_device *lag_dev,
 		      struct netdev_lag_upper_info *uinfo);
 void dsa_port_lag_leave(struct dsa_port *dp, struct net_device *lag_dev);
+bool dsa_port_can_apply_stacked_vlan(struct dsa_port *dp, u16 vid,
+				     struct netlink_ext_ack *extack);
+bool dsa_port_can_apply_bridge_vlan(struct dsa_port *dp, u16 vid,
+				    struct netlink_ext_ack *extack);
 int dsa_port_vlan_filtering(struct dsa_port *dp, bool vlan_filtering,
 			    struct netlink_ext_ack *extack);
 bool dsa_port_skip_vlan_configuration(struct dsa_port *dp);

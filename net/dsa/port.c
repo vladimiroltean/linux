@@ -292,72 +292,141 @@ void dsa_port_lag_leave(struct dsa_port *dp, struct net_device *lag)
 	dsa_lag_unmap(dp->ds->dst, lag);
 }
 
-/* Must be called under rcu_read_lock() */
+static int dsa_port_stacked_vids_collect(struct net_device *vdev, int vid,
+					 void *_stacked_vids)
+{
+	unsigned long *stacked_vids = _stacked_vids;
+
+	if (test_bit(vid, stacked_vids))
+		return -EBUSY;
+
+	set_bit(vid, stacked_vids);
+	return 0;
+}
+
+static bool dsa_port_can_apply_vlan(struct dsa_port *dp, bool *mod_filter,
+				    u16 *stacked_vid, u16 *br_vid,
+				    struct netlink_ext_ack *extack)
+{
+	struct dsa_switch_tree *dst = dp->ds->dst;
+	unsigned long *stacked_vids = NULL;
+	struct dsa_port *other_dp;
+	bool filter;
+	u16 vid;
+
+	/* If the modification we are validating is not toggling VLAN
+	 * filtering, use the current setting.
+	 */
+	if (mod_filter)
+		filter = *mod_filter;
+	else
+		filter = dp->bridge_dev && br_vlan_enabled(dp->bridge_dev);
+
+	/* For cases where enabling/disabling VLAN awareness is global
+	 * to the switch, we need to handle the case where multiple
+	 * bridges span different ports of the same switch device and
+	 * one of them has a different setting than what is being
+	 * requested.
+	 */
+	if (dp->ds->vlan_filtering_is_global) {
+		list_for_each_entry(other_dp, &dst->ports, list) {
+			if (!other_dp->bridge_dev ||
+			    other_dp->bridge_dev == dp->bridge_dev)
+				continue;
+
+			if (br_vlan_enabled(other_dp->bridge_dev) == filter)
+				continue;
+
+			NL_SET_ERR_MSG_MOD(extack, "VLAN filtering is a global setting");
+			goto err;
+		}
+
+	}
+
+	if (!filter)
+		return true;
+
+	stacked_vids = bitmap_zalloc(VLAN_N_VID, GFP_KERNEL);
+	if (!stacked_vids) {
+		WARN_ON_ONCE(1);
+		goto err;
+	}
+
+	/* If the current operation is to add a stacked VLAN, mark it
+	 * as busy. */
+	if (stacked_vid)
+		set_bit(*stacked_vid, stacked_vids);
+
+	/* Forbid any VID used by a stacked VLAN to exist on more than
+	 * one port in the bridge, as the resulting configuration in
+	 * hardware would allow forwarding between those ports. */
+	list_for_each_entry(other_dp, &dst->ports, list) {
+		if (!dsa_is_user_port(other_dp->ds, other_dp->index) ||
+		    !other_dp->bridge_dev ||
+		    other_dp->bridge_dev != dp->bridge_dev)
+			continue;
+
+		if (vlan_for_each(other_dp->slave, dsa_port_stacked_vids_collect,
+				  stacked_vids)) {
+			NL_SET_ERR_MSG_MOD(extack, "Two bridge ports cannot be "
+					   "the base interfaces for VLAN "
+					   "interfaces using the same VID");
+			goto err;
+		}
+	}
+
+	/* If the current operation is to add a bridge VLAN, make sure
+	 * that it is not used by a stacked VLAN. */
+	if (br_vid && test_bit(*br_vid, stacked_vids)) {
+		NL_SET_ERR_MSG_MOD(extack, "A bridge cannot use the same VID "
+				   "already in use by a VLAN interface "
+				   "configured on a bridge port");
+		goto err;
+	}
+
+	/* Ensure that no stacked VLAN is also configured on the bridge
+	 * offloaded by dp as that could result in leakage between
+	 * non-bridged ports. */
+	for_each_set_bit(vid, stacked_vids, VLAN_N_VID) {
+		struct bridge_vlan_info br_info;
+
+		if (br_vlan_get_info(dp->bridge_dev, vid, &br_info))
+			/* Error means that the VID does not exist,
+			 * which is what we want to ensure. */
+			continue;
+
+		NL_SET_ERR_MSG_MOD(extack, "A VLAN interface cannot use a VID "
+				   "that is already in use by a bridge");
+		goto err;
+	}
+
+	kfree(stacked_vids);
+	return true;
+
+err:
+	if (stacked_vids)
+		kfree(stacked_vids);
+	return false;
+}
+
+bool dsa_port_can_apply_stacked_vlan(struct dsa_port *dp, u16 vid,
+				     struct netlink_ext_ack *extack)
+{
+	return dsa_port_can_apply_vlan(dp, NULL, &vid, NULL, extack);
+}
+
+bool dsa_port_can_apply_bridge_vlan(struct dsa_port *dp, u16 vid,
+				    struct netlink_ext_ack *extack)
+{
+	return dsa_port_can_apply_vlan(dp, NULL, NULL, &vid, extack);
+}
+
 static bool dsa_port_can_apply_vlan_filtering(struct dsa_port *dp,
 					      bool vlan_filtering,
 					      struct netlink_ext_ack *extack)
 {
-	struct dsa_switch *ds = dp->ds;
-	int err, i;
-
-	/* VLAN awareness was off, so the question is "can we turn it on".
-	 * We may have had 8021q uppers, those need to go. Make sure we don't
-	 * enter an inconsistent state: deny changing the VLAN awareness state
-	 * as long as we have 8021q uppers.
-	 */
-	if (vlan_filtering && dsa_is_user_port(ds, dp->index)) {
-		struct net_device *upper_dev, *slave = dp->slave;
-		struct net_device *br = dp->bridge_dev;
-		struct list_head *iter;
-
-		netdev_for_each_upper_dev_rcu(slave, upper_dev, iter) {
-			struct bridge_vlan_info br_info;
-			u16 vid;
-
-			if (!is_vlan_dev(upper_dev))
-				continue;
-
-			vid = vlan_dev_vlan_id(upper_dev);
-
-			/* br_vlan_get_info() returns -EINVAL or -ENOENT if the
-			 * device, respectively the VID is not found, returning
-			 * 0 means success, which is a failure for us here.
-			 */
-			err = br_vlan_get_info(br, vid, &br_info);
-			if (err == 0) {
-				NL_SET_ERR_MSG_MOD(extack,
-						   "Must first remove VLAN uppers having VIDs also present in bridge");
-				return false;
-			}
-		}
-	}
-
-	if (!ds->vlan_filtering_is_global)
-		return true;
-
-	/* For cases where enabling/disabling VLAN awareness is global to the
-	 * switch, we need to handle the case where multiple bridges span
-	 * different ports of the same switch device and one of them has a
-	 * different setting than what is being requested.
-	 */
-	for (i = 0; i < ds->num_ports; i++) {
-		struct net_device *other_bridge;
-
-		other_bridge = dsa_to_port(ds, i)->bridge_dev;
-		if (!other_bridge)
-			continue;
-		/* If it's the same bridge, it also has same
-		 * vlan_filtering setting => no need to check
-		 */
-		if (other_bridge == dp->bridge_dev)
-			continue;
-		if (br_vlan_enabled(other_bridge) != vlan_filtering) {
-			NL_SET_ERR_MSG_MOD(extack,
-					   "VLAN filtering is a global setting");
-			return false;
-		}
-	}
-	return true;
+	return dsa_port_can_apply_vlan(dp, &vlan_filtering,
+				       NULL, NULL, extack);
 }
 
 int dsa_port_vlan_filtering(struct dsa_port *dp, bool vlan_filtering,
