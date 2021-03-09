@@ -310,23 +310,27 @@ static int dsa_slave_port_attr_set(struct net_device *dev,
 	return ret;
 }
 
-/* Must be called under rcu_read_lock() */
 static int
-dsa_slave_vlan_check_for_8021q_uppers(struct net_device *slave,
-				      const struct switchdev_obj_port_vlan *vlan)
+dsa_check_bridge_for_overlapping_8021q_uppers(struct net_device *bridge_dev,
+					      u16 vid)
 {
-	struct net_device *upper_dev;
-	struct list_head *iter;
+	struct list_head *iter_upper, *iter_lower;
+	struct net_device *upper, *lower;
 
-	netdev_for_each_upper_dev_rcu(slave, upper_dev, iter) {
-		u16 vid;
-
-		if (!is_vlan_dev(upper_dev))
+	netdev_for_each_lower_dev(bridge_dev, lower, iter_lower) {
+		if (!dsa_slave_dev_check(lower))
 			continue;
 
-		vid = vlan_dev_vlan_id(upper_dev);
-		if (vid == vlan->vid)
-			return -EBUSY;
+		netdev_for_each_upper_dev_rcu(lower, upper, iter_upper) {
+			u16 upper_vid;
+
+			if (!is_vlan_dev(upper))
+				continue;
+
+			upper_vid = vlan_dev_vlan_id(upper);
+			if (upper_vid == vid)
+				return -EBUSY;
+		}
 	}
 
 	return 0;
@@ -355,12 +359,11 @@ static int dsa_slave_vlan_add(struct net_device *dev,
 	 * the same VID.
 	 */
 	if (br_vlan_enabled(dp->bridge_dev)) {
-		rcu_read_lock();
-		err = dsa_slave_vlan_check_for_8021q_uppers(dev, &vlan);
-		rcu_read_unlock();
+		err = dsa_check_bridge_for_overlapping_8021q_uppers(dp->bridge_dev,
+								    vlan.vid);
 		if (err) {
 			NL_SET_ERR_MSG_MOD(extack,
-					   "Port already has a VLAN upper with this VID");
+					   "Bridge already has a port with a VLAN upper with this VID");
 			return err;
 		}
 	}
