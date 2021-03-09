@@ -144,7 +144,8 @@ static void dsa_port_change_brport_flags(struct dsa_port *dp,
 	}
 }
 
-int dsa_port_bridge_join(struct dsa_port *dp, struct net_device *br)
+int dsa_port_bridge_join(struct dsa_port *dp, struct net_device *br,
+			 struct netlink_ext_ack *extack)
 {
 	struct dsa_notifier_bridge_info info = {
 		.tree_index = dp->ds->dst->index,
@@ -152,7 +153,27 @@ int dsa_port_bridge_join(struct dsa_port *dp, struct net_device *br)
 		.port = dp->index,
 		.br = br,
 	};
+	struct net_device *slave = dp->slave;
+	struct net_device *upper_dev;
+	struct list_head *iter;
 	int err;
+
+	netdev_for_each_upper_dev_rcu(slave, upper_dev, iter) {
+		u16 vid;
+
+		if (!is_vlan_dev(upper_dev))
+			continue;
+
+		vid = vlan_dev_vlan_id(upper_dev);
+
+		err = dsa_check_bridge_for_overlapping_8021q_uppers(br, slave,
+								    vid);
+		if (err) {
+			NL_SET_ERR_MSG_MOD(extack,
+					   "Configuration would leak VLAN-tagged packets between bridge ports");
+			return err;
+		}
+	}
 
 	/* Notify the port driver to set its configurable flags in a way that
 	 * matches the initial settings of a bridge port.

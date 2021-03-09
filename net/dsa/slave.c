@@ -310,15 +310,18 @@ static int dsa_slave_port_attr_set(struct net_device *dev,
 	return ret;
 }
 
-static int
-dsa_check_bridge_for_overlapping_8021q_uppers(struct net_device *bridge_dev,
-					      u16 vid)
+int dsa_check_bridge_for_overlapping_8021q_uppers(struct net_device *bridge_dev,
+						  struct net_device *skip,
+						  u16 vid)
 {
 	struct list_head *iter_upper, *iter_lower;
 	struct net_device *upper, *lower;
 
 	netdev_for_each_lower_dev(bridge_dev, lower, iter_lower) {
 		if (!dsa_slave_dev_check(lower))
+			continue;
+
+		if (lower == skip)
 			continue;
 
 		netdev_for_each_upper_dev_rcu(lower, upper, iter_upper) {
@@ -360,6 +363,7 @@ static int dsa_slave_vlan_add(struct net_device *dev,
 	 */
 	if (br_vlan_enabled(dp->bridge_dev)) {
 		err = dsa_check_bridge_for_overlapping_8021q_uppers(dp->bridge_dev,
+								    NULL,
 								    vlan.vid);
 		if (err) {
 			NL_SET_ERR_MSG_MOD(extack,
@@ -1956,7 +1960,8 @@ static int dsa_slave_changeupper(struct net_device *dev,
 
 	if (netif_is_bridge_master(info->upper_dev)) {
 		if (info->linking) {
-			err = dsa_port_bridge_join(dp, info->upper_dev);
+			err = dsa_port_bridge_join(dp, info->upper_dev,
+						   info->info.extack);
 			if (!err)
 				dsa_bridge_mtu_normalization(dp);
 			err = notifier_from_errno(err);
