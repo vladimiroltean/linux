@@ -641,6 +641,8 @@ static int felix_set_ageing_time(struct dsa_switch *ds,
 {
 	struct ocelot *ocelot = ds->priv;
 
+	dev_err(ds->dev, "%s: ageing_time %d\n", __func__, ageing_time);
+
 	ocelot_set_ageing_time(ocelot, ageing_time);
 
 	return 0;
@@ -659,6 +661,8 @@ static int felix_fdb_add(struct dsa_switch *ds, int port,
 {
 	struct ocelot *ocelot = ds->priv;
 
+	dev_err(ds->dev, "%s: port %d fdb %pM\n", __func__, port, addr);
+
 	return ocelot_fdb_add(ocelot, port, addr, vid);
 }
 
@@ -666,6 +670,8 @@ static int felix_fdb_del(struct dsa_switch *ds, int port,
 			 const unsigned char *addr, u16 vid)
 {
 	struct ocelot *ocelot = ds->priv;
+
+	dev_err(ds->dev, "%s: port %d fdb %pM\n", __func__, port, addr);
 
 	return ocelot_fdb_del(ocelot, port, addr, vid);
 }
@@ -675,6 +681,8 @@ static int felix_mdb_add(struct dsa_switch *ds, int port,
 {
 	struct ocelot *ocelot = ds->priv;
 
+	dev_err(ds->dev, "%s: port %d mdb %pM\n", __func__, port, mdb->addr);
+
 	return ocelot_port_mdb_add(ocelot, port, mdb);
 }
 
@@ -683,6 +691,8 @@ static int felix_mdb_del(struct dsa_switch *ds, int port,
 {
 	struct ocelot *ocelot = ds->priv;
 
+	dev_err(ds->dev, "%s: port %d mdb %pM\n", __func__, port, mdb->addr);
+
 	return ocelot_port_mdb_del(ocelot, port, mdb);
 }
 
@@ -690,6 +700,8 @@ static void felix_bridge_stp_state_set(struct dsa_switch *ds, int port,
 				       u8 state)
 {
 	struct ocelot *ocelot = ds->priv;
+
+	dev_err(ds->dev, "%s: port %d state %d\n", __func__, port, state);
 
 	return ocelot_bridge_stp_state_set(ocelot, port, state);
 }
@@ -700,6 +712,8 @@ static int felix_pre_bridge_flags(struct dsa_switch *ds, int port,
 {
 	struct ocelot *ocelot = ds->priv;
 
+	dev_err(ds->dev, "%s: port %d val.mask %ld\n", __func__, port, val.mask);
+
 	return ocelot_port_pre_bridge_flags(ocelot, port, val);
 }
 
@@ -708,6 +722,8 @@ static int felix_bridge_flags(struct dsa_switch *ds, int port,
 			      struct netlink_ext_ack *extack)
 {
 	struct ocelot *ocelot = ds->priv;
+
+	dev_err(ds->dev, "%s: port %d val.val %ld\n", __func__, port, val.val);
 
 	ocelot_port_bridge_flags(ocelot, port, val);
 
@@ -719,6 +735,8 @@ static int felix_bridge_join(struct dsa_switch *ds, int port,
 {
 	struct ocelot *ocelot = ds->priv;
 
+	dev_err(ds->dev, "%s: port %d bridge %s\n", __func__, port, br->name);
+
 	ocelot_port_bridge_join(ocelot, port, br);
 
 	return 0;
@@ -729,6 +747,8 @@ static void felix_bridge_leave(struct dsa_switch *ds, int port,
 {
 	struct ocelot *ocelot = ds->priv;
 
+	dev_err(ds->dev, "%s: port %d bridge %s\n", __func__, port, br->name);
+
 	ocelot_port_bridge_leave(ocelot, port, br);
 }
 
@@ -738,6 +758,8 @@ static int felix_lag_join(struct dsa_switch *ds, int port,
 {
 	struct ocelot *ocelot = ds->priv;
 
+	dev_err(ds->dev, "%s: port %d bond %s\n", __func__, port, bond->name);
+
 	return ocelot_port_lag_join(ocelot, port, bond, info);
 }
 
@@ -745,6 +767,8 @@ static int felix_lag_leave(struct dsa_switch *ds, int port,
 			   struct net_device *bond)
 {
 	struct ocelot *ocelot = ds->priv;
+
+	dev_err(ds->dev, "%s: port %d bond %s\n", __func__, port, bond->name);
 
 	ocelot_port_lag_leave(ocelot, port, bond);
 
@@ -788,6 +812,8 @@ static int felix_vlan_filtering(struct dsa_switch *ds, int port, bool enabled,
 {
 	struct ocelot *ocelot = ds->priv;
 
+	dev_err(ds->dev, "%s: port %d enabled %d\n", __func__, port, enabled);
+
 	return ocelot_port_vlan_filtering(ocelot, port, enabled);
 }
 
@@ -798,6 +824,8 @@ static int felix_vlan_add(struct dsa_switch *ds, int port,
 	struct ocelot *ocelot = ds->priv;
 	u16 flags = vlan->flags;
 	int err;
+
+	dev_err(ds->dev, "%s: port %d vlan %d\n", __func__, port, vlan->vid);
 
 	err = felix_vlan_prepare(ds, port, vlan);
 	if (err)
@@ -812,6 +840,8 @@ static int felix_vlan_del(struct dsa_switch *ds, int port,
 			  const struct switchdev_obj_port_vlan *vlan)
 {
 	struct ocelot *ocelot = ds->priv;
+
+	dev_err(ds->dev, "%s: port %d vlan %d\n", __func__, port, vlan->vid);
 
 	return ocelot_vlan_del(ocelot, port, vlan->vid);
 }
