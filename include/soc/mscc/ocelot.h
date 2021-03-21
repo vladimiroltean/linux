@@ -51,6 +51,7 @@
  */
 
 /* Reserve some destination PGIDs at the end of the range:
+ * PGID_FRER: Destinations for multicast traffic in 802.1CB redundant network.
  * PGID_BLACKHOLE: used for not forwarding the frames
  * PGID_CPU: used for whitelisting certain MAC addresses, such as the addresses
  *           of the switch port net devices, towards the CPU port module.
@@ -60,6 +61,7 @@
  * PGID_MCIPV6: the flooding destinations for IPv6 multicast traffic.
  * PGID_BC: the flooding destinations for broadcast traffic.
  */
+#define PGID_FRER			56
 #define PGID_BLACKHOLE			57
 #define PGID_CPU			58
 #define PGID_UC				59
@@ -425,6 +427,9 @@ enum ocelot_reg {
 	DEV_MAC_FC_MAC_LOW_CFG,
 	DEV_MAC_FC_MAC_HIGH_CFG,
 	DEV_MAC_STICKY,
+	DEV_MM_ENABLE_CONFIG,
+	DEV_MM_VERIF_CONFIG,
+	DEV_MM_STATUS,
 	PCS1G_CFG,
 	PCS1G_MODE_CFG,
 	PCS1G_SD_CFG,
