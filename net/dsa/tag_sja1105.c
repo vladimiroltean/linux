@@ -52,6 +52,10 @@ static void sja1105_meta_unpack(const struct sk_buff *skb,
 	packing(buf + 5, &meta->dmac_byte_3, 7, 0, 1, UNPACK, 0);
 	packing(buf + 6, &meta->source_port, 7, 0, 1, UNPACK, 0);
 	packing(buf + 7, &meta->switch_id,   7, 0, 1, UNPACK, 0);
+	pr_err("%s: meta->tstamp 0x%llx dmac %02llx:%02llx source_port %lld switch_id %lld\n",
+		__func__, meta->tstamp, meta->dmac_byte_4, meta->dmac_byte_3, meta->source_port, meta->switch_id);
+	print_hex_dump(KERN_ERR, "buf: ", DUMP_PREFIX_OFFSET, 16, 1, buf, 16, false);
+	skb_dump(KERN_ERR, skb, true);
 }
 
 static inline bool sja1105_is_meta_frame(const struct sk_buff *skb)
@@ -148,6 +152,7 @@ static void sja1105_transfer_meta(struct sk_buff *skb,
 	hdr->h_dest[3] = meta->dmac_byte_3;
 	hdr->h_dest[4] = meta->dmac_byte_4;
 	SJA1105_SKB_CB(skb)->meta_tstamp = meta->tstamp;
+	netdev_err(skb->dev, "%s: meta_dmac %02llx:%02llx meta_tstamp 0x%llx\n", __func__, meta->dmac_byte_3, meta->dmac_byte_4, meta->tstamp);
 }
 
 /* This is a simple state machine which follows the hardware mechanism of
