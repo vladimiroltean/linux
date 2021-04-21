@@ -2277,6 +2277,8 @@ static int sja1105_bridge_vlan_add(struct dsa_switch *ds, int port,
 				   const struct switchdev_obj_port_vlan *vlan,
 				   struct netlink_ext_ack *extack)
 {
+	/* Always install bridge VLANs as egress-tagged on CPU port */
+	u16 flags = dsa_is_cpu_port(ds, port) ? 0 : vlan->flags;
 	struct sja1105_private *priv = ds->priv;
 	int rc;
 
@@ -2288,7 +2290,7 @@ static int sja1105_bridge_vlan_add(struct dsa_switch *ds, int port,
 		return -EBUSY;
 	}
 
-	rc = sja1105_vlan_add(priv, port, vlan->vid, vlan->flags);
+	rc = sja1105_vlan_add(priv, port, vlan->vid, flags);
 	if (rc)
 		return rc;
 
@@ -2438,6 +2440,7 @@ static int sja1105_setup(struct dsa_switch *ds)
 	 * TPID is ETH_P_SJA1105, and the VLAN ID is the port pvid.
 	 */
 	ds->vlan_filtering_is_global = true;
+	ds->untag_bridge_pvid = true;
 
 	/* Advertise the 8 egress queues */
 	ds->num_tx_queues = SJA1105_NUM_TC;

@@ -537,9 +537,10 @@ struct sk_buff *dsa_8021q_xmit(struct sk_buff *skb, struct net_device *netdev,
 }
 EXPORT_SYMBOL_GPL(dsa_8021q_xmit);
 
-void dsa_8021q_rcv(struct sk_buff *skb, int *source_port, int *switch_id)
+bool dsa_8021q_rcv(struct sk_buff *skb, int *source_port, int *switch_id,
+		   u16 *vid)
 {
-	u16 vid, tci;
+	u16 tci;
 
 	skb_push_rcsum(skb, ETH_HLEN);
 	if (skb_vlan_tag_present(skb)) {
@@ -550,11 +551,15 @@ void dsa_8021q_rcv(struct sk_buff *skb, int *source_port, int *switch_id)
 	}
 	skb_pull_rcsum(skb, ETH_HLEN);
 
-	vid = tci & VLAN_VID_MASK;
+	*vid = tci & VLAN_VID_MASK;
+	if (!vid_is_dsa_8021q_rxvlan(*vid))
+		return false;
 
-	*source_port = dsa_8021q_rx_source_port(vid);
-	*switch_id = dsa_8021q_rx_switch_id(vid);
+	*source_port = dsa_8021q_rx_source_port(*vid);
+	*switch_id = dsa_8021q_rx_switch_id(*vid);
 	skb->priority = (tci & VLAN_PRIO_MASK) >> VLAN_PRIO_SHIFT;
+
+	return true;
 }
 EXPORT_SYMBOL_GPL(dsa_8021q_rcv);
 

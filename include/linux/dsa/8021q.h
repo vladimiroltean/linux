@@ -33,7 +33,8 @@ void dsa_tag_8021q_unregister(struct dsa_switch *ds);
 struct sk_buff *dsa_8021q_xmit(struct sk_buff *skb, struct net_device *netdev,
 			       u16 tpid, u16 tci);
 
-void dsa_8021q_rcv(struct sk_buff *skb, int *source_port, int *switch_id);
+bool dsa_8021q_rcv(struct sk_buff *skb, int *source_port, int *switch_id,
+		   u16 *vid);
 
 u16 dsa_8021q_tx_vid(struct dsa_switch *ds, int port);
 
