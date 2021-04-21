@@ -42,8 +42,10 @@ static struct sk_buff *ocelot_rcv(struct sk_buff *skb,
 				  struct packet_type *pt)
 {
 	int src_port, switch_id;
+	u16 vid;
 
-	dsa_8021q_rcv(skb, &src_port, &switch_id);
+	if (!dsa_8021q_rcv(skb, &src_port, &switch_id, &vid))
+		return NULL;
 
 	skb->dev = dsa_master_find_slave(netdev, switch_id, src_port);
 	if (!skb->dev)
