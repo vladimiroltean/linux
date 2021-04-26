@@ -2385,7 +2385,7 @@ int mlxsw_sp_port_bridge_join(struct mlxsw_sp_port *mlxsw_sp_port,
 		goto err_port_join;
 
 	return switchdev_bridge_port_offload(brport_dev, dev, mlxsw_sp_port,
-					     extack);
+					     false, extack);
 
 err_port_join:
 	mlxsw_sp_bridge_port_put(mlxsw_sp->bridge, bridge_port);

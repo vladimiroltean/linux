@@ -57,6 +57,7 @@ struct br_ip_list {
 #define BR_MRP_AWARE		BIT(17)
 #define BR_MRP_LOST_CONT	BIT(18)
 #define BR_MRP_LOST_IN_CONT	BIT(19)
+#define BR_TX_FWD_OFFLOAD	BIT(20)
 
 #define BR_DEFAULT_AGEING_TIME	(300 * HZ)
 
@@ -180,6 +181,7 @@ static inline clock_t br_get_ageing_time(const struct net_device *br_dev)
 
 int switchdev_bridge_port_offload(struct net_device *brport_dev,
 				  struct net_device *dev, const void *ctx,
+				  bool tx_fwd_offload,
 				  struct netlink_ext_ack *extack);
 int switchdev_bridge_port_unoffload(struct net_device *brport_dev,
 				    struct net_device *dev, const void *ctx,
@@ -190,6 +192,7 @@ int switchdev_bridge_port_unoffload(struct net_device *brport_dev,
 static inline int switchdev_bridge_port_offload(struct net_device *brport_dev,
 						struct net_device *dev,
 						const void *ctx,
+						bool tx_fwd_offload,
 						struct netlink_ext_ack *extack)
 {
 	return -EINVAL;

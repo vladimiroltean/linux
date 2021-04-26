@@ -1197,7 +1197,8 @@ static int ocelot_netdevice_bridge_join(struct net_device *dev,
 
 	ocelot_port_bridge_join(ocelot, port, bridge);
 
-	err = switchdev_bridge_port_offload(brport_dev, dev, priv, extack);
+	err = switchdev_bridge_port_offload(brport_dev, dev, priv, false,
+					    extack);
 	if (err)
 		goto err_switchdev_offload;
 

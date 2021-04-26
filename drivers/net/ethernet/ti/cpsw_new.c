@@ -1517,7 +1517,7 @@ static int cpsw_netdevice_port_link(struct net_device *ndev,
 			return -EOPNOTSUPP;
 	}
 
-	err = switchdev_bridge_port_offload(ndev, ndev, NULL, extack);
+	err = switchdev_bridge_port_offload(ndev, ndev, NULL, false, extack);
 	if (err)
 		return err;
 

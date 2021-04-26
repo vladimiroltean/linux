@@ -254,7 +254,7 @@ int dsa_port_bridge_join(struct dsa_port *dp, struct net_device *br,
 	if (err)
 		goto out_rollback;
 
-	err = switchdev_bridge_port_offload(brport_dev, dev, dp, extack);
+	err = switchdev_bridge_port_offload(brport_dev, dev, dp, false, extack);
 	if (err)
 		goto out_rollback_unbridge;
 

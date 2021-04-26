@@ -1930,7 +1930,8 @@ static int dpaa2_switch_port_bridge_join(struct net_device *netdev,
 	if (err)
 		goto err_egress_flood;
 
-	return switchdev_bridge_port_offload(netdev, netdev, NULL, extack);
+	return switchdev_bridge_port_offload(netdev, netdev, NULL, false,
+					     extack);
 
 err_egress_flood:
 	dpaa2_switch_port_set_fdb(port_priv, NULL);
