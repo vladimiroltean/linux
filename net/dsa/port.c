@@ -230,6 +230,75 @@ static void dsa_port_switchdev_unsync_attrs(struct dsa_port *dp)
 	 */
 }
 
+static int dsa_tree_find_bridge_num(struct dsa_switch_tree *dst,
+				    struct net_device *bridge_dev)
+{
+	struct dsa_port *dp;
+
+	list_for_each_entry(dp, &dst->ports, list)
+		if (dp->bridge_dev  == bridge_dev)
+			return dp->bridge_num;
+
+	return -1;
+}
+
+static void dsa_port_bridge_tx_fwd_unprepare(struct dsa_port *dp,
+					     struct net_device *bridge_dev)
+{
+	struct dsa_switch *ds = dp->ds;
+	struct dsa_switch_tree *dst;
+	int bridge_num;
+
+	dst = ds->dst;
+
+	bridge_num = dp->bridge_num;
+
+	dp->bridge_num = -1;
+
+	/* bridge no longer in use, time to clean it up */
+	if (!dsa_tree_find_bridge_num(dst, bridge_dev))
+		clear_bit(bridge_num, &dst->fwd_offloading_bridges);
+
+	/* Notify the chips only once the offload has been deactivated, so
+	 * that they can update their configuration accordingly.
+	 */
+	dsa_port_bridge_fwd_offload_del(dp, bridge_dev, bridge_num);
+}
+
+static bool dsa_port_bridge_tx_fwd_prepare(struct dsa_port *dp,
+					   struct net_device *bridge_dev)
+{
+	struct dsa_switch *ds = dp->ds;
+	struct dsa_switch_tree *dst;
+	int bridge_num, err;
+
+	dst = ds->dst;
+
+	bridge_num = dsa_tree_find_bridge_num(dst, bridge_dev);
+	if (bridge_num < 0) {
+		/* First port that offloads TX forwarding for this bridge */
+		int bridge_num;
+
+		bridge_num = find_first_zero_bit(&dst->fwd_offloading_bridges,
+						 DSA_MAX_NUM_OFFLOADING_BRIDGES);
+		if (bridge_num >= ds->num_fwd_offloading_bridges)
+			return false;
+
+		set_bit(bridge_num, &dst->fwd_offloading_bridges);
+	}
+
+	dp->bridge_num = bridge_num;
+
+	/* Notify the driver */
+	err = dsa_port_bridge_fwd_offload_add(dp, bridge_dev, bridge_num);
+	if (err) {
+		dsa_port_bridge_tx_fwd_unprepare(dp, bridge_dev);
+		return false;
+	}
+
+	return true;
+}
+
 int dsa_port_bridge_join(struct dsa_port *dp, struct net_device *br,
 			 struct netlink_ext_ack *extack)
 {
@@ -241,6 +310,7 @@ int dsa_port_bridge_join(struct dsa_port *dp, struct net_device *br,
 	};
 	struct net_device *dev = dp->slave;
 	struct net_device *brport_dev;
+	bool tx_fwd_offload;
 	int err;
 
 	/* Here the interface is already bridged. Reflect the current
@@ -254,7 +324,10 @@ int dsa_port_bridge_join(struct dsa_port *dp, struct net_device *br,
 	if (err)
 		goto out_rollback;
 
-	err = switchdev_bridge_port_offload(brport_dev, dev, dp, false, extack);
+	tx_fwd_offload = dsa_port_bridge_tx_fwd_prepare(dp, br);
+
+	err = switchdev_bridge_port_offload(brport_dev, dev, dp, tx_fwd_offload,
+					    extack);
 	if (err)
 		goto out_rollback_unbridge;
 
@@ -279,6 +352,8 @@ int dsa_port_pre_bridge_leave(struct dsa_port *dp, struct net_device *br,
 	struct net_device *brport_dev = dsa_port_to_bridge_port(dp);
 	struct net_device *dev = dp->slave;
 
+	dsa_port_bridge_tx_fwd_prepare(dp, br);
+
 	return switchdev_bridge_port_unoffload(brport_dev, dev, dp, extack);
 }
 
@@ -302,6 +377,29 @@ void dsa_port_bridge_leave(struct dsa_port *dp, struct net_device *br)
 		pr_err("DSA: failed to notify DSA_NOTIFIER_BRIDGE_LEAVE\n");
 
 	dsa_port_switchdev_unsync_attrs(dp);
+}
+
+int dsa_port_bridge_fwd_offload_add(struct dsa_port *dp,
+				    struct net_device *br, int bridge_num)
+{
+	struct dsa_switch *ds = dp->ds;
+
+	if (!ds->ops->port_bridge_fwd_offload_add)
+		return -EOPNOTSUPP;
+
+	return ds->ops->port_bridge_fwd_offload_add(ds, dp->index, br,
+						    bridge_num);
+}
+
+void dsa_port_bridge_fwd_offload_del(struct dsa_port *dp,
+				     struct net_device *br, int bridge_num)
+{
+	struct dsa_switch *ds = dp->ds;
+
+	if (!ds->ops->port_bridge_fwd_offload_del)
+		return;
+
+	ds->ops->port_bridge_fwd_offload_del(ds, dp->index, br, bridge_num);
 }
 
 int dsa_port_lag_change(struct dsa_port *dp,

@@ -1877,9 +1877,20 @@ int dsa_slave_create(struct dsa_port *port)
 
 	slave_dev = alloc_netdev_mqs(sizeof(struct dsa_slave_priv), name,
 				     NET_NAME_UNKNOWN, ether_setup,
-				     ds->num_tx_queues, 1);
+				     ds->num_tx_queues + 1, 1);
 	if (slave_dev == NULL)
 		return -ENOMEM;
+
+	/* To avoid changing the number of TX queues at runtime depending on
+	 * whether the tagging protocol in use supports bridge forwarding
+	 * offload or not, just assume that all tagging protocols do, and
+	 * unconditionally register one extra TX queue to back that offload.
+	 * Then set num_real_tx_queues such that it will never be selected by
+	 * netdev_pick_tx(), just by ourselves.
+	 */
+	ret = netif_set_real_num_tx_queues(slave_dev, ds->num_tx_queues);
+	if (ret)
+		goto out_free;
 
 	slave_dev->features = master->vlan_features | NETIF_F_HW_TC;
 	if (ds->ops->port_vlan_add && ds->ops->port_vlan_del)
