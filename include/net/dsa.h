@@ -103,6 +103,7 @@ struct dsa_device_ops {
 	 * its RX filter.
 	 */
 	bool promisc_on_master;
+	bool bridge_fwd_offload;
 };
 
 /* This structure defines the control interfaces that are overlayed by the
@@ -162,6 +163,9 @@ struct dsa_switch_tree {
 
 	/* Track the largest switch index within a tree */
 	unsigned int last_switch;
+
+	/* Track the bridges with forwarding offload enabled */
+	unsigned long fwd_offloading_bridges;
 };
 
 #define dsa_lags_foreach_id(_id, _dst)				\
@@ -224,6 +228,10 @@ struct dsa_mall_tc_entry {
 	};
 };
 
+struct dsa_bridge_fwd_accel_priv {
+	struct net_device *sb_dev;
+	int bridge_num;
+};
 
 struct dsa_port {
 	/* A CPU port is physically connected to a master device.
@@ -293,6 +301,8 @@ struct dsa_port {
 	 */
 	struct list_head	fdbs;
 	struct list_head	mdbs;
+
+	struct dsa_bridge_fwd_accel_priv *accel_priv;
 
 	bool setup;
 };
@@ -409,6 +419,12 @@ struct dsa_switch {
 	 * dsa_lag_id().
 	 */
 	unsigned int		num_lag_ids;
+
+	/* Drivers that support bridge forwarding offload should set this to
+	 * the maximum number of bridges spanning the same switch tree that can
+	 * be offloaded.
+	 */
+	unsigned int		num_fwd_offloading_bridges;
 
 	size_t num_ports;
 };
@@ -693,6 +709,14 @@ struct dsa_switch_ops {
 				    struct net_device *bridge);
 	void	(*port_bridge_leave)(struct dsa_switch *ds, int port,
 				     struct net_device *bridge);
+	/* Called right after .port_bridge_join() */
+	int	(*port_bridge_fwd_offload_add)(struct dsa_switch *ds, int port,
+					       struct net_device *bridge,
+					       int bridge_num);
+	/* Called right before .port_bridge_leave() */
+	void	(*port_bridge_fwd_offload_del)(struct dsa_switch *ds, int port,
+					       struct net_device *bridge,
+					       int bridge_num);
 	void	(*port_stp_state_set)(struct dsa_switch *ds, int port,
 				      u8 state);
 	void	(*port_fast_age)(struct dsa_switch *ds, int port);

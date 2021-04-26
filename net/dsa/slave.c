@@ -1679,6 +1679,119 @@ static int dsa_slave_fill_forward_path(struct net_device_path_ctx *ctx,
 	return 0;
 }
 
+/* Direct packets coming from the data plane of the bridge to a dedicated TX
+ * queue, and let the generic netdev_pick_tx() handle the rest via hashing
+ * among TX queues of the same priority.
+ */
+static u16 dsa_slave_select_queue(struct net_device *dev, struct sk_buff *skb,
+				  struct net_device *sb_dev)
+{
+	struct dsa_port *dp = dsa_slave_to_port(dev);
+	struct dsa_switch *ds = dp->ds;
+
+	if (unlikely(sb_dev))
+		return ds->num_tx_queues;
+
+	return netdev_pick_tx(dev, skb, sb_dev);
+}
+
+static struct dsa_bridge_fwd_accel_priv *
+dsa_find_accel_priv_by_sb_dev(struct dsa_switch_tree *dst,
+			      struct net_device *sb_dev)
+{
+	struct dsa_port *dp;
+
+	list_for_each_entry(dp, &dst->ports, list)
+		if (dp->accel_priv && dp->accel_priv->sb_dev == sb_dev)
+			return dp->accel_priv;
+
+	return NULL;
+}
+
+static void dsa_slave_fwd_offload_del(struct net_device *dev, void *sb_dev)
+{
+	struct dsa_bridge_fwd_accel_priv *accel_priv;
+	struct dsa_port *dp = dsa_slave_to_port(dev);
+	struct dsa_switch *ds = dp->ds;
+	struct dsa_switch_tree *dst;
+	int bridge_num;
+
+	if (!netif_is_bridge_master(sb_dev))
+		return;
+
+	dst = ds->dst;
+
+	accel_priv = dp->accel_priv;
+	bridge_num = accel_priv->bridge_num;
+
+	dp->accel_priv = NULL;
+
+	/* accel_priv no longer in use, time to clean it up */
+	if (!dsa_find_accel_priv_by_sb_dev(dst, sb_dev)) {
+		clear_bit(accel_priv->bridge_num, &dst->fwd_offloading_bridges);
+		kfree(accel_priv);
+	}
+
+	netdev_unbind_tx_queues_from_sb_dev(dev, sb_dev);
+
+	/* Notify the chips only once the offload has been deactivated, so
+	 * that they can update their configuration accordingly.
+	 */
+	dsa_port_bridge_fwd_offload_del(dp, sb_dev, bridge_num);
+}
+
+static void *dsa_slave_fwd_offload_add(struct net_device *dev,
+				       struct net_device *sb_dev)
+{
+	struct dsa_bridge_fwd_accel_priv *accel_priv;
+	struct dsa_port *dp = dsa_slave_to_port(dev);
+	struct dsa_switch *ds = dp->ds;
+	struct dsa_switch_tree *dst;
+	int err;
+
+	if (!netif_is_bridge_master(sb_dev))
+		return ERR_PTR(-EOPNOTSUPP);
+
+	dst = ds->dst;
+
+	accel_priv = dsa_find_accel_priv_by_sb_dev(dst, sb_dev);
+	if (!accel_priv) {
+		/* First port that offloads forwarding for this bridge */
+		int bridge_num;
+
+		bridge_num = find_first_zero_bit(&dst->fwd_offloading_bridges,
+						 DSA_MAX_NUM_OFFLOADING_BRIDGES);
+		if (bridge_num >= ds->num_fwd_offloading_bridges)
+			return ERR_PTR(-EOPNOTSUPP);
+
+		accel_priv = kzalloc(sizeof(*accel_priv), GFP_KERNEL);
+		if (!accel_priv)
+			return ERR_PTR(-ENOMEM);
+
+		accel_priv->sb_dev = sb_dev;
+		accel_priv->bridge_num = bridge_num;
+
+		set_bit(bridge_num, &dst->fwd_offloading_bridges);
+	}
+
+	dp->accel_priv = accel_priv;
+
+	/* There can be only one master upper interface for each port in the
+	 * case of bridge forwarding offload, so just bind a single TX queue to
+	 * that subordinate device, the last one.
+	 */
+	netdev_bind_tx_queues_to_sb_dev(dev, sb_dev, 1, ds->num_tx_queues);
+
+	err = dsa_port_bridge_fwd_offload_add(dp, sb_dev,
+					      accel_priv->bridge_num);
+	if (err) {
+		dsa_slave_fwd_offload_del(dev, sb_dev);
+		return ERR_PTR(err);
+	}
+
+	return accel_priv;
+}
+
 static const struct net_device_ops dsa_slave_netdev_ops = {
 	.ndo_open	 	= dsa_slave_open,
 	.ndo_stop		= dsa_slave_close,
@@ -1703,6 +1816,9 @@ static const struct net_device_ops dsa_slave_netdev_ops = {
 	.ndo_get_devlink_port	= dsa_slave_get_devlink_port,
 	.ndo_change_mtu		= dsa_slave_change_mtu,
 	.ndo_fill_forward_path	= dsa_slave_fill_forward_path,
+	.ndo_dfwd_add_station	= dsa_slave_fwd_offload_add,
+	.ndo_dfwd_del_station	= dsa_slave_fwd_offload_del,
+	.ndo_select_queue	= dsa_slave_select_queue,
 };
 
 static struct device_type dsa_type = {
@@ -1819,6 +1935,11 @@ void dsa_slave_setup_tagger(struct net_device *slave)
 	slave->needed_tailroom += master->needed_tailroom;
 
 	p->xmit = cpu_dp->tag_ops->xmit;
+
+	if (cpu_dp->tag_ops->bridge_fwd_offload)
+		slave->features |= NETIF_F_HW_L2FW_DOFFLOAD;
+	else
+		slave->features &= ~NETIF_F_HW_L2FW_DOFFLOAD;
 }
 
 static struct lock_class_key dsa_slave_netdev_xmit_lock_key;
@@ -1877,9 +1998,20 @@ int dsa_slave_create(struct dsa_port *port)
 
 	slave_dev = alloc_netdev_mqs(sizeof(struct dsa_slave_priv), name,
 				     NET_NAME_UNKNOWN, ether_setup,
-				     ds->num_tx_queues, 1);
+				     ds->num_tx_queues + 1, 1);
 	if (slave_dev == NULL)
 		return -ENOMEM;
+
+	/* To avoid changing the number of TX queues at runtime depending on
+	 * whether the tagging protocol in use supports bridge forwarding
+	 * offload or not, just assume that all tagging protocols do, and
+	 * unconditionally register one extra TX queue to back that offload.
+	 * Then set num_real_tx_queues such that it will never be selected by
+	 * netdev_pick_tx(), just by ourselves.
+	 */
+	ret = netif_set_real_num_tx_queues(slave_dev, ds->num_tx_queues);
+	if (ret)
+		goto out_free;
 
 	slave_dev->features = master->vlan_features | NETIF_F_HW_TC;
 	if (ds->ops->port_vlan_add && ds->ops->port_vlan_del)
