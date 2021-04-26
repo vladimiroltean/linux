@@ -32,6 +32,8 @@ static inline int should_deliver(const struct net_bridge_port *p,
 
 int br_dev_queue_push_xmit(struct net *net, struct sock *sk, struct sk_buff *skb)
 {
+	struct net_device *sb_dev = NULL;
+
 	skb_push(skb, ETH_HLEN);
 	if (!is_skb_forwardable(skb->dev, skb))
 		goto drop;
@@ -48,7 +50,14 @@ int br_dev_queue_push_xmit(struct net *net, struct sock *sk, struct sk_buff *skb
 		skb_set_network_header(skb, depth);
 	}
 
-	dev_queue_xmit(skb);
+	if (br_switchdev_accels_skb(skb)) {
+		sb_dev = BR_INPUT_SKB_CB(skb)->brdev;
+
+		WARN_ON_ONCE(br_vlan_enabled(sb_dev) &&
+			     !skb_vlan_tag_present(skb));
+	}
+
+	dev_queue_xmit_accel(skb, sb_dev);
 
 	return 0;
 
@@ -75,6 +84,11 @@ static void __br_forward(const struct net_bridge_port *to,
 	struct net_device *indev;
 	struct net *net;
 	int br_hook;
+
+	/* Mark the skb for forwarding offload early so that br_handle_vlan()
+	 * can know whether to pop the VLAN header on egress or keep it.
+	 */
+	nbp_switchdev_frame_mark_accel(to, skb);
 
 	vg = nbp_vlan_group_rcu(to);
 	skb = br_handle_vlan(to->br, to, vg, skb);
@@ -173,6 +187,8 @@ static struct net_bridge_port *maybe_deliver(
 
 	if (!should_deliver(p, skb))
 		return prev;
+
+	nbp_switchdev_frame_mark_fwd(p, skb);
 
 	if (!prev)
 		goto out;
