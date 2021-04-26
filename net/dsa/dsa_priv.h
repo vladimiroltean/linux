@@ -378,6 +378,17 @@ static inline struct sk_buff *dsa_untag_bridge_pvid(struct sk_buff *skb)
 	return skb;
 }
 
+static inline struct net_device *
+dsa_slave_get_sb_dev(const struct net_device *dev, struct sk_buff *skb)
+{
+	u16 queue_mapping = skb_get_queue_mapping(skb);
+	struct netdev_queue *txq;
+
+	txq = netdev_get_tx_queue(dev, queue_mapping);
+
+	return txq->sb_dev;
+}
+
 /* switch.c */
 int dsa_switch_register_notifier(struct dsa_switch *ds);
 void dsa_switch_unregister_notifier(struct dsa_switch *ds);
