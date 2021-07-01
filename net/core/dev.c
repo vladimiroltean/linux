@@ -2957,21 +2957,37 @@ int netdev_set_num_tc(struct net_device *dev, u8 num_tc)
 }
 EXPORT_SYMBOL(netdev_set_num_tc);
 
-void netdev_unbind_sb_channel(struct net_device *dev,
-			      struct net_device *sb_dev)
+void netdev_bind_tx_queues_to_sb_dev(struct net_device *dev,
+				     struct net_device *sb_dev,
+				     u16 count, u16 offset)
+{
+	while (count--)
+		netdev_get_tx_queue(dev, count + offset)->sb_dev = sb_dev;
+}
+EXPORT_SYMBOL_GPL(netdev_bind_tx_queues_to_sb_dev);
+
+void netdev_unbind_tx_queues_from_sb_dev(struct net_device *dev,
+					 struct net_device *sb_dev)
 {
 	struct netdev_queue *txq = &dev->_tx[dev->num_tx_queues];
 
+	while (txq-- != &dev->_tx[0]) {
+		if (txq->sb_dev == sb_dev)
+			txq->sb_dev = NULL;
+	}
+}
+EXPORT_SYMBOL_GPL(netdev_unbind_tx_queues_from_sb_dev);
+
+void netdev_unbind_sb_channel(struct net_device *dev,
+			      struct net_device *sb_dev)
+{
 #ifdef CONFIG_XPS
 	netif_reset_xps_queues_gt(sb_dev, 0);
 #endif
 	memset(sb_dev->tc_to_txq, 0, sizeof(sb_dev->tc_to_txq));
 	memset(sb_dev->prio_tc_map, 0, sizeof(sb_dev->prio_tc_map));
 
-	while (txq-- != &dev->_tx[0]) {
-		if (txq->sb_dev == sb_dev)
-			txq->sb_dev = NULL;
-	}
+	netdev_unbind_tx_queues_from_sb_dev(dev, sb_dev);
 }
 EXPORT_SYMBOL(netdev_unbind_sb_channel);
 
@@ -2994,8 +3010,7 @@ int netdev_bind_sb_channel_queue(struct net_device *dev,
 	/* Provide a way for Tx queue to find the tc_to_txq map or
 	 * XPS map for itself.
 	 */
-	while (count--)
-		netdev_get_tx_queue(dev, count + offset)->sb_dev = sb_dev;
+	netdev_bind_tx_queues_to_sb_dev(dev, sb_dev, count, offset);
 
 	return 0;
 }

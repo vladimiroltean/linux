@@ -2301,6 +2301,13 @@ static inline void net_prefetchw(void *p)
 #endif
 }
 
+void netdev_bind_tx_queues_to_sb_dev(struct net_device *dev,
+				     struct net_device *sb_dev,
+				     u16 count, u16 offset);
+
+void netdev_unbind_tx_queues_from_sb_dev(struct net_device *dev,
+					 struct net_device *sb_dev);
+
 void netdev_unbind_sb_channel(struct net_device *dev,
 			      struct net_device *sb_dev);
 int netdev_bind_sb_channel_queue(struct net_device *dev,
