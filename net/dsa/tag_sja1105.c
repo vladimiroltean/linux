@@ -133,6 +133,32 @@ static u16 sja1105_xmit_tpid(struct sja1105_port *sp)
 	return sp->xmit_tpid;
 }
 
+static struct sk_buff *sja1105_xmit_accel(struct sk_buff *skb,
+					  struct net_device *netdev)
+{
+	struct dsa_port *dp = dsa_slave_to_port(netdev);
+	int bridge_num;
+	u16 tx_vid;
+
+	/* If the port is under a VLAN-aware bridge, just slide the
+	 * VLAN-tagged packet into the FDB and hope for the best.
+	 * This works because we support a single VLAN-aware bridge
+	 * across the entire dst, and its VLANs cannot be shared with
+	 * any standalone port.
+	 */
+	if (dsa_port_is_vlan_filtering(dp))
+		return skb;
+
+	/* If the port is under a VLAN-unaware bridge, use an imprecise
+	 * TX VLAN that targets the bridge's entire broadcast domain,
+	 * instead of just the specific port.
+	 */
+	bridge_num = dp->bridge_num + 1;
+	tx_vid = dsa_8021q_bridge_fwd_offload_tx_vid(bridge_num);
+
+	return dsa_8021q_xmit(skb, netdev, sja1105_xmit_tpid(dp->priv), tx_vid);
+}
+
 static struct sk_buff *sja1105_xmit(struct sk_buff *skb,
 				    struct net_device *netdev)
 {
@@ -140,6 +166,9 @@ static struct sk_buff *sja1105_xmit(struct sk_buff *skb,
 	u16 tx_vid = dsa_8021q_tx_vid(dp->ds, dp->index);
 	u16 queue_mapping = skb_get_queue_mapping(skb);
 	u8 pcp = netdev_txq_to_tc(netdev, queue_mapping);
+
+	if (skb->offload_fwd_mark)
+		return sja1105_xmit_accel(skb, netdev);
 
 	/* Transmitting management traffic does not rely upon switch tagging,
 	 * but instead SPI-installed management routes. Part 2 of this
@@ -164,6 +193,9 @@ static struct sk_buff *sja1110_xmit(struct sk_buff *skb,
 	__be32 *tx_trailer;
 	__be16 *tx_header;
 	int trailer_pos;
+
+	if (skb->offload_fwd_mark)
+		return sja1105_xmit_accel(skb, netdev);
 
 	/* Transmitting control packets is done using in-band control
 	 * extensions, while data packets are transmitted using
