@@ -3697,10 +3697,10 @@ static inline void netdev_reset_queue(struct net_device *dev_queue)
  */
 static inline u16 netdev_cap_txqueue(struct net_device *dev, u16 queue_index)
 {
-	if (unlikely(queue_index >= dev->real_num_tx_queues)) {
-		net_warn_ratelimited("%s selects TX queue %d, but real number of TX queues is %d\n",
+	if (unlikely(queue_index >= dev->num_tx_queues)) {
+		net_warn_ratelimited("%s selects TX queue %d, but number of TX queues is %d\n",
 				     dev->name, queue_index,
-				     dev->real_num_tx_queues);
+				     dev->num_tx_queues);
 		return 0;
 	}
 
