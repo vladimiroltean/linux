@@ -133,13 +133,48 @@ static u16 sja1105_xmit_tpid(struct sja1105_port *sp)
 	return sp->xmit_tpid;
 }
 
+static struct sk_buff *sja1105_xmit_accel(struct sk_buff *skb,
+					  struct net_device *netdev)
+{
+	/* Don't bother finding the accel_priv corresponding with this
+	 * subordinate device, we know it's the bridge becase we can't
+	 * offload anything else, so just search for it under the port,
+	 * we know it's the same.
+	 */
+	struct dsa_port *dp = dsa_slave_to_port(netdev);
+	int bridge_num;
+	u16 tx_vid;
+
+	/* If the port is under a VLAN-aware bridge, just slide the
+	 * VLAN-tagged packet into the FDB and hope for the best.
+	 * This works because we support a single VLAN-aware bridge
+	 * across the entire dst, and its VLANs cannot be shared with
+	 * any standalone port.
+	 */
+	if (dsa_port_is_vlan_filtering(dp))
+		return skb;
+
+	/* If the port is under a VLAN-unaware bridge, use an imprecise
+	 * TX VLAN that targets the bridge's entire broadcast domain,
+	 * instead of just the specific port.
+	 */
+	bridge_num = dp->accel_priv->bridge_num + 1;
+	tx_vid = dsa_8021q_bridge_fwd_offload_tx_vid(bridge_num);
+
+	return dsa_8021q_xmit(skb, netdev, sja1105_xmit_tpid(dp->priv), tx_vid);
+}
+
 static struct sk_buff *sja1105_xmit(struct sk_buff *skb,
 				    struct net_device *netdev)
 {
+	struct net_device *sb_dev = dsa_slave_get_sb_dev(netdev, skb);
 	struct dsa_port *dp = dsa_slave_to_port(netdev);
 	u16 tx_vid = dsa_8021q_tx_vid(dp->ds, dp->index);
 	u16 queue_mapping = skb_get_queue_mapping(skb);
 	u8 pcp = netdev_txq_to_tc(netdev, queue_mapping);
+
+	if (sb_dev)
+		return sja1105_xmit_accel(skb, netdev);
 
 	/* Transmitting management traffic does not rely upon switch tagging,
 	 * but instead SPI-installed management routes. Part 2 of this
@@ -155,6 +190,7 @@ static struct sk_buff *sja1105_xmit(struct sk_buff *skb,
 static struct sk_buff *sja1110_xmit(struct sk_buff *skb,
 				    struct net_device *netdev)
 {
+	struct net_device *sb_dev = dsa_slave_get_sb_dev(netdev, skb);
 	struct sk_buff *clone = SJA1105_SKB_CB(skb)->clone;
 	struct dsa_port *dp = dsa_slave_to_port(netdev);
 	u16 tx_vid = dsa_8021q_tx_vid(dp->ds, dp->index);
@@ -164,6 +200,9 @@ static struct sk_buff *sja1110_xmit(struct sk_buff *skb,
 	__be32 *tx_trailer;
 	__be16 *tx_header;
 	int trailer_pos;
+
+	if (sb_dev)
+		return sja1105_xmit_accel(skb, netdev);
 
 	/* Transmitting control packets is done using in-band control
 	 * extensions, while data packets are transmitted using
@@ -558,6 +597,7 @@ static const struct dsa_device_ops sja1105_netdev_ops = {
 	.needed_headroom = VLAN_HLEN,
 	.flow_dissect = sja1105_flow_dissect,
 	.promisc_on_master = true,
+	.bridge_fwd_offload = true,
 };
 
 DSA_TAG_DRIVER(sja1105_netdev_ops);
@@ -571,6 +611,7 @@ static const struct dsa_device_ops sja1110_netdev_ops = {
 	.flow_dissect = sja1110_flow_dissect,
 	.needed_headroom = SJA1110_HEADER_LEN + VLAN_HLEN,
 	.needed_tailroom = SJA1110_RX_TRAILER_LEN + SJA1110_MAX_PADDING_LEN,
+	.bridge_fwd_offload = true,
 };
 
 DSA_TAG_DRIVER(sja1110_netdev_ops);
