@@ -176,6 +176,98 @@ static int dsa_8021q_vid_apply(struct dsa_switch *ds, int port, u16 vid,
  * +-+-----+-+-----+-+-----+-+-----+-+    +-+-----+-+-----+-+-----+-+-----+-+
  *   swp0    swp1    swp2    swp3           swp0    swp1    swp2    swp3
  */
+static bool dsa_tag_8021q_bridge_match(struct dsa_switch *ds, int port,
+				       struct dsa_notifier_bridge_info *info)
+{
+	struct dsa_port *dp = dsa_to_port(ds, port);
+
+	/* Don't match on self */
+	if (ds->dst->index == info->tree_index &&
+	    ds->index == info->sw_index &&
+	    port == info->port)
+		return false;
+
+	if (dsa_port_is_user(dp))
+		return dp->bridge_dev == info->br;
+
+	return false;
+}
+
+int dsa_tag_8021q_bridge_join(struct dsa_switch *ds,
+			      struct dsa_notifier_bridge_info *info)
+{
+	struct dsa_switch *targeted_ds;
+	u16 targeted_rx_vid;
+	int err, port;
+
+	if (!ds->tag_8021q_ctx)
+		return 0;
+
+	targeted_ds = dsa_switch_find(info->tree_index, info->sw_index);
+	targeted_rx_vid = dsa_8021q_rx_vid(targeted_ds, info->port);
+
+	for (port = 0; port < ds->num_ports; port++) {
+		u16 rx_vid = dsa_8021q_rx_vid(ds, port);
+
+		if (!dsa_tag_8021q_bridge_match(ds, port, info))
+			continue;
+
+		/* Install the RX VID of the targeted port in our VLAN table */
+		err = dsa_8021q_vid_apply(ds, port, targeted_rx_vid,
+					  BRIDGE_VLAN_INFO_UNTAGGED, true);
+		if (err)
+			return err;
+
+		/* Install our RX VID into the targeted port's VLAN table */
+		err = dsa_8021q_vid_apply(targeted_ds, info->port, rx_vid,
+					  BRIDGE_VLAN_INFO_UNTAGGED, true);
+		if (err)
+			return err;
+	}
+
+	return 0;
+}
+
+int dsa_tag_8021q_bridge_leave(struct dsa_switch *ds,
+			       struct dsa_notifier_bridge_info *info)
+{
+	struct dsa_switch *targeted_ds;
+	u16 targeted_rx_vid;
+	int err, port;
+
+	if (!ds->tag_8021q_ctx)
+		return 0;
+
+	targeted_ds = dsa_switch_find(info->tree_index, info->sw_index);
+	targeted_rx_vid = dsa_8021q_rx_vid(targeted_ds, info->port);
+
+	for (port = 0; port < ds->num_ports; port++) {
+		u16 rx_vid = dsa_8021q_rx_vid(ds, port);
+
+		if (!dsa_tag_8021q_bridge_match(ds, port, info))
+			continue;
+
+		/* Remove the RX VID of the targeted port from our VLAN table */
+		err = dsa_8021q_vid_apply(ds, port, targeted_rx_vid,
+					  BRIDGE_VLAN_INFO_UNTAGGED, false);
+		if (err)
+			dev_err(ds->dev,
+				"port %d failed to delete tag_8021q VLAN: %pe\n",
+				port, ERR_PTR(err));
+
+		/* Remove our RX VID from the targeted port's VLAN table */
+		err = dsa_8021q_vid_apply(targeted_ds, info->port, rx_vid,
+					  BRIDGE_VLAN_INFO_UNTAGGED, false);
+		if (err)
+			dev_err(targeted_ds->dev,
+				"port %d failed to delete tag_8021q VLAN: %pe\n",
+				info->port, ERR_PTR(err));
+	}
+
+	return 0;
+}
+
+/* Set up a port's tag_8021q RX and TX VLAN for standalone mode operation */
 static int dsa_8021q_setup_port(struct dsa_switch *ds, int port, bool enabled)
 {
 	struct dsa_8021q_context *ctx = ds->tag_8021q_ctx;
@@ -183,7 +275,7 @@ static int dsa_8021q_setup_port(struct dsa_switch *ds, int port, bool enabled)
 	u16 rx_vid = dsa_8021q_rx_vid(ds, port);
 	u16 tx_vid = dsa_8021q_tx_vid(ds, port);
 	struct net_device *master;
-	int i, err;
+	int err;
 
 	/* The CPU port is implicitly configured by
 	 * configuring the front-panel ports
@@ -198,26 +290,13 @@ static int dsa_8021q_setup_port(struct dsa_switch *ds, int port, bool enabled)
 	 * L2 forwarding rules still take precedence when there are no VLAN
 	 * restrictions, so there are no concerns about leaking traffic.
 	 */
-	for (i = 0; i < ds->num_ports; i++) {
-		u16 flags;
-
-		if (i == upstream)
-			continue;
-		else if (i == port)
-			/* The RX VID is pvid on this port */
-			flags = BRIDGE_VLAN_INFO_UNTAGGED |
-				BRIDGE_VLAN_INFO_PVID;
-		else
-			/* The RX VID is a regular VLAN on all others */
-			flags = BRIDGE_VLAN_INFO_UNTAGGED;
-
-		err = dsa_8021q_vid_apply(ds, i, rx_vid, flags, enabled);
-		if (err) {
-			dev_err(ds->dev,
-				"Failed to apply RX VID %d to port %d: %pe\n",
-				rx_vid, port, ERR_PTR(err));
-			return err;
-		}
+	err = dsa_8021q_vid_apply(ds, port, rx_vid, BRIDGE_VLAN_INFO_UNTAGGED |
+				  BRIDGE_VLAN_INFO_PVID, enabled);
+	if (err) {
+		dev_err(ds->dev,
+			"Failed to apply RX VID %d to port %d: %pe\n",
+			rx_vid, port, ERR_PTR(err));
+		return err;
 	}
 
 	/* CPU port needs to see this port's RX VID
