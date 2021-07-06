@@ -394,7 +394,7 @@ static int sja1105_init_static_vlan(struct sja1105_private *priv)
 		v->port = port;
 		v->vid = SJA1105_DEFAULT_VLAN;
 		v->untagged = true;
-		if (dsa_is_cpu_port(ds, port))
+		if (dsa_is_dsa_port(ds, port) || dsa_is_cpu_port(ds, port))
 			v->pvid = true;
 		list_add(&v->list, &priv->dsa_8021q_vlans);
 	}
