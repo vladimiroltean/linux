@@ -420,10 +420,8 @@ static struct sk_buff *sja1105_rcv(struct sk_buff *skb,
 		skb->dev = dsa_find_designated_bridge_port_by_vid(netdev, vid);
 	else
 		skb->dev = dsa_master_find_slave(netdev, switch_id, source_port);
-	if (!skb->dev) {
-		netdev_warn(netdev, "Couldn't decode source port\n");
+	if (!skb->dev)
 		return NULL;
-	}
 
 	return sja1105_rcv_meta_state_machine(skb, &meta, is_link_local,
 					      is_meta);
@@ -555,12 +553,8 @@ static struct sk_buff *sja1110_rcv(struct sk_buff *skb,
 		skb->dev = dsa_find_designated_bridge_port_by_vid(netdev, vid);
 	else
 		skb->dev = dsa_master_find_slave(netdev, switch_id, source_port);
-	if (!skb->dev) {
-		netdev_warn(netdev,
-			    "Couldn't decode source port %d and switch id %d\n",
-			    source_port, switch_id);
+	if (!skb->dev)
 		return NULL;
-	}
 
 	return skb;
 }
