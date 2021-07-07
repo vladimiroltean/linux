@@ -124,9 +124,9 @@ static int sja1105_init_mac_settings(struct sja1105_private *priv)
 		mac[i] = default_mac;
 
 		/* Let sja1105_bridge_stp_state_set() keep address learning
-		 * enabled for the CPU port.
+		 * enabled for the CPU port and DSA links.
 		 */
-		if (dsa_is_cpu_port(ds, i))
+		if (dsa_is_cpu_port(ds, i) || dsa_is_dsa_port(ds, i))
 			priv->learn_ena |= BIT(i);
 	}
 
