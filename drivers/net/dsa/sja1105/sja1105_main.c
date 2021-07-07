@@ -2227,6 +2227,14 @@ static int sja1105_vlan_add(struct sja1105_private *priv, int port, u16 vid,
 	else
 		vlan[match].tag_port |= BIT(port);
 
+	/* Suppress TX VLANs from looping back into the system in "H"
+	 * topologies by removing the CPU port from their broadcast domain.
+	 * They should only be _received_ by the switch on a CPU port, never
+	 * _sent_ on one.
+	 */
+	if (vid_is_dsa_8021q_txvlan(vid) && dsa_is_cpu_port(priv->ds, port))
+		vlan[match].vlan_bc &= ~BIT(port);
+
 	return sja1105_dynamic_config_write(priv, BLK_IDX_VLAN_LOOKUP, vid,
 					    &vlan[match], true);
 }
