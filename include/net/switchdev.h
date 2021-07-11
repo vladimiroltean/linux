@@ -258,9 +258,6 @@ int call_switchdev_notifiers(unsigned long val, struct net_device *dev,
 
 int register_switchdev_blocking_notifier(struct notifier_block *nb);
 int unregister_switchdev_blocking_notifier(struct notifier_block *nb);
-int call_switchdev_blocking_notifiers(unsigned long val, struct net_device *dev,
-				      struct switchdev_notifier_info *info,
-				      struct netlink_ext_ack *extack);
 
 void switchdev_port_fwd_mark_set(struct net_device *dev,
 				 struct net_device *group_dev,
@@ -338,15 +335,6 @@ static inline int
 unregister_switchdev_blocking_notifier(struct notifier_block *nb)
 {
 	return 0;
-}
-
-static inline int
-call_switchdev_blocking_notifiers(unsigned long val,
-				  struct net_device *dev,
-				  struct switchdev_notifier_info *info,
-				  struct netlink_ext_ack *extack)
-{
-	return NOTIFY_DONE;
 }
 
 static inline int

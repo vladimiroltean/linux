@@ -22,6 +22,9 @@
 static LIST_HEAD(deferred);
 static DEFINE_SPINLOCK(deferred_lock);
 
+static ATOMIC_NOTIFIER_HEAD(switchdev_notif_chain);
+static BLOCKING_NOTIFIER_HEAD(switchdev_blocking_notif_chain);
+
 typedef void switchdev_deferred_func_t(struct net_device *dev,
 				       const void *data);
 
@@ -31,6 +34,17 @@ struct switchdev_deferred_item {
 	switchdev_deferred_func_t *func;
 	unsigned long data[];
 };
+
+static int
+call_switchdev_blocking_notifiers(unsigned long val, struct net_device *dev,
+				  struct switchdev_notifier_info *info,
+				  struct netlink_ext_ack *extack)
+{
+	info->dev = dev;
+	info->extack = extack;
+	return blocking_notifier_call_chain(&switchdev_blocking_notif_chain,
+					    val, info);
+}
 
 static struct switchdev_deferred_item *switchdev_deferred_dequeue(void)
 {
@@ -306,9 +320,6 @@ int switchdev_port_obj_del(struct net_device *dev,
 }
 EXPORT_SYMBOL_GPL(switchdev_port_obj_del);
 
-static ATOMIC_NOTIFIER_HEAD(switchdev_notif_chain);
-static BLOCKING_NOTIFIER_HEAD(switchdev_blocking_notif_chain);
-
 /**
  *	register_switchdev_notifier - Register notifier
  *	@nb: notifier_block
@@ -366,17 +377,6 @@ int unregister_switchdev_blocking_notifier(struct notifier_block *nb)
 	return blocking_notifier_chain_unregister(chain, nb);
 }
 EXPORT_SYMBOL_GPL(unregister_switchdev_blocking_notifier);
-
-int call_switchdev_blocking_notifiers(unsigned long val, struct net_device *dev,
-				      struct switchdev_notifier_info *info,
-				      struct netlink_ext_ack *extack)
-{
-	info->dev = dev;
-	info->extack = extack;
-	return blocking_notifier_call_chain(&switchdev_blocking_notif_chain,
-					    val, info);
-}
-EXPORT_SYMBOL_GPL(call_switchdev_blocking_notifiers);
 
 static int __switchdev_handle_port_obj_add(struct net_device *dev,
 			struct switchdev_notifier_port_obj_info *port_obj_info,
