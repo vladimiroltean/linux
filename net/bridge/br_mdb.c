@@ -705,10 +705,10 @@ static void br_mdb_switchdev_host_port(struct net_device *dev,
 
 	switch (type) {
 	case RTM_NEWMDB:
-		switchdev_port_obj_add(lower_dev, &mdb.obj, NULL);
+		switchdev_port_obj_add(lower_dev, &mdb.obj, NULL, NULL);
 		break;
 	case RTM_DELMDB:
-		switchdev_port_obj_del(lower_dev, &mdb.obj);
+		switchdev_port_obj_del(lower_dev, &mdb.obj, NULL);
 		break;
 	}
 }
@@ -752,11 +752,13 @@ void br_mdb_notify(struct net_device *dev,
 			complete_info->ip = mp->addr;
 			mdb.obj.complete_priv = complete_info;
 			mdb.obj.complete = br_mdb_complete;
-			if (switchdev_port_obj_add(pg->key.port->dev, &mdb.obj, NULL))
+			if (switchdev_port_obj_add(pg->key.port->dev, &mdb.obj,
+						   NULL, NULL))
 				kfree(complete_info);
 			break;
 		case RTM_DELMDB:
-			switchdev_port_obj_del(pg->key.port->dev, &mdb.obj);
+			switchdev_port_obj_del(pg->key.port->dev, &mdb.obj,
+					       NULL);
 			break;
 		}
 	} else {

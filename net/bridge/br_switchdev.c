@@ -111,7 +111,7 @@ int br_switchdev_port_vlan_add(struct net_device *dev, u16 vid, u16 flags,
 		.vid = vid,
 	};
 
-	return switchdev_port_obj_add(dev, &v.obj, extack);
+	return switchdev_port_obj_add(dev, &v.obj, NULL, extack);
 }
 
 int br_switchdev_port_vlan_del(struct net_device *dev, u16 vid)
@@ -122,7 +122,7 @@ int br_switchdev_port_vlan_del(struct net_device *dev, u16 vid)
 		.vid = vid,
 	};
 
-	return switchdev_port_obj_del(dev, &v.obj);
+	return switchdev_port_obj_del(dev, &v.obj, NULL);
 }
 
 static int nbp_switchdev_hwdom_set(struct net_bridge_port *joining)

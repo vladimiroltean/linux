@@ -38,9 +38,11 @@ struct switchdev_deferred_item {
 static int
 call_switchdev_blocking_notifiers(unsigned long val, struct net_device *dev,
 				  struct switchdev_notifier_info *info,
+				  const void *ctx,
 				  struct netlink_ext_ack *extack)
 {
 	info->dev = dev;
+	info->ctx = ctx;
 	info->extack = extack;
 	return blocking_notifier_call_chain(&switchdev_blocking_notif_chain,
 					    val, info);
@@ -125,8 +127,8 @@ static int switchdev_port_attr_notify(enum switchdev_notifier_type nt,
 		.handled = false,
 	};
 
-	rc = call_switchdev_blocking_notifiers(nt, dev,
-					       &attr_info.info, extack);
+	rc = call_switchdev_blocking_notifiers(nt, dev, &attr_info.info,
+					       NULL, extack);
 	err = notifier_to_errno(rc);
 	if (err) {
 		WARN_ON(!attr_info.handled);
@@ -207,6 +209,7 @@ static size_t switchdev_obj_size(const struct switchdev_obj *obj)
 static int switchdev_port_obj_notify(enum switchdev_notifier_type nt,
 				     struct net_device *dev,
 				     const struct switchdev_obj *obj,
+				     const void *ctx,
 				     struct netlink_ext_ack *extack)
 {
 	int rc;
@@ -217,7 +220,8 @@ static int switchdev_port_obj_notify(enum switchdev_notifier_type nt,
 		.handled = false,
 	};
 
-	rc = call_switchdev_blocking_notifiers(nt, dev, &obj_info.info, extack);
+	rc = call_switchdev_blocking_notifiers(nt, dev, &obj_info.info, ctx,
+					       extack);
 	err = notifier_to_errno(rc);
 	if (err) {
 		WARN_ON(!obj_info.handled);
@@ -236,7 +240,7 @@ static void switchdev_port_obj_add_deferred(struct net_device *dev,
 
 	ASSERT_RTNL();
 	err = switchdev_port_obj_notify(SWITCHDEV_PORT_OBJ_ADD,
-					dev, obj, NULL);
+					dev, obj, NULL, NULL);
 	if (err && err != -EOPNOTSUPP)
 		netdev_err(dev, "failed (err=%d) to add object (id=%d)\n",
 			   err, obj->id);
@@ -256,28 +260,30 @@ static int switchdev_port_obj_add_defer(struct net_device *dev,
  *
  *	@dev: port device
  *	@obj: object to add
+ *	@ctx: driver private data in case of bridge port with multiple lowers
  *	@extack: netlink extended ack
  *
  *	rtnl_lock must be held and must not be in atomic section,
  *	in case SWITCHDEV_F_DEFER flag is not set.
  */
 int switchdev_port_obj_add(struct net_device *dev,
-			   const struct switchdev_obj *obj,
+			   const struct switchdev_obj *obj, const void *ctx,
 			   struct netlink_ext_ack *extack)
 {
 	if (obj->flags & SWITCHDEV_F_DEFER)
 		return switchdev_port_obj_add_defer(dev, obj);
 	ASSERT_RTNL();
 	return switchdev_port_obj_notify(SWITCHDEV_PORT_OBJ_ADD,
-					 dev, obj, extack);
+					 dev, obj, ctx, extack);
 }
 EXPORT_SYMBOL_GPL(switchdev_port_obj_add);
 
 static int switchdev_port_obj_del_now(struct net_device *dev,
-				      const struct switchdev_obj *obj)
+				      const struct switchdev_obj *obj,
+				      const void *ctx)
 {
 	return switchdev_port_obj_notify(SWITCHDEV_PORT_OBJ_DEL,
-					 dev, obj, NULL);
+					 dev, obj, ctx, NULL);
 }
 
 static void switchdev_port_obj_del_deferred(struct net_device *dev,
@@ -286,7 +292,7 @@ static void switchdev_port_obj_del_deferred(struct net_device *dev,
 	const struct switchdev_obj *obj = data;
 	int err;
 
-	err = switchdev_port_obj_del_now(dev, obj);
+	err = switchdev_port_obj_del_now(dev, obj, NULL);
 	if (err && err != -EOPNOTSUPP)
 		netdev_err(dev, "failed (err=%d) to del object (id=%d)\n",
 			   err, obj->id);
@@ -306,17 +312,19 @@ static int switchdev_port_obj_del_defer(struct net_device *dev,
  *
  *	@dev: port device
  *	@obj: object to delete
+ *	@ctx: driver private data in case of bridge port with multiple lowers
  *
  *	rtnl_lock must be held and must not be in atomic section,
  *	in case SWITCHDEV_F_DEFER flag is not set.
  */
 int switchdev_port_obj_del(struct net_device *dev,
-			   const struct switchdev_obj *obj)
+			   const struct switchdev_obj *obj,
+			   const void *ctx)
 {
 	if (obj->flags & SWITCHDEV_F_DEFER)
 		return switchdev_port_obj_del_defer(dev, obj);
 	ASSERT_RTNL();
-	return switchdev_port_obj_del_now(dev, obj);
+	return switchdev_port_obj_del_now(dev, obj, ctx);
 }
 EXPORT_SYMBOL_GPL(switchdev_port_obj_del);
 

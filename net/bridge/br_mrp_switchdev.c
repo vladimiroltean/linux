@@ -11,9 +11,9 @@ br_mrp_switchdev_port_obj(struct net_bridge *br,
 	int err;
 
 	if (add)
-		err = switchdev_port_obj_add(br->dev, obj, NULL);
+		err = switchdev_port_obj_add(br->dev, obj, NULL, NULL);
 	else
-		err = switchdev_port_obj_del(br->dev, obj);
+		err = switchdev_port_obj_del(br->dev, obj, NULL);
 
 	/* In case of success just return and notify the SW that doesn't need
 	 * to do anything
@@ -42,7 +42,7 @@ int br_mrp_switchdev_add(struct net_bridge *br, struct br_mrp *mrp)
 	if (!IS_ENABLED(CONFIG_NET_SWITCHDEV))
 		return 0;
 
-	return switchdev_port_obj_add(br->dev, &mrp_obj.obj, NULL);
+	return switchdev_port_obj_add(br->dev, &mrp_obj.obj, NULL, NULL);
 }
 
 int br_mrp_switchdev_del(struct net_bridge *br, struct br_mrp *mrp)
@@ -88,9 +88,10 @@ br_mrp_switchdev_set_ring_role(struct net_bridge *br, struct br_mrp *mrp,
 	 */
 	mrp_role.sw_backup = true;
 	if (role != BR_MRP_RING_ROLE_DISABLED)
-		err = switchdev_port_obj_add(br->dev, &mrp_role.obj, NULL);
+		err = switchdev_port_obj_add(br->dev, &mrp_role.obj, NULL,
+					     NULL);
 	else
-		err = switchdev_port_obj_del(br->dev, &mrp_role.obj);
+		err = switchdev_port_obj_del(br->dev, &mrp_role.obj, NULL);
 
 	if (!err)
 		return BR_MRP_SW;
@@ -133,7 +134,7 @@ int br_mrp_switchdev_set_ring_state(struct net_bridge *br,
 	if (!IS_ENABLED(CONFIG_NET_SWITCHDEV))
 		return 0;
 
-	return switchdev_port_obj_add(br->dev, &mrp_state.obj, NULL);
+	return switchdev_port_obj_add(br->dev, &mrp_state.obj, NULL, NULL);
 }
 
 enum br_mrp_hw_support
@@ -166,9 +167,10 @@ br_mrp_switchdev_set_in_role(struct net_bridge *br, struct br_mrp *mrp,
 	 */
 	mrp_role.sw_backup = true;
 	if (role != BR_MRP_IN_ROLE_DISABLED)
-		err = switchdev_port_obj_add(br->dev, &mrp_role.obj, NULL);
+		err = switchdev_port_obj_add(br->dev, &mrp_role.obj, NULL,
+					     NULL);
 	else
-		err = switchdev_port_obj_del(br->dev, &mrp_role.obj);
+		err = switchdev_port_obj_del(br->dev, &mrp_role.obj, NULL);
 
 	if (!err)
 		return BR_MRP_SW;
@@ -189,7 +191,7 @@ int br_mrp_switchdev_set_in_state(struct net_bridge *br, struct br_mrp *mrp,
 	if (!IS_ENABLED(CONFIG_NET_SWITCHDEV))
 		return 0;
 
-	return switchdev_port_obj_add(br->dev, &mrp_state.obj, NULL);
+	return switchdev_port_obj_add(br->dev, &mrp_state.obj, NULL, NULL);
 }
 
 enum br_mrp_hw_support

@@ -246,9 +246,11 @@ int switchdev_port_attr_set(struct net_device *dev,
 			    struct netlink_ext_ack *extack);
 int switchdev_port_obj_add(struct net_device *dev,
 			   const struct switchdev_obj *obj,
+			   const void *ctx,
 			   struct netlink_ext_ack *extack);
 int switchdev_port_obj_del(struct net_device *dev,
-			   const struct switchdev_obj *obj);
+			   const struct switchdev_obj *obj,
+			   const void *ctx);
 
 int register_switchdev_notifier(struct notifier_block *nb);
 int unregister_switchdev_notifier(struct notifier_block *nb);
@@ -296,13 +298,15 @@ static inline int switchdev_port_attr_set(struct net_device *dev,
 
 static inline int switchdev_port_obj_add(struct net_device *dev,
 					 const struct switchdev_obj *obj,
+					 const void *ctx,
 					 struct netlink_ext_ack *extack)
 {
 	return -EOPNOTSUPP;
 }
 
 static inline int switchdev_port_obj_del(struct net_device *dev,
-					 const struct switchdev_obj *obj)
+					 const struct switchdev_obj *obj,
+					 const void *ctx)
 {
 	return -EOPNOTSUPP;
 }
