@@ -734,8 +734,7 @@ static inline size_t fdb_nlmsg_size(void)
 
 static int br_fdb_replay_one(struct notifier_block *nb,
 			     const struct net_bridge_fdb_entry *fdb,
-			     struct net_device *dev, unsigned long action,
-			     const void *ctx)
+			     struct net_device *dev, unsigned long action)
 {
 	struct switchdev_notifier_fdb_info item;
 	int err;
@@ -746,14 +745,13 @@ static int br_fdb_replay_one(struct notifier_block *nb,
 	item.offloaded = test_bit(BR_FDB_OFFLOADED, &fdb->flags);
 	item.is_local = test_bit(BR_FDB_LOCAL, &fdb->flags);
 	item.info.dev = dev;
-	item.info.ctx = ctx;
 
 	err = nb->notifier_call(nb, action, &item);
 	return notifier_to_errno(err);
 }
 
 int br_fdb_replay(const struct net_device *br_dev, const struct net_device *dev,
-		  const void *ctx, bool adding, struct notifier_block *nb)
+		  bool adding, struct notifier_block *nb)
 {
 	struct net_bridge_fdb_entry *fdb;
 	struct net_bridge *br;
@@ -783,7 +781,7 @@ int br_fdb_replay(const struct net_device *br_dev, const struct net_device *dev,
 		if (dst_dev != br_dev && dst_dev != dev)
 			continue;
 
-		err = br_fdb_replay_one(nb, fdb, dst_dev, action, ctx);
+		err = br_fdb_replay_one(nb, fdb, dst_dev, action);
 		if (err)
 			break;
 	}
