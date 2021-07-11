@@ -92,7 +92,7 @@ static int __vlan_vid_add(struct net_device *dev, struct net_bridge *br,
 	/* Try switchdev op first. In case it is not supported, fallback to
 	 * 8021q add.
 	 */
-	err = br_switchdev_port_vlan_add(dev, v->vid, flags, extack);
+	err = br_switchdev_port_vlan_add(dev, v->vid, flags, NULL, extack);
 	if (err == -EOPNOTSUPP)
 		return vlan_vid_add(dev, br->vlan_proto, v->vid);
 	v->priv_flags |= BR_VLFLAG_ADDED_BY_SWITCHDEV;
@@ -132,7 +132,7 @@ static int __vlan_vid_del(struct net_device *dev, struct net_bridge *br,
 	/* Try switchdev op first. In case it is not supported, fallback to
 	 * 8021q del.
 	 */
-	err = br_switchdev_port_vlan_del(dev, v->vid);
+	err = br_switchdev_port_vlan_del(dev, v->vid, NULL);
 	if (!(v->priv_flags & BR_VLFLAG_ADDED_BY_SWITCHDEV))
 		vlan_vid_del(dev, br->vlan_proto, v->vid);
 	return err == -EOPNOTSUPP ? 0 : err;
@@ -281,7 +281,8 @@ static int __vlan_add(struct net_bridge_vlan *v, u16 flags,
 			v->stats = masterv->stats;
 		}
 	} else {
-		err = br_switchdev_port_vlan_add(dev, v->vid, flags, extack);
+		err = br_switchdev_port_vlan_add(dev, v->vid, flags, NULL,
+						 extack);
 		if (err && err != -EOPNOTSUPP)
 			goto out;
 	}
@@ -330,7 +331,7 @@ out_filt:
 			v->brvlan = NULL;
 		}
 	} else {
-		br_switchdev_port_vlan_del(dev, v->vid);
+		br_switchdev_port_vlan_del(dev, v->vid, NULL);
 	}
 
 	goto out;
@@ -357,7 +358,7 @@ static int __vlan_del(struct net_bridge_vlan *v)
 		if (err)
 			goto out;
 	} else {
-		err = br_switchdev_port_vlan_del(v->br->dev, v->vid);
+		err = br_switchdev_port_vlan_del(v->br->dev, v->vid, NULL);
 		if (err && err != -EOPNOTSUPP)
 			goto out;
 		err = 0;
@@ -650,7 +651,8 @@ static int br_vlan_add_existing(struct net_bridge *br,
 {
 	int err;
 
-	err = br_switchdev_port_vlan_add(br->dev, vlan->vid, flags, extack);
+	err = br_switchdev_port_vlan_add(br->dev, vlan->vid, flags, NULL,
+					 extack);
 	if (err && err != -EOPNOTSUPP)
 		return err;
 
@@ -681,7 +683,7 @@ static int br_vlan_add_existing(struct net_bridge *br,
 
 err_fdb_insert:
 err_flags:
-	br_switchdev_port_vlan_del(br->dev, vlan->vid);
+	br_switchdev_port_vlan_del(br->dev, vlan->vid, NULL);
 	return err;
 }
 
@@ -1219,7 +1221,8 @@ int nbp_vlan_add(struct net_bridge_port *port, u16 vid, u16 flags,
 	vlan = br_vlan_find(nbp_vlan_group(port), vid);
 	if (vlan) {
 		/* Pass the flags to the hardware bridge */
-		ret = br_switchdev_port_vlan_add(port->dev, vid, flags, extack);
+		ret = br_switchdev_port_vlan_add(port->dev, vid, flags, NULL,
+						 extack);
 		if (ret && ret != -EOPNOTSUPP)
 			return ret;
 		*changed = __vlan_add_flags(vlan, flags);

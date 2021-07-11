@@ -1673,8 +1673,10 @@ int br_switchdev_set_port_flag(struct net_bridge_port *p,
 void br_switchdev_fdb_notify(struct net_bridge *br,
 			     const struct net_bridge_fdb_entry *fdb, int type);
 int br_switchdev_port_vlan_add(struct net_device *dev, u16 vid, u16 flags,
+			       const void *ctx,
 			       struct netlink_ext_ack *extack);
-int br_switchdev_port_vlan_del(struct net_device *dev, u16 vid);
+int br_switchdev_port_vlan_del(struct net_device *dev, u16 vid,
+			       const void *ctx);
 void br_switchdev_init(struct net_bridge *br);
 
 static inline void br_switchdev_frame_unmark(struct sk_buff *skb)
@@ -1703,12 +1705,14 @@ static inline int br_switchdev_set_port_flag(struct net_bridge_port *p,
 
 static inline int br_switchdev_port_vlan_add(struct net_device *dev,
 					     u16 vid, u16 flags,
+					     const void *ctx,
 					     struct netlink_ext_ack *extack)
 {
 	return -EOPNOTSUPP;
 }
 
-static inline int br_switchdev_port_vlan_del(struct net_device *dev, u16 vid)
+static inline int br_switchdev_port_vlan_del(struct net_device *dev, u16 vid,
+					     const void *ctx)
 {
 	return -EOPNOTSUPP;
 }

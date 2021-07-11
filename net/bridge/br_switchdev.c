@@ -102,6 +102,7 @@ br_switchdev_fdb_notify(struct net_bridge *br,
 }
 
 int br_switchdev_port_vlan_add(struct net_device *dev, u16 vid, u16 flags,
+			       const void *ctx,
 			       struct netlink_ext_ack *extack)
 {
 	struct switchdev_obj_port_vlan v = {
@@ -111,10 +112,11 @@ int br_switchdev_port_vlan_add(struct net_device *dev, u16 vid, u16 flags,
 		.vid = vid,
 	};
 
-	return switchdev_port_obj_add(dev, &v.obj, NULL, extack);
+	return switchdev_port_obj_add(dev, &v.obj, ctx, extack);
 }
 
-int br_switchdev_port_vlan_del(struct net_device *dev, u16 vid)
+int br_switchdev_port_vlan_del(struct net_device *dev, u16 vid,
+			       const void *ctx)
 {
 	struct switchdev_obj_port_vlan v = {
 		.obj.orig_dev = dev,
@@ -122,7 +124,7 @@ int br_switchdev_port_vlan_del(struct net_device *dev, u16 vid)
 		.vid = vid,
 	};
 
-	return switchdev_port_obj_del(dev, &v.obj, NULL);
+	return switchdev_port_obj_del(dev, &v.obj, ctx);
 }
 
 static int nbp_switchdev_hwdom_set(struct net_bridge_port *joining)
