@@ -168,7 +168,7 @@ bool br_port_flag_is_set(const struct net_device *dev, unsigned long flag);
 u8 br_port_get_stp_state(const struct net_device *dev);
 clock_t br_get_ageing_time(const struct net_device *br_dev);
 int br_fdb_replay(const struct net_device *br_dev, const struct net_device *dev,
-		  bool adding, struct notifier_block *nb);
+		  bool adding);
 #else
 static inline struct net_device *
 br_fdb_find_port(const struct net_device *br_dev,
@@ -200,7 +200,7 @@ static inline clock_t br_get_ageing_time(const struct net_device *br_dev)
 
 static inline int br_fdb_replay(const struct net_device *br_dev,
 				const struct net_device *dev,
-				bool adding, struct notifier_block *nb)
+				bool adding)
 {
 	return -EOPNOTSUPP;
 }

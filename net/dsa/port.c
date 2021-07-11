@@ -200,13 +200,12 @@ static int dsa_port_switchdev_sync(struct dsa_port *dp,
 		return err;
 
 	/* Forwarding and termination FDB entries on the port */
-	err = br_fdb_replay(br, brport_dev, true,
-			    &dsa_slave_switchdev_notifier);
+	err = br_fdb_replay(br, brport_dev, true);
 	if (err && err != -EOPNOTSUPP)
 		return err;
 
 	/* Termination FDB entries on the bridge itself */
-	err = br_fdb_replay(br, br, true, &dsa_slave_switchdev_notifier);
+	err = br_fdb_replay(br, br, true);
 	if (err && err != -EOPNOTSUPP)
 		return err;
 
@@ -232,13 +231,12 @@ static int dsa_port_switchdev_unsync_objs(struct dsa_port *dp,
 		return err;
 
 	/* Forwarding and termination FDB entries on the port */
-	err = br_fdb_replay(br, brport_dev, false,
-			    &dsa_slave_switchdev_notifier);
+	err = br_fdb_replay(br, brport_dev, false);
 	if (err && err != -EOPNOTSUPP)
 		return err;
 
 	/* Termination FDB entries on the bridge itself */
-	err = br_fdb_replay(br, br, false, &dsa_slave_switchdev_notifier);
+	err = br_fdb_replay(br, br, false);
 	if (err && err != -EOPNOTSUPP)
 		return err;
 
