@@ -4055,6 +4055,110 @@ static bool mlxsw_sp_bridge_vxlan_is_valid(struct net_device *br_dev,
 	return true;
 }
 
+static int
+mlxsw_sp_prechangeupper_sanity_checks(struct mlxsw_sp *mlxsw_sp,
+				      struct net_device *dev,
+				      struct net_device *lower_dev,
+				      struct net_device *upper_dev,
+				      struct netdev_notifier_changeupper_info *info,
+				      struct netlink_ext_ack *extack)
+{
+	u16 proto;
+
+	if (!is_vlan_dev(upper_dev) &&
+	    !netif_is_lag_master(upper_dev) &&
+	    !netif_is_bridge_master(upper_dev) &&
+	    !netif_is_ovs_master(upper_dev) &&
+	    !netif_is_macvlan(upper_dev)) {
+		NL_SET_ERR_MSG_MOD(extack, "Unknown upper device type");
+		return -EINVAL;
+	}
+
+	if (!info->linking)
+		return 0;
+
+	if (netif_is_bridge_master(upper_dev) &&
+	    !mlxsw_sp_bridge_device_is_offloaded(mlxsw_sp, upper_dev) &&
+	    mlxsw_sp_bridge_has_vxlan(upper_dev) &&
+	    !mlxsw_sp_bridge_vxlan_is_valid(upper_dev, extack))
+		return -EOPNOTSUPP;
+
+	if (netdev_has_any_upper_dev(upper_dev) &&
+	    (!netif_is_bridge_master(upper_dev) ||
+	     !mlxsw_sp_bridge_device_is_offloaded(mlxsw_sp,
+						  upper_dev))) {
+		NL_SET_ERR_MSG_MOD(extack, "Enslaving a port to a device that already has an upper device is not supported");
+		return -EINVAL;
+	}
+
+	if (netif_is_lag_master(upper_dev) &&
+	    !mlxsw_sp_master_lag_check(mlxsw_sp, upper_dev,
+				       info->upper_info, extack))
+		return -EINVAL;
+
+	if (netif_is_lag_master(upper_dev) && vlan_uses_dev(dev)) {
+		NL_SET_ERR_MSG_MOD(extack, "Master device is a LAG master and this device has a VLAN");
+		return -EINVAL;
+	}
+
+	if (netif_is_lag_port(dev) && is_vlan_dev(upper_dev) &&
+	    !netif_is_lag_master(vlan_dev_real_dev(upper_dev))) {
+		NL_SET_ERR_MSG_MOD(extack, "Can not put a VLAN on a LAG port");
+		return -EINVAL;
+	}
+
+	if (netif_is_macvlan(upper_dev) &&
+	    !mlxsw_sp_rif_exists(mlxsw_sp, lower_dev)) {
+		NL_SET_ERR_MSG_MOD(extack, "macvlan is only supported on top of router interfaces");
+		return -EOPNOTSUPP;
+	}
+
+	if (netif_is_ovs_master(upper_dev) && vlan_uses_dev(dev)) {
+		NL_SET_ERR_MSG_MOD(extack, "Master device is an OVS master and this device has a VLAN");
+		return -EINVAL;
+	}
+
+	if (netif_is_ovs_port(dev) && is_vlan_dev(upper_dev)) {
+		NL_SET_ERR_MSG_MOD(extack, "Can not put a VLAN on an OVS port");
+		return -EINVAL;
+	}
+
+	if (netif_is_bridge_master(upper_dev)) {
+		br_vlan_get_proto(upper_dev, &proto);
+		if (br_vlan_enabled(upper_dev) &&
+		    proto != ETH_P_8021Q && proto != ETH_P_8021AD) {
+			NL_SET_ERR_MSG_MOD(extack, "Enslaving a port to a bridge with unknown VLAN protocol is not supported");
+			return -EOPNOTSUPP;
+		}
+		if (vlan_uses_dev(lower_dev) &&
+		    br_vlan_enabled(upper_dev) &&
+		    proto == ETH_P_8021AD) {
+			NL_SET_ERR_MSG_MOD(extack, "Enslaving a port that already has a VLAN upper to an 802.1ad bridge is not supported");
+			return -EOPNOTSUPP;
+		}
+	}
+
+	if (netif_is_bridge_port(lower_dev) && is_vlan_dev(upper_dev)) {
+		struct net_device *br_dev = netdev_master_upper_dev_get(lower_dev);
+
+		if (br_vlan_enabled(br_dev)) {
+			br_vlan_get_proto(br_dev, &proto);
+			if (proto == ETH_P_8021AD) {
+				NL_SET_ERR_MSG_MOD(extack, "VLAN uppers are not supported on a port enslaved to an 802.1ad bridge");
+				return -EOPNOTSUPP;
+			}
+		}
+	}
+
+	if (is_vlan_dev(upper_dev) &&
+	    ntohs(vlan_dev_vlan_proto(upper_dev)) != ETH_P_8021Q) {
+		NL_SET_ERR_MSG_MOD(extack, "VLAN uppers are only supported with 802.1q VLAN protocol");
+		return -EOPNOTSUPP;
+	}
+
+	return 0;
+}
+
 static int mlxsw_sp_netdevice_port_upper_event(struct net_device *lower_dev,
 					       struct net_device *dev,
 					       unsigned long event, void *ptr)
@@ -4065,7 +4169,6 @@ static int mlxsw_sp_netdevice_port_upper_event(struct net_device *lower_dev,
 	struct net_device *upper_dev;
 	struct mlxsw_sp *mlxsw_sp;
 	int err = 0;
-	u16 proto;
 
 	mlxsw_sp_port = netdev_priv(dev);
 	mlxsw_sp = mlxsw_sp_port->mlxsw_sp;
@@ -4075,84 +4178,15 @@ static int mlxsw_sp_netdevice_port_upper_event(struct net_device *lower_dev,
 	switch (event) {
 	case NETDEV_PRECHANGEUPPER:
 		upper_dev = info->upper_dev;
-		if (!is_vlan_dev(upper_dev) &&
-		    !netif_is_lag_master(upper_dev) &&
-		    !netif_is_bridge_master(upper_dev) &&
-		    !netif_is_ovs_master(upper_dev) &&
-		    !netif_is_macvlan(upper_dev)) {
-			NL_SET_ERR_MSG_MOD(extack, "Unknown upper device type");
-			return -EINVAL;
-		}
-		if (!info->linking)
-			break;
-		if (netif_is_bridge_master(upper_dev) &&
-		    !mlxsw_sp_bridge_device_is_offloaded(mlxsw_sp, upper_dev) &&
-		    mlxsw_sp_bridge_has_vxlan(upper_dev) &&
-		    !mlxsw_sp_bridge_vxlan_is_valid(upper_dev, extack))
-			return -EOPNOTSUPP;
-		if (netdev_has_any_upper_dev(upper_dev) &&
-		    (!netif_is_bridge_master(upper_dev) ||
-		     !mlxsw_sp_bridge_device_is_offloaded(mlxsw_sp,
-							  upper_dev))) {
-			NL_SET_ERR_MSG_MOD(extack, "Enslaving a port to a device that already has an upper device is not supported");
-			return -EINVAL;
-		}
-		if (netif_is_lag_master(upper_dev) &&
-		    !mlxsw_sp_master_lag_check(mlxsw_sp, upper_dev,
-					       info->upper_info, extack))
-			return -EINVAL;
-		if (netif_is_lag_master(upper_dev) && vlan_uses_dev(dev)) {
-			NL_SET_ERR_MSG_MOD(extack, "Master device is a LAG master and this device has a VLAN");
-			return -EINVAL;
-		}
-		if (netif_is_lag_port(dev) && is_vlan_dev(upper_dev) &&
-		    !netif_is_lag_master(vlan_dev_real_dev(upper_dev))) {
-			NL_SET_ERR_MSG_MOD(extack, "Can not put a VLAN on a LAG port");
-			return -EINVAL;
-		}
-		if (netif_is_macvlan(upper_dev) &&
-		    !mlxsw_sp_rif_exists(mlxsw_sp, lower_dev)) {
-			NL_SET_ERR_MSG_MOD(extack, "macvlan is only supported on top of router interfaces");
-			return -EOPNOTSUPP;
-		}
-		if (netif_is_ovs_master(upper_dev) && vlan_uses_dev(dev)) {
-			NL_SET_ERR_MSG_MOD(extack, "Master device is an OVS master and this device has a VLAN");
-			return -EINVAL;
-		}
-		if (netif_is_ovs_port(dev) && is_vlan_dev(upper_dev)) {
-			NL_SET_ERR_MSG_MOD(extack, "Can not put a VLAN on an OVS port");
-			return -EINVAL;
-		}
-		if (netif_is_bridge_master(upper_dev)) {
-			br_vlan_get_proto(upper_dev, &proto);
-			if (br_vlan_enabled(upper_dev) &&
-			    proto != ETH_P_8021Q && proto != ETH_P_8021AD) {
-				NL_SET_ERR_MSG_MOD(extack, "Enslaving a port to a bridge with unknown VLAN protocol is not supported");
-				return -EOPNOTSUPP;
-			}
-			if (vlan_uses_dev(lower_dev) &&
-			    br_vlan_enabled(upper_dev) &&
-			    proto == ETH_P_8021AD) {
-				NL_SET_ERR_MSG_MOD(extack, "Enslaving a port that already has a VLAN upper to an 802.1ad bridge is not supported");
-				return -EOPNOTSUPP;
-			}
-		}
-		if (netif_is_bridge_port(lower_dev) && is_vlan_dev(upper_dev)) {
-			struct net_device *br_dev = netdev_master_upper_dev_get(lower_dev);
 
-			if (br_vlan_enabled(br_dev)) {
-				br_vlan_get_proto(br_dev, &proto);
-				if (proto == ETH_P_8021AD) {
-					NL_SET_ERR_MSG_MOD(extack, "VLAN uppers are not supported on a port enslaved to an 802.1ad bridge");
-					return -EOPNOTSUPP;
-				}
-			}
-		}
-		if (is_vlan_dev(upper_dev) &&
-		    ntohs(vlan_dev_vlan_proto(upper_dev)) != ETH_P_8021Q) {
-			NL_SET_ERR_MSG_MOD(extack, "VLAN uppers are only supported with 802.1q VLAN protocol");
-			return -EOPNOTSUPP;
-		}
+		err = mlxsw_sp_prechangeupper_sanity_checks(mlxsw_sp,
+							    dev, lower_dev,
+							    upper_dev,
+							    info,
+							    extack);
+		if (err)
+			return err;
+
 		break;
 	case NETDEV_CHANGEUPPER:
 		upper_dev = info->upper_dev;
@@ -4260,6 +4294,45 @@ static int mlxsw_sp_netdevice_lag_event(struct net_device *lag_dev,
 	return 0;
 }
 
+static int
+mlxsw_sp_vlan_prechangeupper_sanity_checks(struct mlxsw_sp *mlxsw_sp,
+					   struct net_device *vlan_dev,
+					   struct net_device *upper_dev,
+					   struct netdev_notifier_changeupper_info *info,
+					   struct netlink_ext_ack *extack)
+{
+	if (!netif_is_bridge_master(upper_dev) &&
+	    !netif_is_macvlan(upper_dev)) {
+		NL_SET_ERR_MSG_MOD(extack, "Unknown upper device type");
+		return -EINVAL;
+	}
+
+	if (!info->linking)
+		return 0;
+
+	if (netif_is_bridge_master(upper_dev) &&
+	    !mlxsw_sp_bridge_device_is_offloaded(mlxsw_sp, upper_dev) &&
+	    mlxsw_sp_bridge_has_vxlan(upper_dev) &&
+	    !mlxsw_sp_bridge_vxlan_is_valid(upper_dev, extack))
+		return -EOPNOTSUPP;
+
+	if (netdev_has_any_upper_dev(upper_dev) &&
+	    (!netif_is_bridge_master(upper_dev) ||
+	     !mlxsw_sp_bridge_device_is_offloaded(mlxsw_sp,
+						  upper_dev))) {
+		NL_SET_ERR_MSG_MOD(extack, "Enslaving a port to a device that already has an upper device is not supported");
+		return -EINVAL;
+	}
+
+	if (netif_is_macvlan(upper_dev) &&
+	    !mlxsw_sp_rif_exists(mlxsw_sp, vlan_dev)) {
+		NL_SET_ERR_MSG_MOD(extack, "macvlan is only supported on top of router interfaces");
+		return -EOPNOTSUPP;
+	}
+
+	return 0;
+}
+
 static int mlxsw_sp_netdevice_port_vlan_event(struct net_device *vlan_dev,
 					      struct net_device *dev,
 					      unsigned long event, void *ptr,
@@ -4277,30 +4350,14 @@ static int mlxsw_sp_netdevice_port_vlan_event(struct net_device *vlan_dev,
 	switch (event) {
 	case NETDEV_PRECHANGEUPPER:
 		upper_dev = info->upper_dev;
-		if (!netif_is_bridge_master(upper_dev) &&
-		    !netif_is_macvlan(upper_dev)) {
-			NL_SET_ERR_MSG_MOD(extack, "Unknown upper device type");
-			return -EINVAL;
-		}
-		if (!info->linking)
-			break;
-		if (netif_is_bridge_master(upper_dev) &&
-		    !mlxsw_sp_bridge_device_is_offloaded(mlxsw_sp, upper_dev) &&
-		    mlxsw_sp_bridge_has_vxlan(upper_dev) &&
-		    !mlxsw_sp_bridge_vxlan_is_valid(upper_dev, extack))
-			return -EOPNOTSUPP;
-		if (netdev_has_any_upper_dev(upper_dev) &&
-		    (!netif_is_bridge_master(upper_dev) ||
-		     !mlxsw_sp_bridge_device_is_offloaded(mlxsw_sp,
-							  upper_dev))) {
-			NL_SET_ERR_MSG_MOD(extack, "Enslaving a port to a device that already has an upper device is not supported");
-			return -EINVAL;
-		}
-		if (netif_is_macvlan(upper_dev) &&
-		    !mlxsw_sp_rif_exists(mlxsw_sp, vlan_dev)) {
-			NL_SET_ERR_MSG_MOD(extack, "macvlan is only supported on top of router interfaces");
-			return -EOPNOTSUPP;
-		}
+
+		err = mlxsw_sp_vlan_prechangeupper_sanity_checks(mlxsw_sp,
+								 vlan_dev,
+								 upper_dev,
+								 info, extack);
+		if (err)
+			return err;
+
 		break;
 	case NETDEV_CHANGEUPPER:
 		upper_dev = info->upper_dev;
