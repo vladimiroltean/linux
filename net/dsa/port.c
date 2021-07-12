@@ -208,8 +208,7 @@ static int dsa_port_switchdev_sync(struct dsa_port *dp,
 	if (err && err != -EOPNOTSUPP)
 		return err;
 
-	err = br_vlan_replay(br, brport_dev, dp, true,
-			     &dsa_slave_switchdev_blocking_notifier, extack);
+	err = br_vlan_replay(br, brport_dev, dp, true, extack);
 	if (err && err != -EOPNOTSUPP)
 		return err;
 
@@ -238,8 +237,7 @@ static int dsa_port_switchdev_unsync_objs(struct dsa_port *dp,
 	if (err && err != -EOPNOTSUPP)
 		return err;
 
-	err = br_vlan_replay(br, brport_dev, dp, false,
-			     &dsa_slave_switchdev_blocking_notifier, extack);
+	err = br_vlan_replay(br, brport_dev, dp, false, extack);
 	if (err && err != -EOPNOTSUPP)
 		return err;
 
