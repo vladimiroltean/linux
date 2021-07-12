@@ -1175,8 +1175,7 @@ static int ocelot_switchdev_sync(struct ocelot *ocelot, int port,
 	ageing_time = br_get_ageing_time(bridge_dev);
 	ocelot_port_attr_ageing_set(ocelot, port, ageing_time);
 
-	err = br_mdb_replay(bridge_dev, brport_dev, priv, true,
-			    &ocelot_switchdev_blocking_nb, extack);
+	err = br_mdb_replay(bridge_dev, brport_dev, priv, true, extack);
 	if (err && err != -EOPNOTSUPP)
 		return err;
 

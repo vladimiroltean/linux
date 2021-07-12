@@ -566,23 +566,25 @@ static void br_switchdev_mdb_populate(struct switchdev_obj_port_mdb *mdb,
 	mdb->vid = mp->addr.vid;
 }
 
-static int br_mdb_replay_one(struct notifier_block *nb, struct net_device *dev,
+static int br_mdb_replay_one(struct net_device *dev,
 			     const struct switchdev_obj_port_mdb *mdb,
-			     unsigned long action, const void *ctx,
+			     int type, const void *ctx,
 			     struct netlink_ext_ack *extack)
 {
-	struct switchdev_notifier_port_obj_info obj_info = {
-		.info = {
-			.dev = dev,
-			.extack = extack,
-			.ctx = ctx,
-		},
-		.obj = &mdb->obj,
-	};
 	int err;
 
-	err = nb->notifier_call(nb, action, &obj_info);
-	return notifier_to_errno(err);
+	switch (type) {
+	case RTM_NEWMDB:
+		err = switchdev_port_obj_add(dev, &mdb->obj, ctx, extack);
+		break;
+	case RTM_DELMDB:
+		err = switchdev_port_obj_del(dev, &mdb->obj, ctx);
+		break;
+	default:
+		err = -EOPNOTSUPP;
+	}
+
+	return err;
 }
 
 static int br_mdb_queue_one(struct list_head *mdb_list,
@@ -605,15 +607,13 @@ static int br_mdb_queue_one(struct list_head *mdb_list,
 }
 
 int br_mdb_replay(struct net_device *br_dev, struct net_device *dev,
-		  const void *ctx, bool adding, struct notifier_block *nb,
-		  struct netlink_ext_ack *extack)
+		  const void *ctx, bool adding, struct netlink_ext_ack *extack)
 {
 	const struct net_bridge_mdb_entry *mp;
 	struct switchdev_obj *obj, *tmp;
 	struct net_bridge *br;
-	unsigned long action;
 	LIST_HEAD(mdb_list);
-	int err = 0;
+	int type, err = 0;
 
 	ASSERT_RTNL();
 
@@ -667,13 +667,13 @@ int br_mdb_replay(struct net_device *br_dev, struct net_device *dev,
 	rcu_read_unlock();
 
 	if (adding)
-		action = SWITCHDEV_PORT_OBJ_ADD;
+		type = RTM_NEWMDB;
 	else
-		action = SWITCHDEV_PORT_OBJ_DEL;
+		type = RTM_DELMDB;
 
 	list_for_each_entry(obj, &mdb_list, list) {
-		err = br_mdb_replay_one(nb, dev, SWITCHDEV_OBJ_PORT_MDB(obj),
-					action, ctx, extack);
+		err = br_mdb_replay_one(dev, SWITCHDEV_OBJ_PORT_MDB(obj),
+					type, ctx, extack);
 		if (err)
 			goto out_free_mdb;
 	}

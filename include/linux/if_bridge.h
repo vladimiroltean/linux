@@ -71,8 +71,7 @@ bool br_multicast_has_router_adjacent(struct net_device *dev, int proto);
 bool br_multicast_enabled(const struct net_device *dev);
 bool br_multicast_router(const struct net_device *dev);
 int br_mdb_replay(struct net_device *br_dev, struct net_device *dev,
-		  const void *ctx, bool adding, struct notifier_block *nb,
-		  struct netlink_ext_ack *extack);
+		  const void *ctx, bool adding, struct netlink_ext_ack *extack);
 #else
 static inline int br_multicast_list_adjacent(struct net_device *dev,
 					     struct list_head *br_ip_list)
@@ -106,8 +105,7 @@ static inline bool br_multicast_router(const struct net_device *dev)
 }
 static inline int br_mdb_replay(const struct net_device *br_dev,
 				const struct net_device *dev, const void *ctx,
-				bool adding, struct notifier_block *nb,
-				struct netlink_ext_ack *extack)
+				bool adding, struct netlink_ext_ack *extack)
 {
 	return -EOPNOTSUPP;
 }
