@@ -116,7 +116,7 @@ static int sparx5_port_bridge_join(struct sparx5_port *port,
 	 */
 	__dev_mc_unsync(ndev, sparx5_mc_unsync);
 
-	return switchdev_bridge_port_offload(ndev, ndev, extack);
+	return switchdev_bridge_port_offload(ndev, ndev, NULL, extack);
 }
 
 static int sparx5_port_pre_bridge_leave(struct sparx5_port *port,
@@ -124,7 +124,7 @@ static int sparx5_port_pre_bridge_leave(struct sparx5_port *port,
 {
 	struct net_device *ndev = port->ndev;
 
-	return switchdev_bridge_port_unoffload(ndev, ndev, extack);
+	return switchdev_bridge_port_unoffload(ndev, ndev, NULL, extack);
 }
 
 static void sparx5_port_bridge_leave(struct sparx5_port *port,

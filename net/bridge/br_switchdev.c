@@ -214,11 +214,65 @@ static void nbp_switchdev_del(struct net_bridge_port *p,
 		nbp_switchdev_hwdom_put(p);
 }
 
+static int nbp_switchdev_sync_objs(struct net_bridge_port *p, const void *ctx,
+				   struct netlink_ext_ack *extack)
+{
+	int err;
+
+	err = br_mdb_replay(p->br->dev, p->dev, ctx, true, extack);
+	if (err && err != -EOPNOTSUPP)
+		return err;
+
+	/* Forwarding and termination FDB entries on the port */
+	err = br_fdb_replay(p->br->dev, p->dev, true);
+	if (err && err != -EOPNOTSUPP)
+		return err;
+
+	/* Termination FDB entries on the bridge itself */
+	err = br_fdb_replay(p->br->dev, p->br->dev, true);
+	if (err && err != -EOPNOTSUPP)
+		return err;
+
+	err = br_vlan_replay(p->br->dev, p->dev, ctx, true, extack);
+	if (err && err != -EOPNOTSUPP)
+		return err;
+
+	return 0;
+}
+
+static int nbp_switchdev_unsync_objs(struct net_bridge_port *p,
+				     const void *ctx,
+				     struct netlink_ext_ack *extack)
+{
+	int err;
+
+	/* Delete the switchdev objects left on this port */
+	err = br_mdb_replay(p->br->dev, p->dev, ctx, false, extack);
+	if (err && err != -EOPNOTSUPP)
+		return err;
+
+	/* Forwarding and termination FDB entries on the port */
+	err = br_fdb_replay(p->br->dev, p->dev, false);
+	if (err && err != -EOPNOTSUPP)
+		return err;
+
+	/* Termination FDB entries on the bridge itself */
+	err = br_fdb_replay(p->br->dev, p->br->dev, false);
+	if (err && err != -EOPNOTSUPP)
+		return err;
+
+	err = br_vlan_replay(p->br->dev, p->dev, ctx, false, extack);
+	if (err && err != -EOPNOTSUPP)
+		return err;
+
+	return 0;
+}
+
 /* Let the bridge know that this port is offloaded, so that it can assign a
  * switchdev hardware domain to it.
  */
 int switchdev_bridge_port_offload(struct net_device *brport_dev,
-				  struct net_device *dev,
+				  struct net_device *dev, const void *ctx,
 				  struct netlink_ext_ack *extack)
 {
 	struct netdev_phys_item_id ppid;
@@ -235,12 +289,25 @@ int switchdev_bridge_port_offload(struct net_device *brport_dev,
 	if (err)
 		return err;
 
-	return nbp_switchdev_add(p, ppid, extack);
+	err = nbp_switchdev_add(p, ppid, extack);
+	if (err)
+		return err;
+
+	err = nbp_switchdev_sync_objs(p, ctx, extack);
+	if (err)
+		goto out_switchdev_del;
+
+	return 0;
+
+out_switchdev_del:
+	nbp_switchdev_del(p, ppid);
+
+	return err;
 }
 EXPORT_SYMBOL_GPL(switchdev_bridge_port_offload);
 
 int switchdev_bridge_port_unoffload(struct net_device *brport_dev,
-				    struct net_device *dev,
+				    struct net_device *dev, const void *ctx,
 				    struct netlink_ext_ack *extack)
 {
 	struct netdev_phys_item_id ppid;
@@ -256,6 +323,8 @@ int switchdev_bridge_port_unoffload(struct net_device *brport_dev,
 	err = dev_get_port_parent_id(dev, &ppid, false);
 	if (err)
 		return err;
+
+	nbp_switchdev_unsync_objs(p, ctx, extack);
 
 	nbp_switchdev_del(p, ppid);
 
