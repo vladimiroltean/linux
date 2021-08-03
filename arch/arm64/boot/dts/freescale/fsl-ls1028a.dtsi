@@ -1156,6 +1156,7 @@
 						reg = <4>;
 						phy-mode = "internal";
 						status = "disabled";
+						ethernet = <&enetc_port2>;
 
 						fixed-link {
 							speed = <2500>;
