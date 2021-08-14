@@ -652,7 +652,8 @@ static int felix_fdb_dump(struct dsa_switch *ds, int port,
 }
 
 static int felix_fdb_add(struct dsa_switch *ds, int port,
-			 const unsigned char *addr, u16 vid)
+			 const unsigned char *addr, u16 vid,
+			 struct dsa_bridge bridge)
 {
 	struct ocelot *ocelot = ds->priv;
 
@@ -660,7 +661,8 @@ static int felix_fdb_add(struct dsa_switch *ds, int port,
 }
 
 static int felix_fdb_del(struct dsa_switch *ds, int port,
-			 const unsigned char *addr, u16 vid)
+			 const unsigned char *addr, u16 vid,
+			 struct dsa_bridge bridge)
 {
 	struct ocelot *ocelot = ds->priv;
 
@@ -668,7 +670,8 @@ static int felix_fdb_del(struct dsa_switch *ds, int port,
 }
 
 static int felix_lag_fdb_add(struct dsa_switch *ds, struct dsa_lag lag,
-			     const unsigned char *addr, u16 vid)
+			     const unsigned char *addr, u16 vid,
+			     struct dsa_bridge bridge)
 {
 	struct ocelot *ocelot = ds->priv;
 
@@ -676,7 +679,8 @@ static int felix_lag_fdb_add(struct dsa_switch *ds, struct dsa_lag lag,
 }
 
 static int felix_lag_fdb_del(struct dsa_switch *ds, struct dsa_lag lag,
-			     const unsigned char *addr, u16 vid)
+			     const unsigned char *addr, u16 vid,
+			     struct dsa_bridge bridge)
 {
 	struct ocelot *ocelot = ds->priv;
 
@@ -684,7 +688,8 @@ static int felix_lag_fdb_del(struct dsa_switch *ds, struct dsa_lag lag,
 }
 
 static int felix_mdb_add(struct dsa_switch *ds, int port,
-			 const struct switchdev_obj_port_mdb *mdb)
+			 const struct switchdev_obj_port_mdb *mdb,
+			 struct dsa_bridge bridge)
 {
 	struct ocelot *ocelot = ds->priv;
 
@@ -692,7 +697,8 @@ static int felix_mdb_add(struct dsa_switch *ds, int port,
 }
 
 static int felix_mdb_del(struct dsa_switch *ds, int port,
-			 const struct switchdev_obj_port_mdb *mdb)
+			 const struct switchdev_obj_port_mdb *mdb,
+			 struct dsa_bridge bridge)
 {
 	struct ocelot *ocelot = ds->priv;
 

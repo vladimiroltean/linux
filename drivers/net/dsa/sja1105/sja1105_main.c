@@ -1820,7 +1820,8 @@ int sja1105pqrs_fdb_del(struct dsa_switch *ds, int port,
 }
 
 static int sja1105_fdb_add(struct dsa_switch *ds, int port,
-			   const unsigned char *addr, u16 vid)
+			   const unsigned char *addr, u16 vid,
+			   struct dsa_bridge bridge)
 {
 	struct sja1105_private *priv = ds->priv;
 
@@ -1828,7 +1829,8 @@ static int sja1105_fdb_add(struct dsa_switch *ds, int port,
 }
 
 static int sja1105_fdb_del(struct dsa_switch *ds, int port,
-			   const unsigned char *addr, u16 vid)
+			   const unsigned char *addr, u16 vid,
+			   struct dsa_bridge bridge)
 {
 	struct sja1105_private *priv = ds->priv;
 
@@ -1886,7 +1888,12 @@ static int sja1105_fdb_dump(struct dsa_switch *ds, int port,
 
 static void sja1105_fast_age(struct dsa_switch *ds, int port)
 {
+	struct dsa_port *dp = dsa_to_port(ds, port);
 	struct sja1105_private *priv = ds->priv;
+	struct dsa_bridge bridge = {
+		.dev = dsa_port_bridge_dev_get(dp),
+		.num = dsa_port_bridge_num_get(dp),
+	};
 	int i;
 
 	for (i = 0; i < SJA1105_MAX_L2_LOOKUP_COUNT; i++) {
@@ -1914,7 +1921,8 @@ static void sja1105_fast_age(struct dsa_switch *ds, int port)
 
 		u64_to_ether_addr(l2_lookup.macaddr, macaddr);
 
-		rc = sja1105_fdb_del(ds, port, macaddr, l2_lookup.vlanid);
+		rc = sja1105_fdb_del(ds, port, macaddr, l2_lookup.vlanid,
+				     bridge);
 		if (rc) {
 			dev_err(ds->dev,
 				"Failed to delete FDB entry %pM vid %lld: %pe\n",
@@ -1925,15 +1933,17 @@ static void sja1105_fast_age(struct dsa_switch *ds, int port)
 }
 
 static int sja1105_mdb_add(struct dsa_switch *ds, int port,
-			   const struct switchdev_obj_port_mdb *mdb)
+			   const struct switchdev_obj_port_mdb *mdb,
+			   struct dsa_bridge bridge)
 {
-	return sja1105_fdb_add(ds, port, mdb->addr, mdb->vid);
+	return sja1105_fdb_add(ds, port, mdb->addr, mdb->vid, bridge);
 }
 
 static int sja1105_mdb_del(struct dsa_switch *ds, int port,
-			   const struct switchdev_obj_port_mdb *mdb)
+			   const struct switchdev_obj_port_mdb *mdb,
+			   struct dsa_bridge bridge)
 {
-	return sja1105_fdb_del(ds, port, mdb->addr, mdb->vid);
+	return sja1105_fdb_del(ds, port, mdb->addr, mdb->vid, bridge);
 }
 
 /* Common function for unicast and broadcast flood configuration.
