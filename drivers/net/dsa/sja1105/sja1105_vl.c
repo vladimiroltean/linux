@@ -399,7 +399,7 @@ static int sja1105_init_virtual_links(struct sja1105_private *priv,
 				u16 vid;
 
 				if (dp->bridge)
-					vid = dsa_8021q_bridge_tx_fwd_offload_vid(dsa_port_bridge_num_get(dp));
+					vid = dsa_tag_8021q_bridge_vid(dsa_port_bridge_num_get(dp));
 				else
 					vid = dsa_tag_8021q_standalone_vid(dp);
 
