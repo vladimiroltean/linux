@@ -394,13 +394,14 @@ static int sja1105_init_virtual_links(struct sja1105_private *priv,
 				vl_lookup[k].vlanid = rule->key.vl.vid;
 				vl_lookup[k].vlanprior = rule->key.vl.pcp;
 			} else {
+				/* FIXME */
 				struct dsa_port *dp = dsa_to_port(priv->ds, port);
 				u16 vid;
 
 				if (dp->bridge)
 					vid = dsa_8021q_bridge_tx_fwd_offload_vid(dsa_port_bridge_num_get(dp));
 				else
-					vid = dsa_tag_8021q_rx_vid(dp);
+					vid = dsa_tag_8021q_standalone_vid(dp);
 
 				vl_lookup[k].vlanid = vid;
 				vl_lookup[k].vlanprior = 0;
