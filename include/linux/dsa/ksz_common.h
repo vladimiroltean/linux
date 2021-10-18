@@ -35,13 +35,14 @@ struct ksz_device_ptp_shared {
 	/* approximated current time, read once per second from hardware */
 	struct timespec64 ptp_clock_time;
 	unsigned long state;
+	void (*xmit_work_fn)(struct kthread_work *work);
+	struct kthread_worker *xmit_worker;
 };
 
-struct ksz_port_ptp_shared {
-	struct ksz_device_ptp_shared *dev;
-	struct kthread_worker *xmit_worker;
-	struct kthread_work xmit_work;
-	struct sk_buff_head xmit_queue;
+struct ksz_deferred_xmit_work {
+	struct dsa_port *dp;
+	struct sk_buff *skb;
+	struct kthread_work work;
 };
 
 /* net/dsa/tag_ksz.c */

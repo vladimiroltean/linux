@@ -45,7 +45,6 @@ struct ksz_port {
 	struct ksz_port_mib mib;
 	phy_interface_t interface;
 #if IS_ENABLED(CONFIG_NET_DSA_MICROCHIP_KSZ9477_PTP)
-	struct ksz_port_ptp_shared ptp_shared;
 	ktime_t tstamp_xdelay;
 	struct completion tstamp_completion;
 	bool hwts_tx_en;

@@ -749,42 +749,62 @@ static void ksz9477_ptp_txtstamp_skb(struct ksz_device *dev,
 	skb_complete_tx_timestamp(skb, &hwtstamps);
 }
 
-#define work_to_port(work) \
-		container_of((work), struct ksz_port_ptp_shared, xmit_work)
-#define ptp_shared_to_ksz_port(t) \
-		container_of((t), struct ksz_port, ptp_shared)
-#define ptp_shared_to_ksz_device(t) \
-		container_of((t), struct ksz_device, ptp_shared)
+#define work_to_xmit_work(w) \
+		container_of((w), struct ksz_deferred_xmit_work, work)
 
 /* Deferred work is necessary for time stamped PDelay_Req messages. This cannot
  * be done from atomic context as we have to wait for the hardware interrupt.
  */
 static void ksz9477_port_deferred_xmit(struct kthread_work *work)
 {
-	struct ksz_port_ptp_shared *prt_ptp_shared = work_to_port(work);
-	struct ksz_port *prt = ptp_shared_to_ksz_port(prt_ptp_shared);
-	struct ksz_device_ptp_shared *ptp_shared = prt_ptp_shared->dev;
-	struct ksz_device *dev = ptp_shared_to_ksz_device(ptp_shared);
-	int port = prt - dev->ports;
-	struct sk_buff *skb;
+	struct ksz_deferred_xmit_work *xmit_work = work_to_xmit_work(work);
+	struct dsa_switch *ds = xmit_work->dp->ds;
+	struct sk_buff *skb = xmit_work->skb;
+	struct dsa_port *dp = xmit_work->dp;
+	struct ksz_device *dev = ds->priv;
+	struct ksz_port *prt = dp->priv;
 
-	while ((skb = skb_dequeue(&prt_ptp_shared->xmit_queue)) != NULL) {
-		struct sk_buff *clone = DSA_SKB_CB(skb)->clone;
+	reinit_completion(&prt->tstamp_completion);
 
-		reinit_completion(&prt->tstamp_completion);
+	/* Transfer skb to the host port. */
+	dsa_enqueue_skb(skb, dp->slave);
 
-		/* Transfer skb to the host port. */
-		dsa_enqueue_skb(skb, dsa_to_port(dev->ds, port)->slave);
+	ksz9477_ptp_txtstamp_skb(dev, prt, DSA_SKB_CB(skb)->clone);
+	kfree(xmit_work);
+}
 
-		ksz9477_ptp_txtstamp_skb(dev, prt, clone);
+static int ksz9477_ptp_shared_init(struct ksz_device *dev)
+{
+	struct ksz_device_ptp_shared *ptp_shared = &dev->ptp_shared;
+	int ret;
+
+	/* PDelay_Req messages require deferred transmit as the time
+	 * stamp unit provides no sequenceId or similar.  So we must
+	 * wait for the time stamp interrupt.
+	 */
+	ptp_shared->xmit_work_fn = ksz9477_port_deferred_xmit;
+	ptp_shared->xmit_worker = kthread_create_worker(0, "ksz_xmit");
+	if (IS_ERR(ptp_shared->xmit_worker)) {
+		ret = PTR_ERR(ptp_shared->xmit_worker);
+		dev_err(dev->dev,
+			"failed to create deferred xmit thread: %d\n", ret);
+		return ret;
 	}
+
+	return 0;
+}
+
+static void ksz9477_ptp_shared_deinit(struct ksz_device *dev)
+{
+	struct ksz_device_ptp_shared *ptp_shared = &dev->ptp_shared;
+
+	kthread_destroy_worker(ptp_shared->xmit_worker);
 }
 
 static int ksz9477_ptp_port_init(struct ksz_device *dev, int port)
 {
-	struct ksz_port *prt = &dev->ports[port];
-	struct ksz_port_ptp_shared *ptp_shared = &prt->ptp_shared;
 	struct dsa_port *dp = dsa_to_port(dev->ds, port);
+	struct ksz_port *prt = &dev->ports[port];
 	int ret;
 
 	if (port == dev->cpu_port)
@@ -809,31 +829,15 @@ static int ksz9477_ptp_port_init(struct ksz_device *dev, int port)
 	if (ret)
 		goto error_disable_port_ptp_interrupts;
 
-	/* ksz_port::ptp_shared is used in tagging driver */
-	ptp_shared->dev = &dev->ptp_shared;
-	dp->priv = ptp_shared;
-
 	/* PDelay_Req messages require deferred transmit as the time
 	 * stamp unit provides no sequenceId or similar.  So we must
 	 * wait for the time stamp interrupt.
 	 */
+	dp->priv = &dev->ptp_shared;
 	init_completion(&prt->tstamp_completion);
-	kthread_init_work(&ptp_shared->xmit_work,
-			  ksz9477_port_deferred_xmit);
-	ptp_shared->xmit_worker = kthread_create_worker(0, "%s_xmit",
-							dp->slave->name);
-	if (IS_ERR(ptp_shared->xmit_worker)) {
-		ret = PTR_ERR(ptp_shared->xmit_worker);
-		dev_err(dev->dev,
-			"failed to create deferred xmit thread: %d\n", ret);
-		goto error_disable_port_egress_interrupts;
-	}
-	skb_queue_head_init(&ptp_shared->xmit_queue);
 
 	return 0;
 
-error_disable_port_egress_interrupts:
-	ksz9477_ptp_enable_port_egress_interrupts(dev, port, false);
 error_disable_port_ptp_interrupts:
 	ksz9477_ptp_enable_port_ptp_interrupts(dev, port, false);
 	return ret;
@@ -841,12 +845,12 @@ error_disable_port_ptp_interrupts:
 
 static void ksz9477_ptp_port_deinit(struct ksz_device *dev, int port)
 {
-	struct ksz_port_ptp_shared *ptp_shared = &dev->ports[port].ptp_shared;
+	struct dsa_port *dp = dsa_to_port(dev->ds, port);
 
 	if (port == dev->cpu_port)
 		return;
 
-	kthread_destroy_worker(ptp_shared->xmit_worker);
+	dp->priv = NULL;
 	ksz9477_ptp_enable_port_egress_interrupts(dev, port, false);
 	ksz9477_ptp_enable_port_ptp_interrupts(dev, port, false);
 }
@@ -855,6 +859,10 @@ static int ksz9477_ptp_ports_init(struct ksz_device *dev)
 {
 	int port;
 	int ret;
+
+	ret = ksz9477_ptp_shared_init(dev);
+	if (ret)
+		return ret;
 
 	for (port = 0; port < dev->port_cnt; port++) {
 		ret = ksz9477_ptp_port_init(dev, port);
@@ -867,6 +875,7 @@ static int ksz9477_ptp_ports_init(struct ksz_device *dev)
 error_deinit:
 	while (port-- > 0)
 		ksz9477_ptp_port_deinit(dev, port);
+	ksz9477_ptp_shared_deinit(dev);
 	return ret;
 }
 
@@ -876,6 +885,7 @@ static void ksz9477_ptp_ports_deinit(struct ksz_device *dev)
 
 	for (port = 0; port < dev->port_cnt; port++)
 		ksz9477_ptp_port_deinit(dev, port);
+	ksz9477_ptp_shared_deinit(dev);
 }
 
 /* device attributes */

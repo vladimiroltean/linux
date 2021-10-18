@@ -175,11 +175,12 @@ out_put_tag:
 static struct sk_buff *ksz9477_defer_xmit(struct dsa_port *dp,
 					  struct sk_buff *skb)
 {
-	struct ksz_port_ptp_shared *ptp_shared = dp->priv;
+	struct ksz_device_ptp_shared *ptp_shared = dp->priv;
 	struct sk_buff *clone = DSA_SKB_CB(skb)->clone;
+	struct ksz_deferred_xmit_work *xmit_work;
 	u8 ptp_msg_type;
 
-	if (!clone)
+	if (!clone || !ptp_shared)
 		return skb;  /* no deferred xmit for this packet */
 
 	/* Use cached PTP msg type from ksz9477_ptp_port_txtstamp().  */
@@ -188,11 +189,18 @@ static struct sk_buff *ksz9477_defer_xmit(struct dsa_port *dp,
 	    ptp_msg_type != PTP_MSGTYPE_PDELAY_REQ)
 		goto out_free_clone;  /* only PDelay_Req is deferred */
 
+	xmit_work = kzalloc(sizeof(*xmit_work), GFP_ATOMIC);
+	if (!xmit_work)
+		return NULL;
+
+	kthread_init_work(&xmit_work->work, ptp_shared->xmit_work_fn);
 	/* Increase refcount so the kfree_skb in dsa_slave_xmit
 	 * won't really free the packet.
 	 */
-	skb_queue_tail(&ptp_shared->xmit_queue, skb_get(skb));
-	kthread_queue_work(ptp_shared->xmit_worker, &ptp_shared->xmit_work);
+	xmit_work->dp = dp;
+	xmit_work->skb = skb_get(skb);
+
+	kthread_queue_work(ptp_shared->xmit_worker, &xmit_work->work);
 
 	return NULL;
 
@@ -232,7 +240,7 @@ static void ksz9477_rcv_timestamp(struct sk_buff *skb, u8 *tag,
 {
 	struct skb_shared_hwtstamps *hwtstamps = skb_hwtstamps(skb);
 	struct dsa_switch *ds = dev->dsa_ptr->ds;
-	struct ksz_port_ptp_shared *port_ptp_shared;
+	struct ksz_device_ptp_shared *ptp_shared;
 	u8 *tstamp_raw = tag - KSZ9477_PTP_TAG_LEN;
 	struct ptp_header *ptp_hdr;
 	unsigned int ptp_type;
@@ -240,15 +248,14 @@ static void ksz9477_rcv_timestamp(struct sk_buff *skb, u8 *tag,
 	ktime_t tstamp;
 	s64 correction;
 
-	port_ptp_shared = dsa_to_port(ds, port)->priv;
-	if (!port_ptp_shared)
+	ptp_shared = dsa_to_port(ds, port)->priv;
+	if (!ptp_shared)
 		return;
 
 	/* convert time stamp and write to skb */
 	tstamp = ksz9477_decode_tstamp(get_unaligned_be32(tstamp_raw));
 	memset(hwtstamps, 0, sizeof(*hwtstamps));
-	hwtstamps->hwtstamp = ksz9477_tstamp_reconstruct(port_ptp_shared->dev,
-							 tstamp);
+	hwtstamps->hwtstamp = ksz9477_tstamp_reconstruct(ptp_shared, tstamp);
 
 	/* For PDelay_Req messages, user space (ptp4l) expects that the hardware
 	 * subtracts the ingress time stamp from the correction field.  The
@@ -289,8 +296,7 @@ static struct sk_buff *ksz9477_xmit(struct sk_buff *skb,
 				    struct net_device *dev)
 {
 	struct dsa_port *dp = dsa_slave_to_port(dev);
-	struct ksz_port_ptp_shared *port_ptp_shared = dp->priv;
-	struct ksz_device_ptp_shared *ptp_shared = port_ptp_shared->dev;
+	struct ksz_device_ptp_shared *ptp_shared = dp->priv;
 	__be16 *tag;
 	u8 *addr;
 	u16 val;
@@ -347,8 +353,7 @@ static struct sk_buff *ksz9893_xmit(struct sk_buff *skb,
 				    struct net_device *dev)
 {
 	struct dsa_port *dp = dsa_slave_to_port(dev);
-	struct ksz_port_ptp_shared *port_ptp_shared = dp->priv;
-	struct ksz_device_ptp_shared *ptp_shared = port_ptp_shared->dev;
+	struct ksz_device_ptp_shared *ptp_shared = dp->priv;
 	u8 *addr;
 	u8 *tag;
 
