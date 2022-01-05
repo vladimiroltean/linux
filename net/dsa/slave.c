@@ -2391,16 +2391,56 @@ static int dsa_slave_netdevice_event(struct notifier_block *nb,
 	return NOTIFY_DONE;
 }
 
-static void
-dsa_fdb_offload_notify(struct dsa_switchdev_event_work *switchdev_work)
+static void dsa_fdb_offload_notify(struct net_device *dev,
+				   const unsigned char *addr, u16 vid)
 {
-	struct switchdev_notifier_fdb_info info = {};
+	struct switchdev_notifier_fdb_info info = {
+		.addr = addr,
+		.vid = vid,
+		.offloaded = true,
+	};
 
-	info.addr = switchdev_work->addr;
-	info.vid = switchdev_work->vid;
-	info.offloaded = true;
-	call_switchdev_notifiers(SWITCHDEV_FDB_OFFLOADED,
-				 switchdev_work->dev, &info.info, NULL);
+	call_switchdev_notifiers(SWITCHDEV_FDB_OFFLOADED, dev, &info.info,
+				 NULL);
+}
+
+static void dsa_slave_fdb_event_work(struct net_device *dev,
+				     unsigned long event,
+				     const unsigned char *addr,
+				     u16 vid, bool host_addr)
+{
+	struct dsa_port *dp = dsa_slave_to_port(dev);
+	struct dsa_switch *ds = dp->ds;
+	int err;
+
+	switch (event) {
+	case SWITCHDEV_FDB_ADD_TO_DEVICE:
+		if (host_addr)
+			err = dsa_port_host_fdb_add(dp, addr, vid);
+		else
+			err = dsa_port_fdb_add(dp, addr, vid);
+		if (err) {
+			dev_err(ds->dev,
+				"port %d failed to add %pM vid %d to fdb: %d\n",
+				dp->index, addr, vid, err);
+			break;
+		}
+		dsa_fdb_offload_notify(dev, addr, vid);
+		break;
+
+	case SWITCHDEV_FDB_DEL_TO_DEVICE:
+		if (host_addr)
+			err = dsa_port_host_fdb_del(dp, addr, vid);
+		else
+			err = dsa_port_fdb_del(dp, addr, vid);
+		if (err) {
+			dev_err(ds->dev,
+				"port %d failed to delete %pM vid %d from fdb: %d\n",
+				dp->index, addr, vid, err);
+		}
+
+		break;
+	}
 }
 
 static void dsa_slave_switchdev_event_work(struct work_struct *work)
@@ -2408,47 +2448,12 @@ static void dsa_slave_switchdev_event_work(struct work_struct *work)
 	struct dsa_switchdev_event_work *switchdev_work =
 		container_of(work, struct dsa_switchdev_event_work, work);
 	struct net_device *dev = switchdev_work->dev;
-	struct dsa_switch *ds;
-	struct dsa_port *dp;
-	int err;
 
-	dp = dsa_slave_to_port(dev);
-	ds = dp->ds;
-
-	switch (switchdev_work->event) {
-	case SWITCHDEV_FDB_ADD_TO_DEVICE:
-		if (switchdev_work->host_addr)
-			err = dsa_port_host_fdb_add(dp, switchdev_work->addr,
-						    switchdev_work->vid);
-		else
-			err = dsa_port_fdb_add(dp, switchdev_work->addr,
-					       switchdev_work->vid);
-		if (err) {
-			dev_err(ds->dev,
-				"port %d failed to add %pM vid %d to fdb: %d\n",
-				dp->index, switchdev_work->addr,
-				switchdev_work->vid, err);
-			break;
-		}
-		dsa_fdb_offload_notify(switchdev_work);
-		break;
-
-	case SWITCHDEV_FDB_DEL_TO_DEVICE:
-		if (switchdev_work->host_addr)
-			err = dsa_port_host_fdb_del(dp, switchdev_work->addr,
-						    switchdev_work->vid);
-		else
-			err = dsa_port_fdb_del(dp, switchdev_work->addr,
-					       switchdev_work->vid);
-		if (err) {
-			dev_err(ds->dev,
-				"port %d failed to delete %pM vid %d from fdb: %d\n",
-				dp->index, switchdev_work->addr,
-				switchdev_work->vid, err);
-		}
-
-		break;
-	}
+	if (dsa_slave_dev_check(dev))
+		dsa_slave_fdb_event_work(dev, switchdev_work->event,
+					 switchdev_work->addr,
+					 switchdev_work->vid,
+					 switchdev_work->host_addr);
 
 	kfree(switchdev_work);
 }
