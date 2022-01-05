@@ -408,7 +408,7 @@ static int switchdev_lower_dev_walk(struct net_device *lower_dev,
 	return 0;
 }
 
-static struct net_device *
+struct net_device *
 switchdev_lower_dev_find(struct net_device *dev,
 			 bool (*check_cb)(const struct net_device *dev),
 			 bool (*foreign_dev_check_cb)(const struct net_device *dev,
@@ -428,6 +428,7 @@ switchdev_lower_dev_find(struct net_device *dev,
 
 	return switchdev_priv.lower_dev;
 }
+EXPORT_SYMBOL_GPL(switchdev_lower_dev_find);
 
 static int __switchdev_handle_fdb_event_to_device(struct net_device *dev,
 		struct net_device *orig_dev, unsigned long event,
