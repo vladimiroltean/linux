@@ -2443,7 +2443,80 @@ static void dsa_slave_fdb_event_work(struct net_device *dev,
 	}
 }
 
-static void dsa_slave_switchdev_event_work(struct work_struct *work)
+static void dsa_lag_fdb_event_work(struct net_device *lag_dev,
+				   unsigned long event,
+				   const unsigned char *addr,
+				   u16 vid, bool host_addr,
+				   const void *ctx)
+{
+	struct dsa_switch_tree *dst;
+	struct net_device *slave;
+	struct dsa_port *dp;
+	struct dsa_lag *lag;
+	int err;
+
+	/* Get a handle to any DSA interface beneath the LAG.
+	 * We just need a reference to the switch tree.
+	 */
+	slave = switchdev_lower_dev_find(lag_dev, dsa_slave_dev_check,
+					 dsa_foreign_dev_check);
+	dp = dsa_slave_to_port(slave);
+	dst = dp->ds->dst;
+	lag = dp->lag;
+
+	dsa_lag_foreach_port(dp, dst, lag) {
+		if (ctx && ctx != dp) {
+			const struct dsa_port *other_dp = ctx;
+
+			dev_dbg(dp->ds->dev,
+				"port %d skipping LAG FDB %pM vid %d replayed for port %d\n",
+				dp->index, addr, vid, other_dp->index);
+			continue;
+		}
+
+		switch (event) {
+		case SWITCHDEV_FDB_ADD_TO_DEVICE:
+			if (host_addr)
+				/* Host addresses notified on a LAG should be
+				 * kept for as long as we have at least an
+				 * interface beneath it. Therefore, fan out
+				 * these events as normal host FDB entries
+				 * towards all lower DSA ports.
+				 */
+				err = dsa_port_host_fdb_add(dp, addr, vid);
+			else
+				/* Similarly, FDB entries (replayed or not)
+				 * towards a LAG should be kept as long as we
+				 * have ports under it. Count replayed events
+				 * just once, but normal events will modify the
+				 * refcount by the number of ports currently in
+				 * that LAG.
+				 */
+				err = dsa_port_lag_fdb_add(dp, lag, addr, vid);
+			if (err) {
+				netdev_err(slave,
+					   "failed to add LAG %s FDB entry %pM vid %d: %pe\n",
+					   lag_dev->name, addr, vid, ERR_PTR(err));
+				break;
+			}
+			dsa_fdb_offload_notify(lag_dev, addr, vid);
+			break;
+		case SWITCHDEV_FDB_DEL_TO_DEVICE:
+			if (host_addr)
+				err = dsa_port_host_fdb_del(dp, addr, vid);
+			else
+				err = dsa_port_lag_fdb_del(dp, lag, addr, vid);
+			if (err) {
+				netdev_err(slave,
+					   "failed to delete LAG %s FDB entry %pM vid %d: %pe\n",
+					   lag_dev->name, addr, vid, ERR_PTR(err));
+			}
+			break;
+		}
+	}
+}
+
+static void dsa_fdb_event_work(struct work_struct *work)
 {
 	struct dsa_switchdev_event_work *switchdev_work =
 		container_of(work, struct dsa_switchdev_event_work, work);
@@ -2454,6 +2527,13 @@ static void dsa_slave_switchdev_event_work(struct work_struct *work)
 					 switchdev_work->addr,
 					 switchdev_work->vid,
 					 switchdev_work->host_addr);
+
+	if (netif_is_lag_master(dev))
+		dsa_lag_fdb_event_work(dev, switchdev_work->event,
+				       switchdev_work->addr,
+				       switchdev_work->vid,
+				       switchdev_work->host_addr,
+				       switchdev_work->ctx);
 
 	kfree(switchdev_work);
 }
@@ -2500,13 +2580,79 @@ static int dsa_slave_fdb_event(struct net_device *dev,
 		   orig_dev->name, fdb_info->addr, fdb_info->vid,
 		   host_addr ? " as host address" : "");
 
-	INIT_WORK(&switchdev_work->work, dsa_slave_switchdev_event_work);
+	INIT_WORK(&switchdev_work->work, dsa_fdb_event_work);
 	switchdev_work->event = event;
 	switchdev_work->dev = dev;
 
 	ether_addr_copy(switchdev_work->addr, fdb_info->addr);
 	switchdev_work->vid = fdb_info->vid;
 	switchdev_work->host_addr = host_addr;
+
+	dsa_schedule_work(&switchdev_work->work);
+
+	return 0;
+}
+
+static int
+dsa_lag_fdb_event(struct net_device *lag_dev, struct net_device *orig_dev,
+		  unsigned long event, const void *ctx,
+		  const struct switchdev_notifier_fdb_info *fdb_info)
+{
+	struct dsa_switchdev_event_work *switchdev_work;
+	bool host_addr = fdb_info->is_local;
+	struct net_device *slave;
+	struct dsa_switch *ds;
+	struct dsa_port *dp;
+
+	/* Skip dynamic FDB entries, since the physical ports beneath the LAG
+	 * should have learned it too.
+	 */
+	if (netif_is_lag_master(orig_dev) &&
+	    switchdev_fdb_is_dynamically_learned(fdb_info))
+		return 0;
+
+	/* FDB entries learned by the software bridge should be installed as
+	 * host addresses only if the driver requests assisted learning.
+	 */
+	if (switchdev_fdb_is_dynamically_learned(fdb_info) &&
+	    !ds->assisted_learning_on_cpu_port)
+		return 0;
+
+	/* Get a handle to any DSA interface beneath the LAG */
+	slave = switchdev_lower_dev_find(lag_dev, dsa_slave_dev_check,
+					 dsa_foreign_dev_check);
+	dp = dsa_slave_to_port(slave);
+	ds = dp->ds;
+
+	/* Also treat FDB entries on foreign interfaces bridged with us as host
+	 * addresses.
+	 */
+	if (dsa_foreign_dev_check(slave, orig_dev))
+		host_addr = true;
+
+	if (host_addr && (!ds->ops->port_fdb_add || !ds->ops->port_fdb_del))
+		return -EOPNOTSUPP;
+
+	if (!host_addr && (!ds->ops->lag_fdb_add || !ds->ops->lag_fdb_del))
+		return -EOPNOTSUPP;
+
+	switchdev_work = kzalloc(sizeof(*switchdev_work), GFP_ATOMIC);
+	if (!switchdev_work)
+		return -ENOMEM;
+
+	netdev_dbg(lag_dev, "%s LAG FDB entry towards %s, addr %pM vid %d%s\n",
+		   event == SWITCHDEV_FDB_ADD_TO_DEVICE ? "Adding" : "Deleting",
+		   orig_dev->name, fdb_info->addr, fdb_info->vid,
+		   host_addr ? " as host address" : "");
+
+	INIT_WORK(&switchdev_work->work, dsa_fdb_event_work);
+	switchdev_work->event = event;
+	switchdev_work->dev = lag_dev;
+
+	ether_addr_copy(switchdev_work->addr, fdb_info->addr);
+	switchdev_work->vid = fdb_info->vid;
+	switchdev_work->host_addr = host_addr;
+	switchdev_work->ctx = ctx;
 
 	dsa_schedule_work(&switchdev_work->work);
 
@@ -2532,7 +2678,7 @@ static int dsa_slave_switchdev_event(struct notifier_block *unused,
 							   dsa_slave_dev_check,
 							   dsa_foreign_dev_check,
 							   dsa_slave_fdb_event,
-							   NULL);
+							   dsa_lag_fdb_event);
 		return notifier_from_errno(err);
 	default:
 		return NOTIFY_DONE;
