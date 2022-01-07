@@ -24,6 +24,7 @@
 #include <linux/dsa/8021q.h>
 #include "sja1105.h"
 #include "sja1105_tas.h"
+#include "sja1105_vl.h"
 
 #define SJA1105_UNKNOWN_MULTICAST	0x010000000000ull
 
@@ -2097,6 +2098,9 @@ static int sja1105_bridge_join(struct dsa_switch *ds, int port,
 static void sja1105_bridge_leave(struct dsa_switch *ds, int port,
 				 struct dsa_bridge bridge)
 {
+	struct sja1105_private *priv = ds->priv;
+
+	sja1105_update_virtual_links(priv);
 	dsa_tag_8021q_bridge_leave(ds, port, bridge);
 	sja1105_bridge_member(ds, port, bridge, false);
 }
@@ -2594,7 +2598,9 @@ static int sja1105_prechangeupper(struct dsa_switch *ds, int port,
 {
 	struct netlink_ext_ack *extack = info->info.extack;
 	struct net_device *upper = info->upper_dev;
+	struct sja1105_private *priv = ds->priv;
 	struct dsa_switch_tree *dst = ds->dst;
+	struct sja1105_rule *rule;
 	struct dsa_port *dp;
 
 	if (is_vlan_dev(upper)) {
@@ -2609,6 +2615,14 @@ static int sja1105_prechangeupper(struct dsa_switch *ds, int port,
 			if (br && br != upper && br_vlan_enabled(br)) {
 				NL_SET_ERR_MSG_MOD(extack,
 						   "Only one VLAN-aware bridge is supported");
+				return -EBUSY;
+			}
+		}
+
+		list_for_each_entry(rule, &priv->flow_block.rules, list) {
+			if (rule->type == SJA1105_RULE_VL) {
+				NL_SET_ERR_MSG_MOD(extack,
+						   "Cannot join bridge with active VL rules");
 				return -EBUSY;
 			}
 		}

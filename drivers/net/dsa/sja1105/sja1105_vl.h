@@ -27,6 +27,8 @@ int sja1105_vl_stats(struct sja1105_private *priv, int port,
 		     struct sja1105_rule *rule, struct flow_stats *stats,
 		     struct netlink_ext_ack *extack);
 
+void sja1105_update_virtual_links(struct sja1105_private *priv);
+
 #else
 
 static inline int sja1105_vl_redirect(struct sja1105_private *priv, int port,
@@ -67,6 +69,10 @@ static inline int sja1105_vl_stats(struct sja1105_private *priv, int port,
 {
 	NL_SET_ERR_MSG_MOD(extack, "Virtual Links not compiled in");
 	return -EOPNOTSUPP;
+}
+
+static inline void sja1105_update_virtual_links(struct sja1105_private *priv)
+{
 }
 
 #endif /* IS_ENABLED(CONFIG_NET_DSA_SJA1105_VL) */

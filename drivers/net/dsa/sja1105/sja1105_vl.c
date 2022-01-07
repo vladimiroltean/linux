@@ -395,7 +395,12 @@ static int sja1105_init_virtual_links(struct sja1105_private *priv,
 				vl_lookup[k].vlanprior = rule->key.vl.pcp;
 			} else {
 				struct dsa_port *dp = dsa_to_port(priv->ds, port);
-				u16 vid = dsa_tag_8021q_rx_vid(dp);
+				u16 vid;
+
+				if (dp->bridge)
+					vid = dsa_8021q_bridge_tx_fwd_offload_vid(dsa_port_bridge_num_get(dp));
+				else
+					vid = dsa_tag_8021q_rx_vid(dp);
 
 				vl_lookup[k].vlanid = vid;
 				vl_lookup[k].vlanprior = 0;
@@ -487,6 +492,44 @@ static int sja1105_init_virtual_links(struct sja1105_private *priv,
 	sja1105_frame_memory_partitioning(priv);
 
 	return 0;
+}
+
+/* If virtual links are used, need to update their VLANs when joining or
+ * leaving a bridge.
+ */
+void sja1105_update_virtual_links(struct sja1105_private *priv)
+{
+	bool have_vlan_unaware_vls = false;
+	struct dsa_switch *ds = priv->ds;
+	struct sja1105_rule *rule;
+	int rc;
+
+	/* Don't do anything (reset the switch) if no VLAN-unaware virtual link
+	 * is active, since nothing needs to be updated then.
+	 */
+	list_for_each_entry(rule, &priv->flow_block.rules, list) {
+		if (rule->type == SJA1105_RULE_VL &&
+		    rule->key.type == SJA1105_KEY_VLAN_UNAWARE_VL) {
+			have_vlan_unaware_vls = true;
+			break;
+		}
+	}
+
+	if (!have_vlan_unaware_vls)
+		return;
+
+	rc = sja1105_init_virtual_links(priv, NULL);
+	if (rc) {
+		dev_err(ds->dev, "failed to reinit virtual links: %pe\n",
+			ERR_PTR(rc));
+		return;
+	}
+
+	rc = sja1105_static_config_reload(priv, SJA1105_VIRTUAL_LINKS);
+	if (rc) {
+		dev_err(ds->dev, "failed to update static config: %pe\n",
+			ERR_PTR(rc));
+	}
 }
 
 int sja1105_vl_redirect(struct sja1105_private *priv, int port,
