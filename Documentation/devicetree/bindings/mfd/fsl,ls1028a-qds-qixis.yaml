@@ -1,0 +1,61 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/mfd/fsl,ls1028a-qds-qixis.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: QIXIS FPGA for NXP LS1028A-QDS
+
+maintainers:
+  - Vladimir Oltean <vladimir.oltean@nxp.com>
+
+description: |
+  The QIXIS FPGA on the NXP LS1028A-QDS board handles system control
+  (boot sources, power sequences and reset signals, signal routing).
+  It can be configured by the host CPU through an I2C interface.
+
+properties:
+  compatible:
+    const: fsl,ls1028a-qds-qixis
+
+  reg:
+    description:
+      I2C device address.
+    maxItems: 1
+
+  "#address-cells":
+    const: 1
+
+  "#size-cells":
+    const: 0
+
+patternProperties:
+  "^mux-controller(@[0-9a-f]+)?$":
+    $ref: ../mux/reg-mux.yaml
+
+required:
+  - "#address-cells"
+  - "#size-cells"
+  - compatible
+  - reg
+
+additionalProperties: false
+
+examples:
+  - |
+    #include <dt-bindings/mfd/ls1028a-qds-qixis.h>
+    i2c {
+        fpga@66 {
+            compatible = "fsl,ls1028a-qds-qixis";
+            reg = <0x66>;
+            #address-cells = <1>;
+            #size-cells = <0>;
+
+            mux: mux-controller@54 {
+                compatible = "reg-mux";
+                reg = <0x54>;
+                #mux-control-cells = <1>;
+                mux-reg-masks = <QIXIS_BRDCFG(4) 0xf0>; /* bits 7:4 */
+            };
+        };
+    };
