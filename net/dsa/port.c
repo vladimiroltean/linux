@@ -1022,7 +1022,7 @@ int dsa_port_standalone_host_fdb_add(struct dsa_port *dp,
 int dsa_port_bridge_host_fdb_add(struct dsa_port *dp,
 				 const unsigned char *addr, u16 vid)
 {
-	struct dsa_port *cpu_dp = dp->cpu_dp;
+	struct net_device *master = dsa_port_to_master(dp);
 	struct dsa_db db = {
 		.type = DSA_DB_BRIDGE,
 		.bridge = *dp->bridge,
@@ -1033,8 +1033,8 @@ int dsa_port_bridge_host_fdb_add(struct dsa_port *dp,
 	 * requires rtnl_lock(), since we can't guarantee that is held here,
 	 * and we can't take it either.
 	 */
-	if (cpu_dp->master->priv_flags & IFF_UNICAST_FLT) {
-		err = dev_uc_add(cpu_dp->master, addr);
+	if (master->priv_flags & IFF_UNICAST_FLT) {
+		err = dev_uc_add(master, addr);
 		if (err)
 			return err;
 	}
@@ -1073,15 +1073,15 @@ int dsa_port_standalone_host_fdb_del(struct dsa_port *dp,
 int dsa_port_bridge_host_fdb_del(struct dsa_port *dp,
 				 const unsigned char *addr, u16 vid)
 {
-	struct dsa_port *cpu_dp = dp->cpu_dp;
+	struct net_device *master = dsa_port_to_master(dp);
 	struct dsa_db db = {
 		.type = DSA_DB_BRIDGE,
 		.bridge = *dp->bridge,
 	};
 	int err;
 
-	if (cpu_dp->master->priv_flags & IFF_UNICAST_FLT) {
-		err = dev_uc_del(cpu_dp->master, addr);
+	if (master->priv_flags & IFF_UNICAST_FLT) {
+		err = dev_uc_del(master, addr);
 		if (err)
 			return err;
 	}
@@ -1204,14 +1204,14 @@ int dsa_port_standalone_host_mdb_add(const struct dsa_port *dp,
 int dsa_port_bridge_host_mdb_add(const struct dsa_port *dp,
 				 const struct switchdev_obj_port_mdb *mdb)
 {
-	struct dsa_port *cpu_dp = dp->cpu_dp;
+	struct net_device *master = dsa_port_to_master(dp);
 	struct dsa_db db = {
 		.type = DSA_DB_BRIDGE,
 		.bridge = *dp->bridge,
 	};
 	int err;
 
-	err = dev_mc_add(cpu_dp->master, mdb->addr);
+	err = dev_mc_add(master, mdb->addr);
 	if (err)
 		return err;
 
@@ -1248,14 +1248,14 @@ int dsa_port_standalone_host_mdb_del(const struct dsa_port *dp,
 int dsa_port_bridge_host_mdb_del(const struct dsa_port *dp,
 				 const struct switchdev_obj_port_mdb *mdb)
 {
-	struct dsa_port *cpu_dp = dp->cpu_dp;
+	struct net_device *master = dsa_port_to_master(dp);
 	struct dsa_db db = {
 		.type = DSA_DB_BRIDGE,
 		.bridge = *dp->bridge,
 	};
 	int err;
 
-	err = dev_mc_del(cpu_dp->master, mdb->addr);
+	err = dev_mc_del(master, mdb->addr);
 	if (err)
 		return err;
 
@@ -1290,19 +1290,19 @@ int dsa_port_host_vlan_add(struct dsa_port *dp,
 			   const struct switchdev_obj_port_vlan *vlan,
 			   struct netlink_ext_ack *extack)
 {
+	struct net_device *master = dsa_port_to_master(dp);
 	struct dsa_notifier_vlan_info info = {
 		.dp = dp,
 		.vlan = vlan,
 		.extack = extack,
 	};
-	struct dsa_port *cpu_dp = dp->cpu_dp;
 	int err;
 
 	err = dsa_port_notify(dp, DSA_NOTIFIER_HOST_VLAN_ADD, &info);
 	if (err && err != -EOPNOTSUPP)
 		return err;
 
-	vlan_vid_add(cpu_dp->master, htons(ETH_P_8021Q), vlan->vid);
+	vlan_vid_add(master, htons(ETH_P_8021Q), vlan->vid);
 
 	return err;
 }
@@ -1310,18 +1310,18 @@ int dsa_port_host_vlan_add(struct dsa_port *dp,
 int dsa_port_host_vlan_del(struct dsa_port *dp,
 			   const struct switchdev_obj_port_vlan *vlan)
 {
+	struct net_device *master = dsa_port_to_master(dp);
 	struct dsa_notifier_vlan_info info = {
 		.dp = dp,
 		.vlan = vlan,
 	};
-	struct dsa_port *cpu_dp = dp->cpu_dp;
 	int err;
 
 	err = dsa_port_notify(dp, DSA_NOTIFIER_HOST_VLAN_DEL, &info);
 	if (err && err != -EOPNOTSUPP)
 		return err;
 
-	vlan_vid_del(cpu_dp->master, htons(ETH_P_8021Q), vlan->vid);
+	vlan_vid_del(master, htons(ETH_P_8021Q), vlan->vid);
 
 	return err;
 }
