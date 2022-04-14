@@ -2683,6 +2683,20 @@ static int dsa_user_phy_setup(struct net_device *user_dev)
 	return ret;
 }
 
+static void
+dsa_user_inherit_conduit_features(struct net_device *user,
+				  const struct net_device *conduit,
+				  const struct dsa_device_ops *tag_ops)
+{
+	if (tag_ops->inherit_conduit_features)
+		return tag_ops->inherit_conduit_features(user, conduit);
+
+	user->features = conduit->vlan_features;
+	if (user->needed_tailroom)
+		user->features &= ~(NETIF_F_SG | NETIF_F_FRAGLIST |
+				     NETIF_F_CSUM_MASK);
+}
+
 void dsa_user_setup_tagger(struct net_device *user)
 {
 	struct dsa_port *dp = dsa_user_to_port(user);
@@ -2702,10 +2716,9 @@ void dsa_user_setup_tagger(struct net_device *user)
 
 	p->xmit = cpu_dp->tag_ops->xmit;
 
-	user->features = conduit->vlan_features | NETIF_F_HW_TC;
+	dsa_user_inherit_conduit_features(user, conduit, cpu_dp->tag_ops);
+	user->features |= NETIF_F_HW_TC;
 	user->hw_features |= NETIF_F_HW_TC;
-	if (user->needed_tailroom)
-		user->features &= ~(NETIF_F_SG | NETIF_F_FRAGLIST);
 	if (ds->needs_standalone_vlan_filtering)
 		user->features |= NETIF_F_HW_VLAN_CTAG_FILTER;
 
@@ -2803,7 +2816,6 @@ int dsa_user_create(struct dsa_port *port)
 	p->dp = port;
 	INIT_LIST_HEAD(&p->mall_tc_list);
 	port->user = user_dev;
-	dsa_user_setup_tagger(user_dev);
 
 	netif_carrier_off(user_dev);
 
@@ -2842,6 +2854,8 @@ int dsa_user_create(struct dsa_port *port)
 	}
 
 	ret = netdev_upper_dev_link(conduit, user_dev, NULL);
+
+	dsa_user_setup_tagger(user_dev);
 
 	rtnl_unlock();
 

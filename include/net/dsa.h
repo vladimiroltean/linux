@@ -96,6 +96,8 @@ struct dsa_device_ops {
 			     int *offset);
 	int (*connect)(struct dsa_switch *ds);
 	void (*disconnect)(struct dsa_switch *ds);
+	void (*inherit_conduit_features)(struct net_device *user,
+					 const struct net_device *conduit);
 	unsigned int needed_headroom;
 	unsigned int needed_tailroom;
 	const char *name;
