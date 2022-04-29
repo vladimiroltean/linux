@@ -11,6 +11,9 @@
 #include <net/pkt_sched.h>
 #include <net/tso.h>
 
+#define CREATE_TRACE_POINTS
+#include <trace/events/enetc.h>
+
 static int enetc_num_stack_tx_queues(struct enetc_ndev_priv *priv)
 {
 	int num_tx_rings = priv->num_tx_rings;
@@ -185,9 +188,16 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb)
 	temp_bd.frm_len = cpu_to_le16(skb->len);
 	temp_bd.flags = flags;
 
-	if (flags & ENETC_TXBD_FLAGS_TSE)
+	if (flags & ENETC_TXBD_FLAGS_TSE) {
+		u32 now_lo = enetc_rd(&priv->si->hw, ENETC_SICTR0);
+		u32 now_hi = enetc_rd(&priv->si->hw, ENETC_SICTR1);
+		u64 now = now_lo | ((u64)now_hi << 32);
+
+		trace_enetc_tx_start(skb, now);
+
 		temp_bd.txstart = enetc_txbd_set_tx_start(skb->skb_mstamp_ns,
 							  flags);
+	}
 
 	if (flags & ENETC_TXBD_FLAGS_EX) {
 		u8 e_flags = 0;
