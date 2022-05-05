@@ -414,21 +414,17 @@ static const struct felix_tag_proto_ops felix_tag_npi_proto_ops = {
 static int felix_tag_8021q_setup(struct dsa_switch *ds)
 {
 	struct ocelot *ocelot = ds->priv;
-	struct dsa_port *dp, *cpu_dp;
+	struct dsa_port *dp;
 	int err;
 
 	err = dsa_tag_8021q_register(ds, htons(ETH_P_8021AD));
 	if (err)
 		return err;
 
-	dsa_switch_for_each_cpu_port(cpu_dp, ds) {
-		ocelot_port_set_dsa_8021q_cpu(ocelot, cpu_dp->index);
-
-		/* TODO we could support multiple CPU ports in tag_8021q mode */
-		break;
-	}
-
 	dsa_switch_for_each_user_port(dp, ds) {
+		ocelot_port_assign_dsa_8021q_cpu(ocelot, dp->index,
+						 dp->cpu_dp->index);
+
 		/* This overwrites ocelot_init():
 		 * Do not forward BPDU frames to the CPU port module,
 		 * for 2 reasons:
@@ -459,7 +455,7 @@ static int felix_tag_8021q_setup(struct dsa_switch *ds)
 static void felix_tag_8021q_teardown(struct dsa_switch *ds)
 {
 	struct ocelot *ocelot = ds->priv;
-	struct dsa_port *dp, *cpu_dp;
+	struct dsa_port *dp;
 
 	dsa_switch_for_each_user_port(dp, ds) {
 		/* Restore the logic from ocelot_init:
@@ -469,13 +465,8 @@ static void felix_tag_8021q_teardown(struct dsa_switch *ds)
 				 ANA_PORT_CPU_FWD_BPDU_CFG_BPDU_REDIR_ENA(0xffff),
 				 ANA_PORT_CPU_FWD_BPDU_CFG,
 				 dp->index);
-	}
 
-	dsa_switch_for_each_cpu_port(cpu_dp, ds) {
-		ocelot_port_unset_dsa_8021q_cpu(ocelot, cpu_dp->index);
-
-		/* TODO we could support multiple CPU ports in tag_8021q mode */
-		break;
+		ocelot_port_unassign_dsa_8021q_cpu(ocelot, dp->index);
 	}
 
 	dsa_tag_8021q_unregister(ds);
