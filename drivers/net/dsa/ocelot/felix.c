@@ -428,7 +428,7 @@ static int felix_tag_8021q_setup(struct dsa_switch *ds)
 		break;
 	}
 
-	dsa_switch_for_each_available_port(dp, ds) {
+	dsa_switch_for_each_user_port(dp, ds) {
 		/* This overwrites ocelot_init():
 		 * Do not forward BPDU frames to the CPU port module,
 		 * for 2 reasons:
@@ -461,7 +461,7 @@ static void felix_tag_8021q_teardown(struct dsa_switch *ds)
 	struct ocelot *ocelot = ds->priv;
 	struct dsa_port *dp, *cpu_dp;
 
-	dsa_switch_for_each_available_port(dp, ds) {
+	dsa_switch_for_each_user_port(dp, ds) {
 		/* Restore the logic from ocelot_init:
 		 * do not forward BPDU frames to the front ports.
 		 */
