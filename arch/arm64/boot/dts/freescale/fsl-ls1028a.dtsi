@@ -1169,6 +1169,7 @@
 						reg = <5>;
 						phy-mode = "internal";
 						status = "disabled";
+						ethernet = <&enetc_port3>;
 
 						fixed-link {
 							speed = <1000>;
