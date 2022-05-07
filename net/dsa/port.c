@@ -783,7 +783,7 @@ int dsa_port_vlan_filtering(struct dsa_port *dp, bool vlan_filtering,
 	apply = dsa_port_can_apply_vlan_filtering(dp, vlan_filtering, extack);
 	rcu_read_unlock();
 	if (!apply)
-		return -EINVAL;
+		return -EOPNOTSUPP;
 
 	if (dsa_port_is_vlan_filtering(dp) == vlan_filtering)
 		return 0;
