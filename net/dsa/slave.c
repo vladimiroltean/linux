@@ -2812,6 +2812,10 @@ dsa_master_prechangeupper_sanity_check(struct net_device *master,
 	if (netif_is_bridge_master(info->upper_dev))
 		return NOTIFY_DONE;
 
+	/* Allow LAG uppers */
+	if (netif_is_lag_master(info->upper_dev))
+		return NOTIFY_DONE;
+
 	extack = netdev_notifier_info_to_extack(&info->info);
 
 	NL_SET_ERR_MSG_MOD(extack,
@@ -2859,6 +2863,138 @@ dsa_bridge_prechangelower_sanity_check(struct net_device *new_lower,
 	return NOTIFY_DONE;
 }
 
+static void dsa_tree_migrate_ports_from_lag_master(struct dsa_switch_tree *dst,
+						   struct net_device *lag_dev)
+{
+	struct net_device *new_master;
+	struct dsa_port *dp;
+	int err;
+
+	new_master = dsa_tree_find_first_master(dst);
+
+	dsa_tree_for_each_user_port(dp, dst) {
+		if (dsa_port_to_master(dp) != lag_dev)
+			continue;
+
+		err = dsa_port_change_master(dp, new_master, NULL);
+		if (err) {
+			netdev_err(dp->slave,
+				   "failed to restore master to %s: %pe\n",
+				   new_master->name, ERR_PTR(err));
+		}
+	}
+}
+
+static int dsa_master_lag_join(struct net_device *master,
+			       struct net_device *lag_dev,
+			       struct netdev_lag_upper_info *uinfo,
+			       struct netlink_ext_ack *extack)
+{
+	struct dsa_port *cpu_dp = master->dsa_ptr;
+	struct dsa_switch_tree *dst = cpu_dp->dst;
+	struct dsa_port *dp;
+	int err;
+
+	err = dsa_master_lag_setup(lag_dev, cpu_dp, uinfo, extack);
+	if (err)
+		return err;
+
+	dsa_tree_for_each_user_port(dp, dst) {
+		if (dsa_port_to_master(dp) != master)
+			continue;
+
+		err = dsa_port_change_master(dp, lag_dev, extack);
+		if (err)
+			goto restore;
+	}
+
+	return 0;
+
+restore:
+	dsa_tree_for_each_user_port_continue_reverse(dp, dst) {
+		if (dsa_port_to_master(dp) != lag_dev)
+			continue;
+
+		err = dsa_port_change_master(dp, master, NULL);
+		if (err) {
+			netdev_err(dp->slave,
+				   "failed to restore master to %s: %pe\n",
+				   master->name, ERR_PTR(err));
+		}
+	}
+
+	dsa_master_lag_teardown(lag_dev, master->dsa_ptr);
+
+	return err;
+}
+
+static void dsa_master_lag_leave(struct net_device *master,
+				 struct net_device *lag_dev)
+{
+	struct dsa_port *dp, *cpu_dp = lag_dev->dsa_ptr;
+	struct dsa_switch_tree *dst = cpu_dp->dst;
+	struct dsa_port *new_cpu_dp = NULL;
+	struct net_device *lower;
+	struct list_head *iter;
+
+	netdev_for_each_lower_dev(lag_dev, lower, iter) {
+		if (netdev_uses_dsa(lower)) {
+			new_cpu_dp = lower->dsa_ptr;
+			break;
+		}
+	}
+
+	if (new_cpu_dp) {
+		/* Update the CPU port of the user ports still under the LAG
+		 * so that dsa_port_to_master() continues to work properly
+		 */
+		dsa_tree_for_each_user_port(dp, dst)
+			if (dsa_port_to_master(dp) == lag_dev)
+				dp->cpu_dp = new_cpu_dp;
+
+		/* Update the index of the virtual CPU port to match the lowest
+		 * physical CPU port
+		 */
+		lag_dev->dsa_ptr = new_cpu_dp;
+		wmb();
+	} else {
+		/* If the LAG DSA master has no ports left, migrate back all
+		 * user ports to the first physical CPU port
+		 */
+		dsa_tree_migrate_ports_from_lag_master(dst, lag_dev);
+	}
+
+	/* This DSA master has left its LAG in any case, so let
+	 * the CPU port leave the hardware LAG as well
+	 */
+	dsa_master_lag_teardown(lag_dev, master->dsa_ptr);
+}
+
+static int dsa_master_changeupper(struct net_device *dev,
+				  struct netdev_notifier_changeupper_info *info)
+{
+	struct netlink_ext_ack *extack;
+	int err = NOTIFY_DONE;
+
+	if (!netdev_uses_dsa(dev))
+		return err;
+
+	extack = netdev_notifier_info_to_extack(&info->info);
+
+	if (netif_is_lag_master(info->upper_dev)) {
+		if (info->linking) {
+			err = dsa_master_lag_join(dev, info->upper_dev,
+						  info->upper_info, extack);
+			err = notifier_from_errno(err);
+		} else {
+			dsa_master_lag_leave(dev, info->upper_dev);
+			err = NOTIFY_OK;
+		}
+	}
+
+	return err;
+}
+
 static int dsa_slave_netdevice_event(struct notifier_block *nb,
 				     unsigned long event, void *ptr)
 {
@@ -2902,6 +3038,10 @@ static int dsa_slave_netdevice_event(struct notifier_block *nb,
 		if (notifier_to_errno(err))
 			return err;
 
+		err = dsa_master_changeupper(dev, ptr);
+		if (notifier_to_errno(err))
+			return err;
+
 		break;
 	}
 	case NETDEV_CHANGELOWERSTATE: {
@@ -2909,12 +3049,21 @@ static int dsa_slave_netdevice_event(struct notifier_block *nb,
 		struct dsa_port *dp;
 		int err;
 
-		if (!dsa_slave_dev_check(dev))
-			break;
+		if (dsa_slave_dev_check(dev)) {
+			dp = dsa_slave_to_port(dev);
 
-		dp = dsa_slave_to_port(dev);
+			err = dsa_port_lag_change(dp, info->lower_state_info);
+		}
 
-		err = dsa_port_lag_change(dp, info->lower_state_info);
+		/* Mirror LAG port events on DSA masters that are in
+		 * a LAG towards their respective switch CPU ports
+		 */
+		if (netdev_uses_dsa(dev)) {
+			dp = dev->dsa_ptr;
+
+			err = dsa_port_lag_change(dp, info->lower_state_info);
+		}
+
 		return notifier_from_errno(err);
 	}
 	case NETDEV_CHANGE:

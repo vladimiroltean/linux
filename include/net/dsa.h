@@ -296,6 +296,9 @@ struct dsa_port {
 	u8			master_admin_up:1;
 	u8			master_oper_up:1;
 
+	/* Valid only on user ports */
+	u8			cpu_port_in_lag:1;
+
 	u8			setup:1;
 
 	struct device_node	*dn;
@@ -720,6 +723,9 @@ static inline bool dsa_port_offloads_lag(struct dsa_port *dp,
 
 static inline struct net_device *dsa_port_to_master(const struct dsa_port *dp)
 {
+	if (dp->cpu_port_in_lag)
+		return dsa_port_lag_dev_get(dp->cpu_dp);
+
 	return dp->cpu_dp->master;
 }
 
