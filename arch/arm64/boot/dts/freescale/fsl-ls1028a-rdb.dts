@@ -193,6 +193,24 @@
 &i2c0 {
 	status = "okay";
 
+	fpga@66 {
+		compatible = "fsl,ls1028a-rdb-qixis";
+		reg = <0x66>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		qixis_intc: interrupt-controller@90 {
+			compatible = "fsl,ls1028a-rdb-qixis-intc";
+			reg = <0x90 0x20>;
+
+			interrupts-extended = <&gpio1 25
+					       IRQ_TYPE_EDGE_FALLING>;
+
+			interrupt-controller;
+			#interrupt-cells = <2>;
+		};
+	};
+
 	i2c-mux@77 {
 		compatible = "nxp,pca9847";
 		reg = <0x77>;
