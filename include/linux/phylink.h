@@ -531,6 +531,8 @@ void phylink_destroy(struct phylink *);
 
 int phylink_connect_phy(struct phylink *, struct phy_device *);
 int phylink_of_phy_connect(struct phylink *, struct device_node *, u32 flags);
+int phylink_of_phy_connect_probe(struct phylink *pl, struct device_node *dn,
+				 u32 flags);
 int phylink_fwnode_phy_connect(struct phylink *pl,
 			       struct fwnode_handle *fwnode,
 			       u32 flags);

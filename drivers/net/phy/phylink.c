@@ -1504,20 +1504,9 @@ int phylink_of_phy_connect(struct phylink *pl, struct device_node *dn,
 }
 EXPORT_SYMBOL_GPL(phylink_of_phy_connect);
 
-/**
- * phylink_fwnode_phy_connect() - connect the PHY specified in the fwnode.
- * @pl: a pointer to a &struct phylink returned from phylink_create()
- * @fwnode: a pointer to a &struct fwnode_handle.
- * @flags: PHY-specific flags to communicate to the PHY device driver
- *
- * Connect the phy specified @fwnode to the phylink instance specified
- * by @pl.
- *
- * Returns 0 on success or a negative errno.
- */
-int phylink_fwnode_phy_connect(struct phylink *pl,
-			       struct fwnode_handle *fwnode,
-			       u32 flags)
+static int __phylink_fwnode_phy_connect(struct phylink *pl,
+					struct fwnode_handle *fwnode,
+					u32 flags, bool probe)
 {
 	struct fwnode_handle *phy_fwnode;
 	struct phy_device *phy_dev;
@@ -1539,8 +1528,21 @@ int phylink_fwnode_phy_connect(struct phylink *pl,
 	phy_dev = fwnode_phy_find_device(phy_fwnode);
 	/* We're done with the phy_node handle */
 	fwnode_handle_put(phy_fwnode);
-	if (!phy_dev)
-		return -ENODEV;
+	if (!phy_dev) {
+		/* Drivers that connect to the PHY from ndo_open do not support
+		 * waiting for the PHY to defer probe now, because doing so
+		 * would propagate -EPROBE_DEFER to user space, which is an
+		 * error code the kernel does not export.
+		 */
+		if (!probe)
+			return -ENODEV;
+
+		/* Allow the PHY driver to defer probing, and return -ENODEV if
+		 * it times out or if we know it will never become available.
+		 */
+		ret = driver_deferred_probe_check_state(pl->dev);
+		return ret == -EPROBE_DEFER ? ret : -ENODEV;
+	}
 
 	/* Use PHY device/driver interface */
 	if (pl->link_interface == PHY_INTERFACE_MODE_NA) {
@@ -1560,6 +1562,45 @@ int phylink_fwnode_phy_connect(struct phylink *pl,
 		phy_detach(phy_dev);
 
 	return ret;
+}
+
+/**
+ * phylink_of_phy_connect_probe() - connect the PHY in the DT node during probe.
+ * @pl: a pointer to a &struct phylink returned from phylink_create()
+ * @dn: a pointer to a &struct device_node.
+ * @flags: PHY-specific flags to communicate to the PHY device driver
+ *
+ * Performs the same action as %phylink_of_phy_connect(), but allows the PHY
+ * driver to defer probing, and propagates -EPROBE_DEFER to the caller.
+ * This function cannot be called from contexts that propagate the return code
+ * to user space.
+ *
+ * Returns 0 on success or a negative errno.
+ */
+int phylink_of_phy_connect_probe(struct phylink *pl, struct device_node *dn,
+				 u32 flags)
+{
+	return __phylink_fwnode_phy_connect(pl, of_fwnode_handle(dn), flags,
+					    true);
+}
+EXPORT_SYMBOL_GPL(phylink_of_phy_connect_probe);
+
+/**
+ * phylink_fwnode_phy_connect() - connect the PHY specified in the fwnode.
+ * @pl: a pointer to a &struct phylink returned from phylink_create()
+ * @fwnode: a pointer to a &struct fwnode_handle.
+ * @flags: PHY-specific flags to communicate to the PHY device driver
+ *
+ * Connect the phy specified @fwnode to the phylink instance specified
+ * by @pl.
+ *
+ * Returns 0 on success or a negative errno.
+ */
+int phylink_fwnode_phy_connect(struct phylink *pl,
+			       struct fwnode_handle *fwnode,
+			       u32 flags)
+{
+	return __phylink_fwnode_phy_connect(pl, fwnode, flags, false);
 }
 EXPORT_SYMBOL_GPL(phylink_fwnode_phy_connect);
 
