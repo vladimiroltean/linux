@@ -2252,18 +2252,18 @@ static int dsa_slave_phy_setup(struct net_device *slave_dev)
 	if (ds->ops->get_phy_flags)
 		phy_flags = ds->ops->get_phy_flags(ds, dp->index);
 
-	ret = phylink_of_phy_connect(dp->pl, port_dn, phy_flags);
+	ret = phylink_of_phy_connect_probe(dp->pl, port_dn, phy_flags);
 	if (ret == -ENODEV && ds->slave_mii_bus) {
 		/* We could not connect to a designated PHY or SFP, so try to
 		 * use the switch internal MDIO bus instead
 		 */
 		ret = dsa_slave_phy_connect(slave_dev, dp->index, phy_flags);
 	}
-	if (ret) {
+	if (ret && ret != -EPROBE_DEFER)
 		netdev_err(slave_dev, "failed to connect to PHY: %pe\n",
 			   ERR_PTR(ret));
+	if (ret)
 		phylink_destroy(dp->pl);
-	}
 
 	return ret;
 }
@@ -2386,12 +2386,12 @@ int dsa_slave_create(struct dsa_port *port)
 	netif_carrier_off(slave_dev);
 
 	ret = dsa_slave_phy_setup(slave_dev);
-	if (ret) {
+	if (ret && ret != -EPROBE_DEFER)
 		netdev_err(slave_dev,
 			   "error %d setting up PHY for tree %d, switch %d, port %d\n",
 			   ret, ds->dst->index, ds->index, port->index);
+	if (ret)
 		goto out_gcells;
-	}
 
 	rtnl_lock();
 

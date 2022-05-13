@@ -1012,6 +1012,8 @@ static int dsa_tree_setup_ports(struct dsa_switch_tree *dst)
 	list_for_each_entry(dp, &dst->ports, list) {
 		if (dsa_port_is_user(dp) || dsa_port_is_unused(dp)) {
 			err = dsa_port_setup(dp);
+			if (err == -EPROBE_DEFER)
+				goto teardown;
 			if (err) {
 				err = dsa_port_reinit_as_unused(dp);
 				if (err)
