@@ -19,41 +19,52 @@
 
 #define QIXIS_MINOR_DATE	0x8
 
+#define LS1028ARDB_REGMAP_IRQ_REG(_irq)					\
+	[(_irq)] = {							\
+		.reg_offset = 0,					\
+		.mask = BIT(_irq),					\
+		.type = {						\
+			.types_supported = IRQ_TYPE_EDGE_FALLING |	\
+					   IRQ_TYPE_EDGE_RISING |	\
+					   IRQ_TYPE_LEVEL_HIGH |	\
+					   IRQ_TYPE_LEVEL_LOW,		\
+		},							\
+	}
+
 static const struct regmap_irq ls1028a_rdb_qixis_irqs[] = {
-	REGMAP_IRQ_REG_LINE(0, 8),
-	REGMAP_IRQ_REG_LINE(1, 8),
-	REGMAP_IRQ_REG_LINE(2, 8),
-	REGMAP_IRQ_REG_LINE(3, 8),
-	REGMAP_IRQ_REG_LINE(4, 8),
-	REGMAP_IRQ_REG_LINE(5, 8),
-	REGMAP_IRQ_REG_LINE(6, 8),
-	REGMAP_IRQ_REG_LINE(7, 8),
+	LS1028ARDB_REGMAP_IRQ_REG(LS1028ARDB_IRQ_ETH_B),
+	LS1028ARDB_REGMAP_IRQ_REG(LS1028ARDB_IRQ_QSGMII_B),
+	LS1028ARDB_REGMAP_IRQ_REG(LS1028ARDB_IRQ_UBUS1),
+	LS1028ARDB_REGMAP_IRQ_REG(LS1028ARDB_IRQ_UBUS2),
+	LS1028ARDB_REGMAP_IRQ_REG(LS1028ARDB_IRQ_RTC_B),
 };
 
 struct qixis_intc_data {
-	const struct regmap_irq_chip chip;
+	const struct regmap_irq_chip *chip;
 	long min_year;
 	int min_month;
 	int min_day;
 	int id;
 };
 
-static const struct qixis_intc_data intc_data[] = {
+static const struct regmap_irq_chip ls1028a_rdb_irq_chip = {
+	.name = "ls1028a-rdb-qixis-intc",
+	.irqs = ls1028a_rdb_qixis_irqs,
+	.num_irqs = ARRAY_SIZE(ls1028a_rdb_qixis_irqs),
+	.num_regs = 1,
+	.status_base = INTC_IP,
+	.mask_base = INTC_IE,
+	.mask_invert = true,
+	.ack_base = INTC_IP,
+};
+
+static const struct qixis_intc_data qixis_intc_data[] = {
 	{
 		.id = QIXIS_ID_LS1028A_RDB,
 		.min_year = 2020,
 		.min_month = 2,
 		.min_day = 28,
-		.chip = {
-			.name = "ls1028a-rdb-qixis-intc",
-			.irqs = ls1028a_rdb_qixis_irqs,
-			.num_irqs = ARRAY_SIZE(ls1028a_rdb_qixis_irqs),
-			.num_regs = 1,
-			.status_base = INTC_IP,
-			.mask_base = INTC_IE,
-			.mask_invert = true,
-			.ack_base = INTC_IP,
-		},
+		.chip = &ls1028a_rdb_irq_chip,
 	},
 };
 
@@ -134,9 +145,9 @@ static const struct qixis_intc_data *qixis_intc_detect(struct device *dev,
 		return ERR_PTR(ret);
 	}
 
-	for (i = 0; i < ARRAY_SIZE(intc_data); i++)
-		if (intc_data[i].id == id)
-			return &intc_data[i];
+	for (i = 0; i < ARRAY_SIZE(qixis_intc_data); i++)
+		if (qixis_intc_data[i].id == id)
+			return &qixis_intc_data[i];
 
 	return ERR_PTR(-ENODEV);
 }
@@ -178,7 +189,7 @@ static int qixis_intc_probe(struct platform_device *pdev)
 	return devm_regmap_add_irq_chip_fwnode(dev, dev_fwnode(dev),
 					       irqchip->regmap, irq,
 					       IRQF_SHARED | IRQF_ONESHOT, 0,
-					       &irqchip->intc_data->chip,
+					       irqchip->intc_data->chip,
 					       &irqchip->irq_data);
 }
 
