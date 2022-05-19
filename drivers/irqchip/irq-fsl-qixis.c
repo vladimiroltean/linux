@@ -194,7 +194,7 @@ static int qixis_intc_probe(struct platform_device *pdev)
 }
 
 static const struct of_device_id qixis_intc_of_match[] = {
-	{ .compatible = "fsl,ls1028a-rdb-qixis-intc" },
+//	{ .compatible = "fsl,ls1028a-rdb-qixis-intc" },
 	{}
 };
 MODULE_DEVICE_TABLE(of, qixis_intc_of_match);
