@@ -653,9 +653,6 @@ static void felix_change_tag_protocol(struct dsa_switch *ds,
 
 	old_proto_ops = felix->tag_proto_ops;
 
-	if (proto_ops == old_proto_ops)
-		return;
-
 	proto_ops->setup(ds);
 
 	felix_tag_proto_setup_shared(ds, proto_ops, old_proto_ops);
