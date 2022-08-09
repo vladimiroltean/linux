@@ -48,33 +48,33 @@ int dsa_port_vlan_msti(struct dsa_port *dp,
 void dsa_port_mtu_change(struct dsa_port *dp, int new_mtu);
 int dsa_port_fdb_add(struct dsa_port *dp, const unsigned char *addr,
 		     u16 vid);
-int dsa_port_fdb_del(struct dsa_port *dp, const unsigned char *addr,
-		     u16 vid);
+void dsa_port_fdb_del(struct dsa_port *dp, const unsigned char *addr,
+		      u16 vid);
 int dsa_port_standalone_host_fdb_add(struct dsa_port *dp,
 				     const unsigned char *addr, u16 vid);
-int dsa_port_standalone_host_fdb_del(struct dsa_port *dp,
-				     const unsigned char *addr, u16 vid);
+void dsa_port_standalone_host_fdb_del(struct dsa_port *dp,
+				      const unsigned char *addr, u16 vid);
 int dsa_port_bridge_host_fdb_add(struct dsa_port *dp, const unsigned char *addr,
 				 u16 vid);
-int dsa_port_bridge_host_fdb_del(struct dsa_port *dp, const unsigned char *addr,
-				 u16 vid);
+void dsa_port_bridge_host_fdb_del(struct dsa_port *dp, const unsigned char *addr,
+				  u16 vid);
 int dsa_port_lag_fdb_add(struct dsa_port *dp, const unsigned char *addr,
 			 u16 vid);
-int dsa_port_lag_fdb_del(struct dsa_port *dp, const unsigned char *addr,
-			 u16 vid);
+void dsa_port_lag_fdb_del(struct dsa_port *dp, const unsigned char *addr,
+			  u16 vid);
 int dsa_port_fdb_dump(struct dsa_port *dp, dsa_fdb_dump_cb_t *cb, void *data);
 int dsa_port_mdb_add(const struct dsa_port *dp,
 		     const struct switchdev_obj_port_mdb *mdb);
-int dsa_port_mdb_del(const struct dsa_port *dp,
-		     const struct switchdev_obj_port_mdb *mdb);
+void dsa_port_mdb_del(const struct dsa_port *dp,
+		      const struct switchdev_obj_port_mdb *mdb);
 int dsa_port_standalone_host_mdb_add(const struct dsa_port *dp,
 				     const struct switchdev_obj_port_mdb *mdb);
-int dsa_port_standalone_host_mdb_del(const struct dsa_port *dp,
-				     const struct switchdev_obj_port_mdb *mdb);
+void dsa_port_standalone_host_mdb_del(const struct dsa_port *dp,
+				      const struct switchdev_obj_port_mdb *mdb);
 int dsa_port_bridge_host_mdb_add(const struct dsa_port *dp,
 				 const struct switchdev_obj_port_mdb *mdb);
-int dsa_port_bridge_host_mdb_del(const struct dsa_port *dp,
-				 const struct switchdev_obj_port_mdb *mdb);
+void dsa_port_bridge_host_mdb_del(const struct dsa_port *dp,
+				  const struct switchdev_obj_port_mdb *mdb);
 int dsa_port_pre_bridge_flags(const struct dsa_port *dp,
 			      struct switchdev_brport_flags flags,
 			      struct netlink_ext_ack *extack);
@@ -84,21 +84,21 @@ int dsa_port_bridge_flags(struct dsa_port *dp,
 int dsa_port_vlan_add(struct dsa_port *dp,
 		      const struct switchdev_obj_port_vlan *vlan,
 		      struct netlink_ext_ack *extack);
-int dsa_port_vlan_del(struct dsa_port *dp,
-		      const struct switchdev_obj_port_vlan *vlan);
+void dsa_port_vlan_del(struct dsa_port *dp,
+		       const struct switchdev_obj_port_vlan *vlan);
 int dsa_port_host_vlan_add(struct dsa_port *dp,
 			   const struct switchdev_obj_port_vlan *vlan,
 			   struct netlink_ext_ack *extack);
-int dsa_port_host_vlan_del(struct dsa_port *dp,
-			   const struct switchdev_obj_port_vlan *vlan);
+void dsa_port_host_vlan_del(struct dsa_port *dp,
+			    const struct switchdev_obj_port_vlan *vlan);
 int dsa_port_mrp_add(const struct dsa_port *dp,
 		     const struct switchdev_obj_mrp *mrp);
-int dsa_port_mrp_del(const struct dsa_port *dp,
-		     const struct switchdev_obj_mrp *mrp);
+void dsa_port_mrp_del(const struct dsa_port *dp,
+		      const struct switchdev_obj_mrp *mrp);
 int dsa_port_mrp_add_ring_role(const struct dsa_port *dp,
 			       const struct switchdev_obj_ring_role_mrp *mrp);
-int dsa_port_mrp_del_ring_role(const struct dsa_port *dp,
-			       const struct switchdev_obj_ring_role_mrp *mrp);
+void dsa_port_mrp_del_ring_role(const struct dsa_port *dp,
+			        const struct switchdev_obj_ring_role_mrp *mrp);
 int dsa_port_phylink_create(struct dsa_port *dp);
 void dsa_port_phylink_destroy(struct dsa_port *dp);
 int dsa_shared_port_link_register_of(struct dsa_port *dp);

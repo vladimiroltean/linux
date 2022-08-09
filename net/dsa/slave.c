@@ -101,14 +101,9 @@ static void dsa_slave_standalone_event_work(struct work_struct *work)
 		break;
 
 	case DSA_UC_DEL:
-		err = dsa_port_standalone_host_fdb_del(dp, addr, vid);
-		if (err) {
-			dev_err(ds->dev,
-				"port %d failed to delete %pM vid %d from fdb: %d\n",
-				dp->index, addr, vid, err);
-		}
-
+		dsa_port_standalone_host_fdb_del(dp, addr, vid);
 		break;
+
 	case DSA_MC_ADD:
 		ether_addr_copy(mdb.addr, addr);
 		mdb.vid = vid;
@@ -125,13 +120,7 @@ static void dsa_slave_standalone_event_work(struct work_struct *work)
 		ether_addr_copy(mdb.addr, addr);
 		mdb.vid = vid;
 
-		err = dsa_port_standalone_host_mdb_del(dp, &mdb);
-		if (err) {
-			dev_err(ds->dev,
-				"port %d failed to delete %pM vid %d from mdb: %d\n",
-				dp->index, addr, vid, err);
-		}
-
+		dsa_port_standalone_host_mdb_del(dp, &mdb);
 		break;
 	}
 
@@ -780,43 +769,42 @@ static int dsa_slave_port_obj_add(struct net_device *dev, const void *ctx,
 	return err;
 }
 
-static int dsa_slave_vlan_del(struct net_device *dev,
-			      const struct switchdev_obj *obj)
+static void dsa_slave_vlan_del(struct net_device *dev,
+			       const struct switchdev_obj *obj)
 {
 	struct dsa_port *dp = dsa_slave_to_port(dev);
 	struct switchdev_obj_port_vlan *vlan;
 
 	if (dsa_port_skip_vlan_configuration(dp))
-		return 0;
+		return;
 
 	vlan = SWITCHDEV_OBJ_PORT_VLAN(obj);
 
-	return dsa_port_vlan_del(dp, vlan);
+	dsa_port_vlan_del(dp, vlan);
 }
 
-static int dsa_slave_host_vlan_del(struct net_device *dev,
-				   const struct switchdev_obj *obj)
+static void dsa_slave_host_vlan_del(struct net_device *dev,
+				    const struct switchdev_obj *obj)
 {
 	struct dsa_port *dp = dsa_slave_to_port(dev);
 	struct switchdev_obj_port_vlan *vlan;
 
 	/* Do nothing if this is a software bridge */
 	if (!dp->bridge)
-		return -EOPNOTSUPP;
+		return;
 
 	if (dsa_port_skip_vlan_configuration(dp))
-		return 0;
+		return;
 
 	vlan = SWITCHDEV_OBJ_PORT_VLAN(obj);
 
-	return dsa_port_host_vlan_del(dp, vlan);
+	dsa_port_host_vlan_del(dp, vlan);
 }
 
 static int dsa_slave_port_obj_del(struct net_device *dev, const void *ctx,
 				  const struct switchdev_obj *obj)
 {
 	struct dsa_port *dp = dsa_slave_to_port(dev);
-	int err;
 
 	if (ctx && ctx != dp)
 		return 0;
@@ -826,39 +814,37 @@ static int dsa_slave_port_obj_del(struct net_device *dev, const void *ctx,
 		if (!dsa_port_offloads_bridge_port(dp, obj->orig_dev))
 			return -EOPNOTSUPP;
 
-		err = dsa_port_mdb_del(dp, SWITCHDEV_OBJ_PORT_MDB(obj));
+		dsa_port_mdb_del(dp, SWITCHDEV_OBJ_PORT_MDB(obj));
 		break;
 	case SWITCHDEV_OBJ_ID_HOST_MDB:
 		if (!dsa_port_offloads_bridge_dev(dp, obj->orig_dev))
 			return -EOPNOTSUPP;
 
-		err = dsa_port_bridge_host_mdb_del(dp, SWITCHDEV_OBJ_PORT_MDB(obj));
+		dsa_port_bridge_host_mdb_del(dp, SWITCHDEV_OBJ_PORT_MDB(obj));
 		break;
 	case SWITCHDEV_OBJ_ID_PORT_VLAN:
 		if (dsa_port_offloads_bridge_port(dp, obj->orig_dev))
-			err = dsa_slave_vlan_del(dev, obj);
+			dsa_slave_vlan_del(dev, obj);
 		else
-			err = dsa_slave_host_vlan_del(dev, obj);
+			dsa_slave_host_vlan_del(dev, obj);
 		break;
 	case SWITCHDEV_OBJ_ID_MRP:
 		if (!dsa_port_offloads_bridge_dev(dp, obj->orig_dev))
 			return -EOPNOTSUPP;
 
-		err = dsa_port_mrp_del(dp, SWITCHDEV_OBJ_MRP(obj));
+		dsa_port_mrp_del(dp, SWITCHDEV_OBJ_MRP(obj));
 		break;
 	case SWITCHDEV_OBJ_ID_RING_ROLE_MRP:
 		if (!dsa_port_offloads_bridge_dev(dp, obj->orig_dev))
 			return -EOPNOTSUPP;
 
-		err = dsa_port_mrp_del_ring_role(dp,
-						 SWITCHDEV_OBJ_RING_ROLE_MRP(obj));
+		dsa_port_mrp_del_ring_role(dp, SWITCHDEV_OBJ_RING_ROLE_MRP(obj));
 		break;
 	default:
-		err = -EOPNOTSUPP;
-		break;
+		return -EOPNOTSUPP;
 	}
 
-	return err;
+	return 0;
 }
 
 static inline netdev_tx_t dsa_slave_netpoll_send_skb(struct net_device *dev,
@@ -1816,15 +1802,9 @@ static int dsa_slave_vlan_rx_kill_vid(struct net_device *dev, __be16 proto,
 	};
 	struct dsa_switch *ds = dp->ds;
 	struct netdev_hw_addr *ha;
-	int err;
 
-	err = dsa_port_vlan_del(dp, &vlan);
-	if (err)
-		return err;
-
-	err = dsa_port_host_vlan_del(dp, &vlan);
-	if (err)
-		return err;
+	dsa_port_vlan_del(dp, &vlan);
+	dsa_port_host_vlan_del(dp, &vlan);
 
 	if (!dsa_switch_supports_uc_filtering(ds) &&
 	    !dsa_switch_supports_mc_filtering(ds))
@@ -3462,17 +3442,11 @@ static void dsa_slave_switchdev_event_work(struct work_struct *work)
 
 	case SWITCHDEV_FDB_DEL_TO_DEVICE:
 		if (switchdev_work->host_addr)
-			err = dsa_port_bridge_host_fdb_del(dp, addr, vid);
+			dsa_port_bridge_host_fdb_del(dp, addr, vid);
 		else if (dp->lag)
-			err = dsa_port_lag_fdb_del(dp, addr, vid);
+			dsa_port_lag_fdb_del(dp, addr, vid);
 		else
-			err = dsa_port_fdb_del(dp, addr, vid);
-		if (err) {
-			dev_err(ds->dev,
-				"port %d failed to delete %pM vid %d from fdb: %d\n",
-				dp->index, addr, vid, err);
-		}
-
+			dsa_port_fdb_del(dp, addr, vid);
 		break;
 	}
 
