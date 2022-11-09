@@ -97,6 +97,7 @@ struct sja1105_soc {
 	const struct sja1105_regs *regs;
 	u32 device_id;
 	u32 part_no;
+	u32 silicon_rev;
 };
 
 int sja1105_xfer_buf(const struct sja1105_soc *soc, sja1105_spi_rw_mode_t rw,
