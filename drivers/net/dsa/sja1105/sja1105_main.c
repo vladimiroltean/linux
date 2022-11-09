@@ -3866,7 +3866,8 @@ static int sja1105_switch_probe(struct device *dev,
 		return rc;
 	}
 
-	dev_info(dev, "Probed switch chip: %s\n", priv->info->name);
+	dev_info(dev, "Probed switch chip: %s (rev %d)\n", priv->info->name,
+		 soc->silicon_rev);
 
 	ds = devm_kzalloc(dev, sizeof(*ds), GFP_KERNEL);
 	if (!ds)

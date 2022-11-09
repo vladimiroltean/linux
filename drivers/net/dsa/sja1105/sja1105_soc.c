@@ -16,6 +16,7 @@
 #include "sja1105_soc.h"
 
 #define SJA1105_PROD_ID_PART_NO_X(val)		(((val) & GENMASK(19, 4)) >> 4)
+#define SJA1105_PROD_ID_VERSION_X(val)		((val) & GENMASK(3, 0))
 
 struct sja1110_regmap_bus_context {
 	unsigned long reg_base;
@@ -470,6 +471,7 @@ static int sja1105_soc_read_device_id(struct sja1105_soc *soc)
 		return rc;
 
 	soc->part_no = SJA1105_PROD_ID_PART_NO_X(val);
+	soc->silicon_rev = SJA1105_PROD_ID_VERSION_X(val);
 
 	return 0;
 }
