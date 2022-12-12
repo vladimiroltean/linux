@@ -1,0 +1,70 @@
+# SPDX-License-Identifier: GPL-2.0
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/interrupt-controller/nxp,sja1110-slir.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: NXP SJA1110 System-Level Interrupt Request
+
+maintainers:
+  - Vladimir Oltean <vladimir.oltean@nxp.com>
+
+description: |
+  The NXP SJA1110 Ethernet switches contain multiple interrupt multiplexers
+  generically named System-Level Interrupt Request (SLIR), in the ACU
+  (Auxiliary Control Unit), PMU (Power Management Unit) and GPIO blocks.
+  These controllers allow multiplexing internal interrupts from the switch SoC
+  (like embedded Ethernet PHYs) towards a single wired IRQ connected to the
+  host SoC.
+
+properties:
+  compatible:
+    items:
+      - enum:
+          - nxp,sja1110-acu-slir
+          - nxp,sja1110-gpio-slir
+          - nxp,sja1110-pmu-slir
+
+  reg:
+    maxItems: 1
+    description:
+      Base address and length of the register space (STAT, INTENSET, INTENCLR,
+      INTSTAT).
+
+  interrupts:
+    maxItems: 1
+    description:
+      Parent interrupt line connected to the INT_N pin. Can be absent, case in
+      which the SLIR is polled.
+
+  '#interrupt-cells':
+    const: 1
+    description:
+      The single cell is the multiplexed internal interrupt number.
+
+  interrupt-controller: true
+
+required:
+  - compatible
+  - reg
+  - '#interrupt-cells'
+  - interrupt-controller
+
+additionalProperties: false
+
+examples:
+  - |
+    #include <dt-bindings/interrupt-controller/irq.h>
+    #include <dt-bindings/interrupt-controller/nxp-sja1110-acu-slir.h>
+
+    soc {
+        #address-cells = <1>;
+        #size-cells = <1>;
+
+        interrupt-controller@1c53e0 {
+            compatible = "nxp,sja1110-acu-slir";
+            reg = <0x1c53e0 0x10>;
+            interrupt-controller;
+            #interrupt-cells = <1>;
+        };
+    };

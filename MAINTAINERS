@@ -15569,6 +15569,7 @@ F:	drivers/net/dsa/sja1105
 F:	drivers/net/mdio/mdio-sja1110-cbt1.c
 F:	drivers/net/mdio/mdio-sja1110-cbtx.c
 F:	drivers/net/pcs/pcs-xpcs-nxp.c
+F:	Documentation/devicetree/bindings/interrupt-controller/nxp,sja1110-slir.yaml
 
 NXP TDA998X DRM DRIVER
 M:	Russell King <linux@armlinux.org.uk>
