@@ -6,6 +6,8 @@
 
 /dts-v1/;
 
+#include <dt-bindings/interrupt-controller/nxp-sja1110-acu-slir.h>
+
 #include "fsl-lx2160a.dtsi"
 
 / {
@@ -360,6 +362,12 @@
 		spi-cpol;
 		dsa,member = <0 0>;
 
+		slir1: interrupt-controller {
+			compatible = "nxp,sja1110-acu-slir";
+			interrupt-controller;
+			#interrupt-cells = <1>;
+		};
+
 		ethernet-ports {
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -469,31 +477,37 @@
 				sw1_port5_base_t1_phy: ethernet-phy@1 {
 					compatible = "ethernet-phy-ieee802.3-c45";
 					reg = <0x1>;
+					interrupts-extended = <&slir1 SJA1110_IRQ_CBT1_PHY1>;
 				};
 
 				sw1_port6_base_t1_phy: ethernet-phy@2 {
 					compatible = "ethernet-phy-ieee802.3-c45";
 					reg = <0x2>;
+					interrupts-extended = <&slir1 SJA1110_IRQ_CBT1_PHY2>;
 				};
 
 				sw1_port7_base_t1_phy: ethernet-phy@3 {
 					compatible = "ethernet-phy-ieee802.3-c45";
 					reg = <0x3>;
+					interrupts-extended = <&slir1 SJA1110_IRQ_CBT1_PHY3>;
 				};
 
 				sw1_port8_base_t1_phy: ethernet-phy@4 {
 					compatible = "ethernet-phy-ieee802.3-c45";
 					reg = <0x4>;
+					interrupts-extended = <&slir1 SJA1110_IRQ_CBT1_PHY4>;
 				};
 
 				sw1_port9_base_t1_phy: ethernet-phy@5 {
 					compatible = "ethernet-phy-ieee802.3-c45";
 					reg = <0x5>;
+					interrupts-extended = <&slir1 SJA1110_IRQ_CBT1_PHY5>;
 				};
 
 				sw1_port10_base_t1_phy: ethernet-phy@6 {
 					compatible = "ethernet-phy-ieee802.3-c45";
 					reg = <0x6>;
+					interrupts-extended = <&slir1 SJA1110_IRQ_CBT1_PHY6>;
 				};
 			};
 		};
@@ -505,6 +519,12 @@
 		spi-max-frequency = <4000000>;
 		spi-cpol;
 		dsa,member = <0 1>;
+
+		slir2: interrupt-controller {
+			compatible = "nxp,sja1110-acu-slir";
+			interrupt-controller;
+			#interrupt-cells = <1>;
+		};
 
 		ethernet-ports {
 			#address-cells = <1>;
@@ -614,31 +634,37 @@
 				sw2_port5_base_t1_phy: ethernet-phy@1 {
 					compatible = "ethernet-phy-ieee802.3-c45";
 					reg = <0x1>;
+					interrupts-extended = <&slir2 SJA1110_IRQ_CBT1_PHY1>;
 				};
 
 				sw2_port6_base_t1_phy: ethernet-phy@2 {
 					compatible = "ethernet-phy-ieee802.3-c45";
 					reg = <0x2>;
+					interrupts-extended = <&slir2 SJA1110_IRQ_CBT1_PHY2>;
 				};
 
 				sw2_port7_base_t1_phy: ethernet-phy@3 {
 					compatible = "ethernet-phy-ieee802.3-c45";
 					reg = <0x3>;
+					interrupts-extended = <&slir2 SJA1110_IRQ_CBT1_PHY3>;
 				};
 
 				sw2_port8_base_t1_phy: ethernet-phy@4 {
 					compatible = "ethernet-phy-ieee802.3-c45";
 					reg = <0x4>;
+					interrupts-extended = <&slir2 SJA1110_IRQ_CBT1_PHY4>;
 				};
 
 				sw2_port9_base_t1_phy: ethernet-phy@5 {
 					compatible = "ethernet-phy-ieee802.3-c45";
 					reg = <0x5>;
+					interrupts-extended = <&slir2 SJA1110_IRQ_CBT1_PHY5>;
 				};
 
 				sw2_port10_base_t1_phy: ethernet-phy@6 {
 					compatible = "ethernet-phy-ieee802.3-c45";
 					reg = <0x6>;
+					interrupts-extended = <&slir2 SJA1110_IRQ_CBT1_PHY6>;
 				};
 			};
 		};
