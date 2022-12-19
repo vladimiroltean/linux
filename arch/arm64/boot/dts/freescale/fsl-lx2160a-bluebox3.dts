@@ -7,6 +7,7 @@
 /dts-v1/;
 
 #include <dt-bindings/interrupt-controller/nxp-sja1110-acu-slir.h>
+#include <dt-bindings/reset/nxp-sja1110-rgu.h>
 
 #include "fsl-lx2160a.dtsi"
 
@@ -514,160 +515,203 @@
 		};
 	};
 
-	sw2: ethernet-switch@2 {
-		compatible = "nxp,sja1110a";
+	soc@2 {
+		compatible = "nxp,sja1110-soc";
 		reg = <2>;
 		spi-max-frequency = <4000000>;
 		spi-cpol;
-		dsa,member = <0 1>;
+		#address-cells = <1>;
+		#size-cells = <1>;
 
-		slir2: interrupt-controller {
+		sw2: ethernet-switch@0 {
+			compatible = "nxp,sja1110a";
+			reg = <0x000000 0x400000>;
+			resets = <&sw2_rgu SJA1110_RGU_ETHSW_RST>;
+			dsa,member = <0 1>;
+
+			ethernet-ports {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				/* Microcontroller port */
+				port@0 {
+					reg = <0>;
+					status = "disabled";
+				};
+
+				sw2p1: port@1 {
+					reg = <1>;
+					link = <&sw1p4>;
+					phy-mode = "sgmii";
+
+					fixed-link {
+						speed = <1000>;
+						full-duplex;
+					};
+				};
+
+				port@2 {
+					reg = <2>;
+					ethernet = <&dpmac18>;
+					phy-mode = "rgmii-id";
+					rx-internal-delay-ps = <2000>;
+					tx-internal-delay-ps = <2000>;
+
+					fixed-link {
+						speed = <1000>;
+						full-duplex;
+					};
+				};
+
+				port@3 {
+					reg = <3>;
+					label = "1ge_p2";
+					phy-mode = "rgmii-id";
+					phy-handle = <&sw2_mii3_phy>;
+				};
+
+				port@4 {
+					reg = <4>;
+					label = "to_sw3";
+					phy-mode = "2500base-x";
+
+					fixed-link {
+						speed = <2500>;
+						full-duplex;
+					};
+				};
+
+				port@5 {
+					reg = <5>;
+					label = "trx7";
+					phy-mode = "internal";
+					phy-handle = <&sw2_port5_base_t1_phy>;
+				};
+
+				port@6 {
+					reg = <6>;
+					label = "trx8";
+					phy-mode = "internal";
+					phy-handle = <&sw2_port6_base_t1_phy>;
+				};
+
+				port@7 {
+					reg = <7>;
+					label = "trx9";
+					phy-mode = "internal";
+					phy-handle = <&sw2_port7_base_t1_phy>;
+				};
+
+				port@8 {
+					reg = <8>;
+					label = "trx10";
+					phy-mode = "internal";
+					phy-handle = <&sw2_port8_base_t1_phy>;
+				};
+
+				port@9 {
+					reg = <9>;
+					label = "trx11";
+					phy-mode = "internal";
+					phy-handle = <&sw2_port9_base_t1_phy>;
+				};
+
+				port@a {
+					reg = <10>;
+					label = "trx12";
+					phy-mode = "internal";
+					phy-handle = <&sw2_port10_base_t1_phy>;
+				};
+			};
+		};
+
+		mdio@704000 {
+			compatible = "nxp,sja1110-base-t1-mdio";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x704000 0x1000>;
+
+			sw2_port5_base_t1_phy: ethernet-phy@1 {
+				compatible = "ethernet-phy-ieee802.3-c45";
+				reg = <0x1>;
+				interrupts-extended = <&slir2 SJA1110_IRQ_CBT1_PHY1>;
+			};
+
+			sw2_port6_base_t1_phy: ethernet-phy@2 {
+				compatible = "ethernet-phy-ieee802.3-c45";
+				reg = <0x2>;
+				interrupts-extended = <&slir2 SJA1110_IRQ_CBT1_PHY2>;
+			};
+
+			sw2_port7_base_t1_phy: ethernet-phy@3 {
+				compatible = "ethernet-phy-ieee802.3-c45";
+				reg = <0x3>;
+				interrupts-extended = <&slir2 SJA1110_IRQ_CBT1_PHY3>;
+			};
+
+			sw2_port8_base_t1_phy: ethernet-phy@4 {
+				compatible = "ethernet-phy-ieee802.3-c45";
+				reg = <0x4>;
+				interrupts-extended = <&slir2 SJA1110_IRQ_CBT1_PHY4>;
+			};
+
+			sw2_port9_base_t1_phy: ethernet-phy@5 {
+				compatible = "ethernet-phy-ieee802.3-c45";
+				reg = <0x5>;
+				interrupts-extended = <&slir2 SJA1110_IRQ_CBT1_PHY5>;
+			};
+
+			sw2_port10_base_t1_phy: ethernet-phy@6 {
+				compatible = "ethernet-phy-ieee802.3-c45";
+				reg = <0x6>;
+				interrupts-extended = <&slir2 SJA1110_IRQ_CBT1_PHY6>;
+			};
+		};
+
+		mdio@709000 {
+			compatible = "nxp,sja1110-base-tx-mdio";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x709000 0x1000>;
+		};
+
+		slir2: interrupt-controller@711fe0 {
 			compatible = "nxp,sja1110-acu-slir";
+			reg = <0x711fe0 0x10>;
 			interrupt-controller;
 			#interrupt-cells = <1>;
 		};
 
-		ethernet-ports {
-			#address-cells = <1>;
-			#size-cells = <0>;
-
-			/* Microcontroller port */
-			port@0 {
-				reg = <0>;
-				status = "disabled";
-			};
-
-			sw2p1: port@1 {
-				reg = <1>;
-				link = <&sw1p4>;
-				phy-mode = "sgmii";
-
-				fixed-link {
-					speed = <1000>;
-					full-duplex;
-				};
-			};
-
-			port@2 {
-				reg = <2>;
-				ethernet = <&dpmac18>;
-				phy-mode = "rgmii-id";
-				rx-internal-delay-ps = <2000>;
-				tx-internal-delay-ps = <2000>;
-
-				fixed-link {
-					speed = <1000>;
-					full-duplex;
-				};
-			};
-
-			port@3 {
-				reg = <3>;
-				label = "1ge_p2";
-				phy-mode = "rgmii-id";
-				phy-handle = <&sw2_mii3_phy>;
-			};
-
-			port@4 {
-				reg = <4>;
-				label = "to_sw3";
-				phy-mode = "2500base-x";
-
-				fixed-link {
-					speed = <2500>;
-					full-duplex;
-				};
-			};
-
-			port@5 {
-				reg = <5>;
-				label = "trx7";
-				phy-mode = "internal";
-				phy-handle = <&sw2_port5_base_t1_phy>;
-			};
-
-			port@6 {
-				reg = <6>;
-				label = "trx8";
-				phy-mode = "internal";
-				phy-handle = <&sw2_port6_base_t1_phy>;
-			};
-
-			port@7 {
-				reg = <7>;
-				label = "trx9";
-				phy-mode = "internal";
-				phy-handle = <&sw2_port7_base_t1_phy>;
-			};
-
-			port@8 {
-				reg = <8>;
-				label = "trx10";
-				phy-mode = "internal";
-				phy-handle = <&sw2_port8_base_t1_phy>;
-			};
-
-			port@9 {
-				reg = <9>;
-				label = "trx11";
-				phy-mode = "internal";
-				phy-handle = <&sw2_port9_base_t1_phy>;
-			};
-
-			port@a {
-				reg = <10>;
-				label = "trx12";
-				phy-mode = "internal";
-				phy-handle = <&sw2_port10_base_t1_phy>;
-			};
+		gpio@712000 {
+			compatible = "nxp,sja1110-gpio";
+			reg = <0x712000 0x1000>;
+			gpio-controller;
 		};
 
-		mdios {
-			#address-cells = <1>;
-			#size-cells = <0>;
+		slir2_gpio: interrupt-controller@712fe0 {
+			compatible = "nxp,sja1110-gpio-slir";
+			reg = <0x712fe0 0x10>;
+			interrupt-controller;
+			#interrupt-cells = <1>;
+		};
 
-			mdio@0 {
-				compatible = "nxp,sja1110-base-t1-mdio";
-				#address-cells = <1>;
-				#size-cells = <0>;
-				reg = <0>;
+		sw2_rgu: reset@718000 {
+			compatible = "nxp,sja1110-rgu";
+			reg = <0x718000 0x1000>;
+			#reset-cells = <1>;
+		};
 
-				sw2_port5_base_t1_phy: ethernet-phy@1 {
-					compatible = "ethernet-phy-ieee802.3-c45";
-					reg = <0x1>;
-					interrupts-extended = <&slir2 SJA1110_IRQ_CBT1_PHY1>;
-				};
+		sw2_cgu: clock-controller@719000 {
+			compatible = "nxp,sja1110-cgu";
+			reg = <0x719000 0x1000>;
+			#clock-cells = <1>;
+		};
 
-				sw2_port6_base_t1_phy: ethernet-phy@2 {
-					compatible = "ethernet-phy-ieee802.3-c45";
-					reg = <0x2>;
-					interrupts-extended = <&slir2 SJA1110_IRQ_CBT1_PHY2>;
-				};
-
-				sw2_port7_base_t1_phy: ethernet-phy@3 {
-					compatible = "ethernet-phy-ieee802.3-c45";
-					reg = <0x3>;
-					interrupts-extended = <&slir2 SJA1110_IRQ_CBT1_PHY3>;
-				};
-
-				sw2_port8_base_t1_phy: ethernet-phy@4 {
-					compatible = "ethernet-phy-ieee802.3-c45";
-					reg = <0x4>;
-					interrupts-extended = <&slir2 SJA1110_IRQ_CBT1_PHY4>;
-				};
-
-				sw2_port9_base_t1_phy: ethernet-phy@5 {
-					compatible = "ethernet-phy-ieee802.3-c45";
-					reg = <0x5>;
-					interrupts-extended = <&slir2 SJA1110_IRQ_CBT1_PHY5>;
-				};
-
-				sw2_port10_base_t1_phy: ethernet-phy@6 {
-					compatible = "ethernet-phy-ieee802.3-c45";
-					reg = <0x6>;
-					interrupts-extended = <&slir2 SJA1110_IRQ_CBT1_PHY6>;
-				};
-			};
+		slir2_pmu: interrupt-controller@71afe0 {
+			compatible = "nxp,sja1110-pmu-slir";
+			reg = <0x71afe0 0x10>;
+			interrupt-controller;
+			#interrupt-cells = <1>;
 		};
 	};
 };
