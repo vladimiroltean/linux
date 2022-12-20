@@ -679,4 +679,12 @@ config SUNPLUS_SP7021_INTC
 	  chained controller, routing all interrupt source in P-Chip to
 	  the primary controller on C-Chip.
 
+config SJA1110_SLIR
+	tristate "NXP SJA1110 Ethernet switch interrupt controller"
+	select IRQ_DOMAIN
+	select REGMAP
+	help
+	  This enables support for the System Level Interrupt Request (SLIR)
+	  block on the SJA1110 switches.
+
 endmenu
