@@ -15567,6 +15567,7 @@ L:	linux-kernel@vger.kernel.org
 S:	Maintained
 F:	drivers/net/dsa/sja1105
 F:	drivers/net/mdio/mdio-sja1110-cbt1.c
+F:	drivers/net/mdio/mdio-sja1110-cbtx.c
 F:	drivers/net/pcs/pcs-xpcs-nxp.c
 
 NXP TDA998X DRM DRIVER
