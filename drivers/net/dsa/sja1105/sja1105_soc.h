@@ -38,8 +38,12 @@
 
 #define SJA1105_RSV_ADDR		0xffffffffffffffffull
 
-struct sja1105_private;
+struct device;
+struct device_node;
+struct platform_device;
 struct ptp_system_timestamp;
+struct resource;
+struct sja1105_private;
 
 typedef enum {
 	SPI_READ = 0,
@@ -85,8 +89,6 @@ struct sja1105_regs {
 	u64 rmii_ref_clk[SJA1105_MAX_NUM_PORTS];
 	u64 rmii_ext_tx_clk[SJA1105_MAX_NUM_PORTS];
 	u64 stats[__MAX_SJA1105_STATS_AREA][SJA1105_MAX_NUM_PORTS];
-	u64 mdio_100base_tx;
-	u64 mdio_100base_t1;
 	u64 pcs_base[SJA1105_MAX_NUM_PORTS];
 };
 
@@ -103,5 +105,15 @@ int sja1105_xfer_u64(const struct sja1105_private *priv,
 extern const struct sja1105_regs sja1105et_regs;
 extern const struct sja1105_regs sja1105pqrs_regs;
 extern const struct sja1105_regs sja1110_regs;
+
+struct platform_device *
+sja1110_compat_device_create(struct device *parent, struct device_node *np,
+			     const char *name, const struct resource *resources,
+			     size_t num_resources);
+
+void sja1110_compat_device_destroy(struct platform_device *pdev);
+
+struct regmap *sja1110_create_regmap(struct sja1105_private *priv,
+				     const struct resource *res);
 
 #endif
