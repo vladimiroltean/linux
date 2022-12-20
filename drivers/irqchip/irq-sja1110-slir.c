@@ -11,6 +11,7 @@
 #include <linux/regmap.h>
 
 #define SLIR_NUM_IRQ		32
+#define SLIR_POLL_INTERVAL	msecs_to_jiffies(1000)
 
 #define SLIR_STAT		0x0
 #define SLIR_INTENSET		0x4
@@ -22,15 +23,17 @@ struct slir {
 	struct regmap *regmap;
 	struct irq_domain *domain;
 	struct mutex domain_lock;
+	unsigned long enabled_irqs;
 	u32 intenset;
 	u32 intenclr;
 	int irq;
+	struct kthread_worker *kworker;
+	struct kthread_delayed_work irq_poll_work;
 	char parent_irq_name[64];
 };
 
-static irqreturn_t slir_irq(int irq, void *data)
+static irqreturn_t slir_irq_work(struct slir *slir)
 {
-	struct slir *slir = data;
 	bool handled = false;
 	unsigned int virq;
 	u32 intstat;
@@ -57,12 +60,39 @@ static irqreturn_t slir_irq(int irq, void *data)
 	return handled ? IRQ_HANDLED : IRQ_NONE;
 }
 
+static irqreturn_t slir_irq(int irq, void *data)
+{
+	return slir_irq_work(data);
+}
+
+static void slir_irq_poll_queue_work(struct slir *slir)
+{
+	kthread_queue_delayed_work(slir->kworker, &slir->irq_poll_work,
+				   SLIR_POLL_INTERVAL);
+}
+
+static void slir_irq_poll(struct kthread_work *work)
+{
+	struct slir *slir = container_of(work, struct slir, irq_poll_work.work);
+	bool trigger_poll;
+
+	slir_irq_work(slir);
+
+	mutex_lock(&slir->domain_lock);
+	trigger_poll = !!slir->enabled_irqs;
+	mutex_unlock(&slir->domain_lock);
+
+	if (trigger_poll)
+		slir_irq_poll_queue_work(slir);
+}
+
 static void slir_mask_irq(struct irq_data *d)
 {
 	struct slir *slir = irq_data_get_irq_chip_data(d);
 	unsigned int irq = BIT(d->hwirq);
 
 	slir->intenclr |= irq;
+	slir->enabled_irqs &= ~irq;
 }
 
 static void slir_unmask_irq(struct irq_data *d)
@@ -71,6 +101,7 @@ static void slir_unmask_irq(struct irq_data *d)
 	unsigned int irq = BIT(d->hwirq);
 
 	slir->intenset |= irq;
+	slir->enabled_irqs |= irq;
 }
 
 static void slir_irq_bus_lock(struct irq_data *d)
@@ -86,6 +117,7 @@ static void slir_irq_bus_lock(struct irq_data *d)
 static void slir_irq_bus_sync_unlock(struct irq_data *d)
 {
 	struct slir *slir = irq_data_get_irq_chip_data(d);
+	bool trigger_poll;
 	int err;
 
 	if (slir->intenclr) {
@@ -104,7 +136,12 @@ static void slir_irq_bus_sync_unlock(struct irq_data *d)
 		}
 	}
 
+	trigger_poll = !slir->irq && slir->enabled_irqs;
+
 	mutex_unlock(&slir->domain_lock);
+
+	if (trigger_poll)
+		slir_irq_poll_queue_work(slir);
 }
 
 static struct irq_chip slir_chip = {
@@ -193,13 +230,36 @@ static void slir_irq_domain_teardown(struct slir *slir)
 	irq_domain_remove(domain);
 }
 
+static int slir_irq_poll_setup(struct slir *slir)
+{
+	dev_info(slir->dev, "Missing SLIR IRQ, setting up poll kthread\n");
+
+	slir->kworker = kthread_create_worker(0, "%s:slir", dev_name(slir->dev));
+	if (IS_ERR(slir->kworker))
+		return PTR_ERR(slir->kworker);
+
+	kthread_init_delayed_work(&slir->irq_poll_work, slir_irq_poll);
+
+	return 0;
+}
+
+static void slir_irq_poll_teardown(struct slir *slir)
+{
+	kthread_cancel_delayed_work_sync(&slir->irq_poll_work);
+	kthread_destroy_worker(slir->kworker);
+}
+
 static int slir_parent_irq_setup(struct slir *slir, struct device_node *dn)
 {
 	int err, irq;
 
 	irq = of_irq_get(dn, 0);
-	if (irq <= 0)
+	if (irq == -EPROBE_DEFER)
+		irq = driver_deferred_probe_check_state(slir->dev);
+	if (irq == -EPROBE_DEFER)
 		return irq;
+	if (irq <= 0)
+		return slir_irq_poll_setup(slir);
 
 	snprintf(slir->parent_irq_name, sizeof(slir->parent_irq_name),
 		 "%s:slir", dev_name(slir->dev));
@@ -216,6 +276,9 @@ static int slir_parent_irq_setup(struct slir *slir, struct device_node *dn)
 
 static void slir_parent_irq_teardown(struct slir *slir)
 {
+	if (!slir->irq)
+		return slir_irq_poll_teardown(slir);
+
 	free_irq(slir->irq, slir);
 	slir->irq = 0;
 }
