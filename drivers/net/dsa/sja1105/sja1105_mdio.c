@@ -3,9 +3,17 @@
  */
 #include <linux/pcs/pcs-xpcs.h>
 #include <linux/of_mdio.h>
+
 #include "sja1105.h"
+#include "sja1105_soc.h"
 
 #define SJA1110_PCS_BANK_REG		SJA1110_SPI_ADDR(0x3fc)
+
+static const struct resource sja1110_mdio_cbt1_resource =
+	DEFINE_RES_REG_NAMED(0x704000, 0x4000, "mdio_cbt1");
+
+static const struct resource sja1110_mdio_cbtx_resource =
+	DEFINE_RES_REG_NAMED(0x709000, 0x1000, "mdio_cbtx");
 
 int sja1105_pcs_mdio_read_c45(struct mii_bus *bus, int phy, int mmd, int reg)
 {
@@ -133,134 +141,14 @@ int sja1110_pcs_mdio_write_c45(struct mii_bus *bus, int phy, int reg, int mmd,
 				&tmp, NULL);
 }
 
-enum sja1105_mdio_opcode {
-	SJA1105_C45_ADDR = 0,
-	SJA1105_C22 = 1,
-	SJA1105_C45_DATA = 2,
-	SJA1105_C45_DATA_AUTOINC = 3,
-};
-
-static u64 sja1105_base_t1_encode_addr(struct sja1105_private *priv,
-				       int phy, enum sja1105_mdio_opcode op,
-				       int xad)
-{
-	const struct sja1105_regs *regs = priv->info->regs;
-
-	return regs->mdio_100base_t1 | (phy << 7) | (op << 5) | (xad << 0);
-}
-
-static int sja1105_base_t1_mdio_read_c22(struct mii_bus *bus, int phy, int reg)
-{
-	struct sja1105_mdio_private *mdio_priv = bus->priv;
-	struct sja1105_private *priv = mdio_priv->priv;
-	u64 addr;
-	u32 tmp;
-	int rc;
-
-	addr = sja1105_base_t1_encode_addr(priv, phy, SJA1105_C22, reg & 0x1f);
-
-	rc = sja1105_xfer_u32(priv, SPI_READ, addr, &tmp, NULL);
-	if (rc < 0)
-		return rc;
-
-	return tmp & 0xffff;
-}
-
-static int sja1105_base_t1_mdio_read_c45(struct mii_bus *bus, int phy,
-					 int mmd, int reg)
-{
-	struct sja1105_mdio_private *mdio_priv = bus->priv;
-	struct sja1105_private *priv = mdio_priv->priv;
-	u64 addr;
-	u32 tmp;
-	int rc;
-
-	addr = sja1105_base_t1_encode_addr(priv, phy, SJA1105_C45_ADDR, mmd);
-
-	rc = sja1105_xfer_u32(priv, SPI_WRITE, addr, &reg, NULL);
-	if (rc < 0)
-		return rc;
-
-	addr = sja1105_base_t1_encode_addr(priv, phy, SJA1105_C45_DATA, mmd);
-
-	rc = sja1105_xfer_u32(priv, SPI_READ, addr, &tmp, NULL);
-	if (rc < 0)
-		return rc;
-
-	return tmp & 0xffff;
-}
-
-static int sja1105_base_t1_mdio_write_c22(struct mii_bus *bus, int phy, int reg,
-					  u16 val)
-{
-	struct sja1105_mdio_private *mdio_priv = bus->priv;
-	struct sja1105_private *priv = mdio_priv->priv;
-	u64 addr;
-	u32 tmp;
-
-	addr = sja1105_base_t1_encode_addr(priv, phy, SJA1105_C22, reg & 0x1f);
-
-	tmp = val & 0xffff;
-
-	return sja1105_xfer_u32(priv, SPI_WRITE, addr, &tmp, NULL);
-}
-
-static int sja1105_base_t1_mdio_write_c45(struct mii_bus *bus, int phy,
-					  int mmd, int reg, u16 val)
-{
-	struct sja1105_mdio_private *mdio_priv = bus->priv;
-	struct sja1105_private *priv = mdio_priv->priv;
-	u64 addr;
-	u32 tmp;
-	int rc;
-
-	addr = sja1105_base_t1_encode_addr(priv, phy, SJA1105_C45_ADDR, mmd);
-
-	rc = sja1105_xfer_u32(priv, SPI_WRITE, addr, &reg, NULL);
-	if (rc < 0)
-		return rc;
-
-	addr = sja1105_base_t1_encode_addr(priv, phy, SJA1105_C45_DATA, mmd);
-
-	tmp = val & 0xffff;
-
-	return sja1105_xfer_u32(priv, SPI_WRITE, addr, &tmp, NULL);
-}
-
-static int sja1105_base_tx_mdio_read(struct mii_bus *bus, int phy, int reg)
-{
-	struct sja1105_mdio_private *mdio_priv = bus->priv;
-	struct sja1105_private *priv = mdio_priv->priv;
-	const struct sja1105_regs *regs = priv->info->regs;
-	u32 tmp;
-	int rc;
-
-	rc = sja1105_xfer_u32(priv, SPI_READ, regs->mdio_100base_tx + reg,
-			      &tmp, NULL);
-	if (rc < 0)
-		return rc;
-
-	return tmp & 0xffff;
-}
-
-static int sja1105_base_tx_mdio_write(struct mii_bus *bus, int phy, int reg,
-				      u16 val)
-{
-	struct sja1105_mdio_private *mdio_priv = bus->priv;
-	struct sja1105_private *priv = mdio_priv->priv;
-	const struct sja1105_regs *regs = priv->info->regs;
-	u32 tmp = val;
-
-	return sja1105_xfer_u32(priv, SPI_WRITE, regs->mdio_100base_tx + reg,
-				&tmp, NULL);
-}
-
 static int sja1105_mdiobus_base_tx_register(struct sja1105_private *priv,
 					    struct device_node *mdio_node)
 {
-	struct sja1105_mdio_private *mdio_priv;
+	struct device *dev = &priv->spidev->dev;
+	struct platform_device *pdev;
 	struct device_node *np;
-	struct mii_bus *bus;
+	struct regmap *regmap;
+	char name[64];
 	int rc = 0;
 
 	np = of_get_compatible_child(mdio_node, "nxp,sja1110-base-tx-mdio");
@@ -270,28 +158,22 @@ static int sja1105_mdiobus_base_tx_register(struct sja1105_private *priv,
 	if (!of_device_is_available(np))
 		goto out_put_np;
 
-	bus = mdiobus_alloc_size(sizeof(*mdio_priv));
-	if (!bus) {
-		rc = -ENOMEM;
+	regmap = sja1110_create_regmap(priv, &sja1110_mdio_cbtx_resource);
+	if (IS_ERR(regmap)) {
+		rc = PTR_ERR(regmap);
 		goto out_put_np;
 	}
 
-	bus->name = "SJA1110 100base-TX MDIO bus";
-	snprintf(bus->id, MII_BUS_ID_SIZE, "%s-base-tx",
-		 dev_name(priv->ds->dev));
-	bus->read = sja1105_base_tx_mdio_read;
-	bus->write = sja1105_base_tx_mdio_write;
-	bus->parent = priv->ds->dev;
-	mdio_priv = bus->priv;
-	mdio_priv->priv = priv;
+	snprintf(name, 64, "%s-mdio-cbtx", dev_name(dev));
 
-	rc = of_mdiobus_register(bus, np);
-	if (rc) {
-		mdiobus_free(bus);
+	pdev = sja1110_compat_device_create(dev, np, name,
+					    &sja1110_mdio_cbtx_resource, 1);
+	if (IS_ERR(pdev)) {
+		rc = PTR_ERR(pdev);
 		goto out_put_np;
 	}
 
-	priv->mdio_base_tx = bus;
+	priv->mdio_cbtx_pdev = pdev;
 
 out_put_np:
 	of_node_put(np);
@@ -301,20 +183,20 @@ out_put_np:
 
 static void sja1105_mdiobus_base_tx_unregister(struct sja1105_private *priv)
 {
-	if (!priv->mdio_base_tx)
+	if (!priv->mdio_cbtx_pdev)
 		return;
 
-	mdiobus_unregister(priv->mdio_base_tx);
-	mdiobus_free(priv->mdio_base_tx);
-	priv->mdio_base_tx = NULL;
+	sja1110_compat_device_destroy(priv->mdio_cbtx_pdev);
 }
 
 static int sja1105_mdiobus_base_t1_register(struct sja1105_private *priv,
 					    struct device_node *mdio_node)
 {
-	struct sja1105_mdio_private *mdio_priv;
+	struct device *dev = &priv->spidev->dev;
+	struct platform_device *pdev;
 	struct device_node *np;
-	struct mii_bus *bus;
+	struct regmap *regmap;
+	char name[64];
 	int rc = 0;
 
 	np = of_get_compatible_child(mdio_node, "nxp,sja1110-base-t1-mdio");
@@ -324,30 +206,22 @@ static int sja1105_mdiobus_base_t1_register(struct sja1105_private *priv,
 	if (!of_device_is_available(np))
 		goto out_put_np;
 
-	bus = mdiobus_alloc_size(sizeof(*mdio_priv));
-	if (!bus) {
-		rc = -ENOMEM;
+	regmap = sja1110_create_regmap(priv, &sja1110_mdio_cbt1_resource);
+	if (IS_ERR(regmap)) {
+		rc = PTR_ERR(regmap);
 		goto out_put_np;
 	}
 
-	bus->name = "SJA1110 100base-T1 MDIO bus";
-	snprintf(bus->id, MII_BUS_ID_SIZE, "%s-base-t1",
-		 dev_name(priv->ds->dev));
-	bus->read = sja1105_base_t1_mdio_read_c22;
-	bus->write = sja1105_base_t1_mdio_write_c22;
-	bus->read_c45 = sja1105_base_t1_mdio_read_c45;
-	bus->write_c45 = sja1105_base_t1_mdio_write_c45;
-	bus->parent = priv->ds->dev;
-	mdio_priv = bus->priv;
-	mdio_priv->priv = priv;
+	snprintf(name, 64, "%s-mdio-cbt1", dev_name(dev));
 
-	rc = of_mdiobus_register(bus, np);
-	if (rc) {
-		mdiobus_free(bus);
+	pdev = sja1110_compat_device_create(dev, np, name,
+					    &sja1110_mdio_cbt1_resource, 1);
+	if (IS_ERR(pdev)) {
+		rc = PTR_ERR(pdev);
 		goto out_put_np;
 	}
 
-	priv->mdio_base_t1 = bus;
+	priv->mdio_cbt1_pdev = pdev;
 
 out_put_np:
 	of_node_put(np);
@@ -357,12 +231,10 @@ out_put_np:
 
 static void sja1105_mdiobus_base_t1_unregister(struct sja1105_private *priv)
 {
-	if (!priv->mdio_base_t1)
+	if (!priv->mdio_cbt1_pdev)
 		return;
 
-	mdiobus_unregister(priv->mdio_base_t1);
-	mdiobus_free(priv->mdio_base_t1);
-	priv->mdio_base_t1 = NULL;
+	sja1110_compat_device_destroy(priv->mdio_cbt1_pdev);
 }
 
 static int sja1105_mdiobus_pcs_register(struct sja1105_private *priv)
@@ -461,7 +333,6 @@ static void sja1105_mdiobus_pcs_unregister(struct sja1105_private *priv)
 int sja1105_mdiobus_register(struct dsa_switch *ds)
 {
 	struct sja1105_private *priv = ds->priv;
-	const struct sja1105_regs *regs = priv->info->regs;
 	struct device_node *switch_node = ds->dev->of_node;
 	struct device_node *mdio_node;
 	int rc;
@@ -477,17 +348,13 @@ int sja1105_mdiobus_register(struct dsa_switch *ds)
 	if (!of_device_is_available(mdio_node))
 		goto out_put_mdio_node;
 
-	if (regs->mdio_100base_tx != SJA1105_RSV_ADDR) {
-		rc = sja1105_mdiobus_base_tx_register(priv, mdio_node);
-		if (rc)
-			goto err_put_mdio_node;
-	}
+	rc = sja1105_mdiobus_base_tx_register(priv, mdio_node);
+	if (rc)
+		goto err_put_mdio_node;
 
-	if (regs->mdio_100base_t1 != SJA1105_RSV_ADDR) {
-		rc = sja1105_mdiobus_base_t1_register(priv, mdio_node);
-		if (rc)
-			goto err_free_base_tx_mdiobus;
-	}
+	rc = sja1105_mdiobus_base_t1_register(priv, mdio_node);
+	if (rc)
+		goto err_free_base_tx_mdiobus;
 
 out_put_mdio_node:
 	of_node_put(mdio_node);

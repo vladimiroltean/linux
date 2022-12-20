@@ -194,8 +194,8 @@ struct sja1105_private {
 	struct mutex dynamic_config_lock;
 	struct devlink_region **regions;
 	struct sja1105_cbs_entry *cbs;
-	struct mii_bus *mdio_base_t1;
-	struct mii_bus *mdio_base_tx;
+	struct platform_device *mdio_cbt1_pdev;
+	struct platform_device *mdio_cbtx_pdev;
 	struct mii_bus *mdio_pcs;
 	struct dw_xpcs *xpcs[SJA1105_MAX_NUM_PORTS];
 	struct sja1105_ptp_data ptp_data;

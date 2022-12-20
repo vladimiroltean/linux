@@ -3,10 +3,22 @@
  * Copyright (c) 2018, Sensor-Technik Wiedemann GmbH
  * Copyright (c) 2018-2019, Vladimir Oltean <olteanv@gmail.com>
  */
-#include <linux/spi/spi.h>
+#include <linux/ioport.h>
+#include <linux/mfd/core.h>
+#include <linux/of.h>
+#include <linux/platform_device.h>
 #include <linux/packing.h>
+#include <linux/regmap.h>
+#include <linux/spi/spi.h>
+#include <linux/slab.h>
+
 #include "sja1105.h"
 #include "sja1105_soc.h"
+
+struct sja1110_regmap_bus_context {
+	unsigned long reg_base;
+	struct sja1105_private *priv;
+};
 
 struct sja1105_chunk {
 	u8	*buf;
@@ -180,6 +192,111 @@ int sja1105_xfer_u32(const struct sja1105_private *priv,
 	return rc;
 }
 
+static int sja1110_regmap_bus_reg_read(void *context, unsigned int reg,
+				       unsigned int *val)
+{
+	struct sja1110_regmap_bus_context *ctx = context;
+	struct sja1105_private *priv = ctx->priv;
+	u32 tmp;
+	int rc;
+
+	reg += ctx->reg_base;
+
+	rc = sja1105_xfer_u32(priv, SPI_READ, SJA1110_SPI_ADDR(reg), &tmp,
+			      NULL);
+	if (rc)
+		return rc;
+
+	*val = tmp;
+
+	return 0;
+}
+
+static int sja1110_regmap_bus_reg_write(void *context, unsigned int reg,
+					unsigned int val)
+{
+	struct sja1110_regmap_bus_context *ctx = context;
+	struct sja1105_private *priv = ctx->priv;
+	u32 tmp = val;
+
+	reg += ctx->reg_base;
+
+	return sja1105_xfer_u32(priv, SPI_WRITE, SJA1110_SPI_ADDR(reg), &tmp,
+				NULL);
+}
+
+static struct regmap_bus sja1110_regmap_bus = {
+	.reg_read = sja1110_regmap_bus_reg_read,
+	.reg_write = sja1110_regmap_bus_reg_write,
+	.reg_format_endian_default = REGMAP_ENDIAN_NATIVE,
+	.val_format_endian_default = REGMAP_ENDIAN_NATIVE,
+};
+
+static const struct regmap_config sja1110_regmap_config = {
+	.reg_bits = 32,
+	.val_bits = 32,
+	.reg_stride = 4,
+};
+
+struct regmap *sja1110_create_regmap(struct sja1105_private *priv,
+				     const struct resource *res)
+{
+	struct device *dev = &priv->spidev->dev;
+	struct sja1110_regmap_bus_context *ctx;
+	struct regmap_config regmap_config;
+
+	ctx = devm_kzalloc(dev, sizeof(*ctx), GFP_KERNEL);
+	if (!ctx)
+		return ERR_PTR(-ENOMEM);
+
+	ctx->reg_base = res->start;
+	ctx->priv = priv;
+
+	memcpy(&regmap_config, &sja1110_regmap_config, sizeof(regmap_config));
+
+	regmap_config.name = res->name;
+	regmap_config.max_register = resource_size(res) - 1;
+
+	return devm_regmap_init(dev, &sja1110_regmap_bus, ctx, &regmap_config);
+}
+
+struct platform_device *
+sja1110_compat_device_create(struct device *parent, struct device_node *np,
+			     const char *name, const struct resource *resources,
+			     size_t num_resources)
+{
+	struct platform_device *pdev;
+	int err = -ENOMEM;
+
+	pdev = platform_device_alloc(name, PLATFORM_DEVID_NONE);
+	if (!pdev)
+		goto out;
+
+	pdev->dev.parent = parent;
+	pdev->dev.of_node = np;
+	pdev->dev.fwnode = &np->fwnode;
+
+	err = platform_device_add_resources(pdev, resources, num_resources);
+	if (err)
+		goto out_free_pdev;
+
+	err = platform_device_add(pdev);
+	if (err)
+		goto out_free_pdev;
+
+	return pdev;
+
+out_free_pdev:
+	platform_device_put(pdev);
+out:
+	return ERR_PTR(err);
+}
+
+void sja1110_compat_device_destroy(struct platform_device *pdev)
+{
+	platform_device_unregister(pdev);
+}
+
 const struct sja1105_regs sja1105et_regs = {
 	.device_id = 0x0,
 	.prod_id = 0x100BC3,
@@ -212,8 +329,6 @@ const struct sja1105_regs sja1105et_regs = {
 	.ptpclkval = 0x18, /* Spans 0x18 to 0x19 */
 	.ptpclkrate = 0x1A,
 	.ptpclkcorp = 0x1D,
-	.mdio_100base_tx = SJA1105_RSV_ADDR,
-	.mdio_100base_t1 = SJA1105_RSV_ADDR,
 };
 
 const struct sja1105_regs sja1105pqrs_regs = {
@@ -251,8 +366,6 @@ const struct sja1105_regs sja1105pqrs_regs = {
 	.ptpclkrate = 0x1B,
 	.ptpclkcorp = 0x1E,
 	.ptpsyncts = 0x1F,
-	.mdio_100base_tx = SJA1105_RSV_ADDR,
-	.mdio_100base_t1 = SJA1105_RSV_ADDR,
 };
 
 const struct sja1105_regs sja1110_regs = {
@@ -335,8 +448,6 @@ const struct sja1105_regs sja1110_regs = {
 	.ptpclkrate = SJA1110_SPI_ADDR(0x74),
 	.ptpclkcorp = SJA1110_SPI_ADDR(0x80),
 	.ptpsyncts = SJA1110_SPI_ADDR(0x84),
-	.mdio_100base_tx = 0x1c2400,
-	.mdio_100base_t1 = 0x1c1000,
 	.pcs_base = {SJA1105_RSV_ADDR, 0x1c1400, 0x1c1800, 0x1c1c00, 0x1c2000,
 		     SJA1105_RSV_ADDR, SJA1105_RSV_ADDR, SJA1105_RSV_ADDR,
 		     SJA1105_RSV_ADDR, SJA1105_RSV_ADDR, SJA1105_RSV_ADDR},
