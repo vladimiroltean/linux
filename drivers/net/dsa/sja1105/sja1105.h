@@ -12,6 +12,7 @@
 #include <net/dsa.h>
 #include <linux/mutex.h>
 #include "sja1105_clocking.h"
+#include "sja1105_flower.h"
 #include "sja1105_mdio.h"
 #include "sja1105_soc.h"
 #include "sja1105_static_config.h"
@@ -118,38 +119,6 @@ struct sja1105_info {
 	bool supports_2500basex[SJA1105_MAX_NUM_PORTS];
 	enum sja1105_internal_phy_t internal_phy[SJA1105_MAX_NUM_PORTS];
 	const u64 port_speed[SJA1105_SPEED_MAX];
-};
-
-enum sja1105_key_type {
-	SJA1105_KEY_BCAST,
-	SJA1105_KEY_TC,
-	SJA1105_KEY_VLAN_UNAWARE_VL,
-	SJA1105_KEY_VLAN_AWARE_VL,
-};
-
-struct sja1105_key {
-	enum sja1105_key_type type;
-
-	union {
-		/* SJA1105_KEY_TC */
-		struct {
-			int pcp;
-		} tc;
-
-		/* SJA1105_KEY_VLAN_UNAWARE_VL */
-		/* SJA1105_KEY_VLAN_AWARE_VL */
-		struct {
-			u64 dmac;
-			u16 vid;
-			u16 pcp;
-		} vl;
-	};
-};
-
-enum sja1105_rule_type {
-	SJA1105_RULE_BCAST_POLICER,
-	SJA1105_RULE_TC_POLICER,
-	SJA1105_RULE_VL,
 };
 
 enum sja1105_vl_type {
@@ -295,17 +264,5 @@ enum sja1110_shaper_type {
 };
 
 u8 sja1105et_fdb_hash(struct sja1105_private *priv, const u8 *addr, u16 vid);
-
-/* From sja1105_flower.c */
-int sja1105_cls_flower_del(struct dsa_switch *ds, int port,
-			   struct flow_cls_offload *cls, bool ingress);
-int sja1105_cls_flower_add(struct dsa_switch *ds, int port,
-			   struct flow_cls_offload *cls, bool ingress);
-int sja1105_cls_flower_stats(struct dsa_switch *ds, int port,
-			     struct flow_cls_offload *cls, bool ingress);
-void sja1105_flower_setup(struct dsa_switch *ds);
-void sja1105_flower_teardown(struct dsa_switch *ds);
-struct sja1105_rule *sja1105_rule_find(struct sja1105_private *priv,
-				       unsigned long cookie);
 
 #endif
