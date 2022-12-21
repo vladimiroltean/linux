@@ -58,7 +58,7 @@ int sja1105_pcs_mdio_write_c45(struct mii_bus *bus, int phy, int mmd,
 int sja1110_pcs_mdio_read_c45(struct mii_bus *bus, int phy, int mmd, int reg)
 {
 	struct sja1105_private *priv = bus->priv;
-	const struct sja1105_regs *regs = priv->info->regs;
+	const struct sja1105_regs *regs = priv->regs;
 	int offset, bank;
 	u64 addr;
 	u32 tmp;
@@ -103,7 +103,7 @@ int sja1110_pcs_mdio_write_c45(struct mii_bus *bus, int phy, int reg, int mmd,
 			       u16 val)
 {
 	struct sja1105_private *priv = bus->priv;
-	const struct sja1105_regs *regs = priv->info->regs;
+	const struct sja1105_regs *regs = priv->regs;
 	int offset, bank;
 	u64 addr;
 	u32 tmp;

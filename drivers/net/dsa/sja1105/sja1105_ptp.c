@@ -169,7 +169,7 @@ int sja1105_ptp_commit(struct dsa_switch *ds, struct sja1105_ptp_cmd *cmd,
 		       sja1105_spi_rw_mode_t rw)
 {
 	const struct sja1105_private *priv = ds->priv;
-	const struct sja1105_regs *regs = priv->info->regs;
+	const struct sja1105_regs *regs = priv->regs;
 	u8 buf[SJA1105_SIZE_PTP_CMD] = {0};
 	int rc;
 
@@ -247,7 +247,7 @@ static u64 sja1105_tstamp_reconstruct(struct dsa_switch *ds, u64 now,
 static int sja1105_ptpegr_ts_poll(struct dsa_switch *ds, int port, u64 *ts)
 {
 	struct sja1105_private *priv = ds->priv;
-	const struct sja1105_regs *regs = priv->info->regs;
+	const struct sja1105_regs *regs = priv->regs;
 	int tstamp_bit_start, tstamp_bit_end;
 	int timeout = 10;
 	u8 packed_buf[8];
@@ -293,7 +293,7 @@ static int sja1105_ptpegr_ts_poll(struct dsa_switch *ds, int port, u64 *ts)
 static int sja1105_ptpclkval_read(struct sja1105_private *priv, u64 *ticks,
 				  struct ptp_system_timestamp *ptp_sts)
 {
-	const struct sja1105_regs *regs = priv->info->regs;
+	const struct sja1105_regs *regs = priv->regs;
 
 	return sja1105_xfer_u64(priv, SPI_READ, regs->ptpclkval, ticks,
 				ptp_sts);
@@ -303,7 +303,7 @@ static int sja1105_ptpclkval_read(struct sja1105_private *priv, u64 *ticks,
 static int sja1105_ptpclkval_write(struct sja1105_private *priv, u64 ticks,
 				   struct ptp_system_timestamp *ptp_sts)
 {
-	const struct sja1105_regs *regs = priv->info->regs;
+	const struct sja1105_regs *regs = priv->regs;
 
 	return sja1105_xfer_u64(priv, SPI_WRITE, regs->ptpclkval, &ticks,
 				ptp_sts);
@@ -312,7 +312,7 @@ static int sja1105_ptpclkval_write(struct sja1105_private *priv, u64 ticks,
 static void sja1105_extts_poll(struct sja1105_private *priv)
 {
 	struct sja1105_ptp_data *ptp_data = &priv->ptp_data;
-	const struct sja1105_regs *regs = priv->info->regs;
+	const struct sja1105_regs *regs = priv->regs;
 	struct ptp_clock_event event;
 	u64 ptpsyncts = 0;
 	int rc;
@@ -606,7 +606,7 @@ static int sja1105_ptp_adjfine(struct ptp_clock_info *ptp, long scaled_ppm)
 {
 	struct sja1105_ptp_data *ptp_data = ptp_caps_to_data(ptp);
 	struct sja1105_private *priv = ptp_data_to_sja1105(ptp_data);
-	const struct sja1105_regs *regs = priv->info->regs;
+	const struct sja1105_regs *regs = priv->regs;
 	u32 clkrate32;
 	s64 clkrate;
 	int rc;
@@ -719,7 +719,7 @@ static int sja1105_per_out_enable(struct sja1105_private *priv,
 				  bool on)
 {
 	struct sja1105_ptp_data *ptp_data = &priv->ptp_data;
-	const struct sja1105_regs *regs = priv->info->regs;
+	const struct sja1105_regs *regs = priv->regs;
 	struct sja1105_ptp_cmd cmd = ptp_data->cmd;
 	int rc;
 

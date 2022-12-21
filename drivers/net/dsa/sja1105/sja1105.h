@@ -90,7 +90,6 @@ struct sja1105_info {
 	enum dsa_tag_protocol tag_proto;
 	const struct sja1105_dynamic_table_ops *dyn_ops;
 	const struct sja1105_table_ops *static_ops;
-	const struct sja1105_regs *regs;
 	bool can_limit_mcast_flood;
 	int (*reset_cmd)(struct dsa_switch *ds);
 	int (*setup_rgmii_delay)(const void *ctx, int port);
@@ -171,6 +170,7 @@ struct sja1105_private {
 	unsigned long hwts_tx_en;
 	unsigned long hwts_rx_en;
 	const struct sja1105_info *info;
+	const struct sja1105_regs *regs;
 	size_t max_xfer_len;
 	struct spi_device *spidev;
 	struct dsa_switch *ds;
