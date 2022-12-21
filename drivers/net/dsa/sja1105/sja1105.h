@@ -323,7 +323,7 @@ int sja1105_devlink_info_get(struct dsa_switch *ds,
 			     struct devlink_info_req *req,
 			     struct netlink_ext_ack *extack);
 
-/* From sja1105_spi.c */
+/* From sja1105_soc.c */
 int sja1105_xfer_buf(const struct sja1105_private *priv,
 		     sja1105_spi_rw_mode_t rw, u64 reg_addr,
 		     u8 *buf, size_t len);
