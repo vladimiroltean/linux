@@ -113,7 +113,7 @@ static void sja1105_cgu_idiv_packing(void *buf, struct sja1105_cgu_idiv *idiv,
 static int sja1105_cgu_idiv_config(struct sja1105_private *priv, int port,
 				   bool enabled, int factor)
 {
-	const struct sja1105_regs *regs = priv->info->regs;
+	const struct sja1105_regs *regs = priv->regs;
 	struct device *dev = priv->ds->dev;
 	struct sja1105_cgu_idiv idiv;
 	u8 packed_buf[SJA1105_SIZE_CGU_CMD] = {0};
@@ -151,7 +151,7 @@ sja1105_cgu_mii_control_packing(void *buf, struct sja1105_cgu_mii_ctrl *cmd,
 static int sja1105_cgu_mii_tx_clk_config(struct sja1105_private *priv,
 					 int port, sja1105_mii_role_t role)
 {
-	const struct sja1105_regs *regs = priv->info->regs;
+	const struct sja1105_regs *regs = priv->regs;
 	struct sja1105_cgu_mii_ctrl mii_tx_clk;
 	static const int mac_clk_sources[] = {
 		CLKSRC_MII0_TX_CLK,
@@ -191,7 +191,7 @@ static int sja1105_cgu_mii_tx_clk_config(struct sja1105_private *priv,
 static int
 sja1105_cgu_mii_rx_clk_config(struct sja1105_private *priv, int port)
 {
-	const struct sja1105_regs *regs = priv->info->regs;
+	const struct sja1105_regs *regs = priv->regs;
 	struct sja1105_cgu_mii_ctrl mii_rx_clk;
 	u8 packed_buf[SJA1105_SIZE_CGU_CMD] = {0};
 	static const int clk_sources[] = {
@@ -218,7 +218,7 @@ sja1105_cgu_mii_rx_clk_config(struct sja1105_private *priv, int port)
 static int
 sja1105_cgu_mii_ext_tx_clk_config(struct sja1105_private *priv, int port)
 {
-	const struct sja1105_regs *regs = priv->info->regs;
+	const struct sja1105_regs *regs = priv->regs;
 	struct sja1105_cgu_mii_ctrl mii_ext_tx_clk;
 	u8 packed_buf[SJA1105_SIZE_CGU_CMD] = {0};
 	static const int clk_sources[] = {
@@ -245,7 +245,7 @@ sja1105_cgu_mii_ext_tx_clk_config(struct sja1105_private *priv, int port)
 static int
 sja1105_cgu_mii_ext_rx_clk_config(struct sja1105_private *priv, int port)
 {
-	const struct sja1105_regs *regs = priv->info->regs;
+	const struct sja1105_regs *regs = priv->regs;
 	struct sja1105_cgu_mii_ctrl mii_ext_rx_clk;
 	u8 packed_buf[SJA1105_SIZE_CGU_CMD] = {0};
 	static const int clk_sources[] = {
@@ -338,7 +338,7 @@ sja1105_cgu_pll_control_packing(void *buf, struct sja1105_cgu_pll_ctrl *cmd,
 static int sja1105_cgu_rgmii_tx_clk_config(struct sja1105_private *priv,
 					   int port, u64 speed)
 {
-	const struct sja1105_regs *regs = priv->info->regs;
+	const struct sja1105_regs *regs = priv->regs;
 	struct sja1105_cgu_mii_ctrl txc;
 	u8 packed_buf[SJA1105_SIZE_CGU_CMD] = {0};
 	int clksrc;
@@ -395,7 +395,7 @@ sja1105_cfg_pad_mii_packing(void *buf, struct sja1105_cfg_pad_mii *cmd,
 static int sja1105_rgmii_cfg_pad_tx_config(struct sja1105_private *priv,
 					   int port)
 {
-	const struct sja1105_regs *regs = priv->info->regs;
+	const struct sja1105_regs *regs = priv->regs;
 	struct sja1105_cfg_pad_mii pad_mii_tx = {0};
 	u8 packed_buf[SJA1105_SIZE_CGU_CMD] = {0};
 
@@ -424,7 +424,7 @@ static int sja1105_rgmii_cfg_pad_tx_config(struct sja1105_private *priv,
 
 static int sja1105_cfg_pad_rx_config(struct sja1105_private *priv, int port)
 {
-	const struct sja1105_regs *regs = priv->info->regs;
+	const struct sja1105_regs *regs = priv->regs;
 	struct sja1105_cfg_pad_mii pad_mii_rx = {0};
 	u8 packed_buf[SJA1105_SIZE_CGU_CMD] = {0};
 
@@ -513,8 +513,8 @@ sja1110_cfg_pad_mii_id_packing(void *buf, struct sja1105_cfg_pad_mii_id *cmd,
 int sja1105pqrs_setup_rgmii_delay(const void *ctx, int port)
 {
 	const struct sja1105_private *priv = ctx;
-	const struct sja1105_regs *regs = priv->info->regs;
 	struct sja1105_cfg_pad_mii_id pad_mii_id = {0};
+	const struct sja1105_regs *regs = priv->regs;
 	int rx_delay = priv->rgmii_rx_delay_ps[port];
 	int tx_delay = priv->rgmii_tx_delay_ps[port];
 	u8 packed_buf[SJA1105_SIZE_CGU_CMD] = {0};
@@ -555,8 +555,8 @@ int sja1105pqrs_setup_rgmii_delay(const void *ctx, int port)
 int sja1110_setup_rgmii_delay(const void *ctx, int port)
 {
 	const struct sja1105_private *priv = ctx;
-	const struct sja1105_regs *regs = priv->info->regs;
 	struct sja1105_cfg_pad_mii_id pad_mii_id = {0};
+	const struct sja1105_regs *regs = priv->regs;
 	int rx_delay = priv->rgmii_rx_delay_ps[port];
 	int tx_delay = priv->rgmii_tx_delay_ps[port];
 	u8 packed_buf[SJA1105_SIZE_CGU_CMD] = {0};
@@ -640,7 +640,7 @@ static int sja1105_rgmii_clocking_setup(struct sja1105_private *priv, int port,
 static int sja1105_cgu_rmii_ref_clk_config(struct sja1105_private *priv,
 					   int port)
 {
-	const struct sja1105_regs *regs = priv->info->regs;
+	const struct sja1105_regs *regs = priv->regs;
 	struct sja1105_cgu_mii_ctrl ref_clk;
 	u8 packed_buf[SJA1105_SIZE_CGU_CMD] = {0};
 	static const int clk_sources[] = {
@@ -667,7 +667,7 @@ static int sja1105_cgu_rmii_ref_clk_config(struct sja1105_private *priv,
 static int
 sja1105_cgu_rmii_ext_tx_clk_config(struct sja1105_private *priv, int port)
 {
-	const struct sja1105_regs *regs = priv->info->regs;
+	const struct sja1105_regs *regs = priv->regs;
 	struct sja1105_cgu_mii_ctrl ext_tx_clk;
 	u8 packed_buf[SJA1105_SIZE_CGU_CMD] = {0};
 
@@ -686,7 +686,7 @@ sja1105_cgu_rmii_ext_tx_clk_config(struct sja1105_private *priv, int port)
 
 static int sja1105_cgu_rmii_pll_config(struct sja1105_private *priv)
 {
-	const struct sja1105_regs *regs = priv->info->regs;
+	const struct sja1105_regs *regs = priv->regs;
 	u8 packed_buf[SJA1105_SIZE_CGU_CMD] = {0};
 	struct sja1105_cgu_pll_ctrl pll = {0};
 	struct device *dev = priv->ds->dev;

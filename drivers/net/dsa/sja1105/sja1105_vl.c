@@ -765,7 +765,7 @@ int sja1105_vl_stats(struct sja1105_private *priv, int port,
 		     struct sja1105_rule *rule, struct flow_stats *stats,
 		     struct netlink_ext_ack *extack)
 {
-	const struct sja1105_regs *regs = priv->info->regs;
+	const struct sja1105_regs *regs = priv->regs;
 	u8 buf[SJA1105_SIZE_VL_STATUS] = {0};
 	u64 unreleased;
 	u64 timingerr;

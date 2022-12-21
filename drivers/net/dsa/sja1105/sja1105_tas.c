@@ -609,8 +609,8 @@ static int sja1105_tas_check_running(struct sja1105_private *priv)
 static int sja1105_tas_adjust_drift(struct sja1105_private *priv,
 				    u64 correction)
 {
-	const struct sja1105_regs *regs = priv->info->regs;
 	u32 ptpclkcorp = ns_to_sja1105_ticks(correction);
+	const struct sja1105_regs *regs = priv->regs;
 
 	return sja1105_xfer_u32(priv, SPI_WRITE, regs->ptpclkcorp,
 				&ptpclkcorp, NULL);
@@ -620,8 +620,8 @@ static int sja1105_tas_adjust_drift(struct sja1105_private *priv,
 static int sja1105_tas_set_base_time(struct sja1105_private *priv,
 				     u64 base_time)
 {
-	const struct sja1105_regs *regs = priv->info->regs;
 	u64 ptpschtm = ns_to_sja1105_ticks(base_time);
+	const struct sja1105_regs *regs = priv->regs;
 
 	return sja1105_xfer_u64(priv, SPI_WRITE, regs->ptpschtm,
 				&ptpschtm, NULL);

@@ -62,7 +62,7 @@ static int sja1105_hw_reset(struct device *dev, unsigned int pulse_len,
 static int sja1105et_reset_cmd(struct dsa_switch *ds)
 {
 	struct sja1105_private *priv = ds->priv;
-	const struct sja1105_regs *regs = priv->info->regs;
+	const struct sja1105_regs *regs = priv->regs;
 	u32 cold_reset = BIT(3);
 
 	/* Cold reset */
@@ -72,7 +72,7 @@ static int sja1105et_reset_cmd(struct dsa_switch *ds)
 static int sja1105pqrs_reset_cmd(struct dsa_switch *ds)
 {
 	struct sja1105_private *priv = ds->priv;
-	const struct sja1105_regs *regs = priv->info->regs;
+	const struct sja1105_regs *regs = priv->regs;
 	u32 cold_reset = BIT(2);
 
 	/* Cold reset */
@@ -82,7 +82,7 @@ static int sja1105pqrs_reset_cmd(struct dsa_switch *ds)
 static int sja1110_reset_cmd(struct dsa_switch *ds)
 {
 	struct sja1105_private *priv = ds->priv;
-	const struct sja1105_regs *regs = priv->info->regs;
+	const struct sja1105_regs *regs = priv->regs;
 	u32 switch_reset = BIT(20);
 
 	/* Only reset the switch core.
@@ -1102,7 +1102,7 @@ static int sja1105_init_l2_policing(struct sja1105_private *priv)
 static int sja1105_inhibit_tx(const struct sja1105_private *priv,
 			      unsigned long port_bitmap, bool tx_inhibited)
 {
-	const struct sja1105_regs *regs = priv->info->regs;
+	const struct sja1105_regs *regs = priv->regs;
 	u32 inhibit_cmd;
 	int rc;
 
@@ -1144,7 +1144,7 @@ static void sja1105_status_unpack(void *buf, struct sja1105_status *status)
 static int sja1105_status_get(struct sja1105_private *priv,
 			      struct sja1105_status *status)
 {
-	const struct sja1105_regs *regs = priv->info->regs;
+	const struct sja1105_regs *regs = priv->regs;
 	u8 packed_buf[4];
 	int rc;
 
@@ -1200,7 +1200,7 @@ int static_config_buf_prepare_for_upload(struct sja1105_private *priv,
 static int sja1105_static_config_upload(struct sja1105_private *priv)
 {
 	struct sja1105_static_config *config = &priv->static_config;
-	const struct sja1105_regs *regs = priv->info->regs;
+	const struct sja1105_regs *regs = priv->regs;
 	struct device *dev = &priv->spidev->dev;
 	struct dsa_switch *ds = priv->ds;
 	struct sja1105_status status;
@@ -3482,7 +3482,9 @@ static const struct dsa_switch_ops sja1105_switch_ops = {
 	.port_prechangeupper	= sja1105_prechangeupper,
 };
 
-static const struct sja1105_info sja1105e_info = {
+static const struct sja1105_info sja1105_info[] = {
+{
+	.name			= "SJA1105E",
 	.device_id		= SJA1105E_DEVICE_ID,
 	.part_no		= SJA1105ET_PART_NO,
 	.static_ops		= sja1105e_table_ops,
@@ -3500,7 +3502,6 @@ static const struct sja1105_info sja1105e_info = {
 	.ptp_cmd_packing	= sja1105et_ptp_cmd_packing,
 	.rxtstamp		= sja1105_rxtstamp,
 	.clocking_setup		= sja1105_clocking_setup,
-	.regs			= &sja1105et_regs,
 	.port_speed		= {
 		[SJA1105_SPEED_AUTO] = 0,
 		[SJA1105_SPEED_10MBPS] = 3,
@@ -3511,10 +3512,8 @@ static const struct sja1105_info sja1105e_info = {
 	.supports_mii		= {true, true, true, true, true},
 	.supports_rmii		= {true, true, true, true, true},
 	.supports_rgmii		= {true, true, true, true, true},
-	.name			= "SJA1105E",
-};
-
-static const struct sja1105_info sja1105t_info = {
+}, {
+	.name			= "SJA1105T",
 	.device_id		= SJA1105T_DEVICE_ID,
 	.part_no		= SJA1105ET_PART_NO,
 	.static_ops		= sja1105t_table_ops,
@@ -3532,7 +3531,6 @@ static const struct sja1105_info sja1105t_info = {
 	.ptp_cmd_packing	= sja1105et_ptp_cmd_packing,
 	.rxtstamp		= sja1105_rxtstamp,
 	.clocking_setup		= sja1105_clocking_setup,
-	.regs			= &sja1105et_regs,
 	.port_speed		= {
 		[SJA1105_SPEED_AUTO] = 0,
 		[SJA1105_SPEED_10MBPS] = 3,
@@ -3543,10 +3541,8 @@ static const struct sja1105_info sja1105t_info = {
 	.supports_mii		= {true, true, true, true, true},
 	.supports_rmii		= {true, true, true, true, true},
 	.supports_rgmii		= {true, true, true, true, true},
-	.name			= "SJA1105T",
-};
-
-static const struct sja1105_info sja1105p_info = {
+}, {
+	.name			= "SJA1105P",
 	.device_id		= SJA1105PR_DEVICE_ID,
 	.part_no		= SJA1105P_PART_NO,
 	.static_ops		= sja1105p_table_ops,
@@ -3565,7 +3561,6 @@ static const struct sja1105_info sja1105p_info = {
 	.ptp_cmd_packing	= sja1105pqrs_ptp_cmd_packing,
 	.rxtstamp		= sja1105_rxtstamp,
 	.clocking_setup		= sja1105_clocking_setup,
-	.regs			= &sja1105pqrs_regs,
 	.port_speed		= {
 		[SJA1105_SPEED_AUTO] = 0,
 		[SJA1105_SPEED_10MBPS] = 3,
@@ -3576,10 +3571,8 @@ static const struct sja1105_info sja1105p_info = {
 	.supports_mii		= {true, true, true, true, true},
 	.supports_rmii		= {true, true, true, true, true},
 	.supports_rgmii		= {true, true, true, true, true},
-	.name			= "SJA1105P",
-};
-
-static const struct sja1105_info sja1105q_info = {
+}, {
+	.name			= "SJA1105Q",
 	.device_id		= SJA1105QS_DEVICE_ID,
 	.part_no		= SJA1105Q_PART_NO,
 	.static_ops		= sja1105q_table_ops,
@@ -3598,7 +3591,6 @@ static const struct sja1105_info sja1105q_info = {
 	.ptp_cmd_packing	= sja1105pqrs_ptp_cmd_packing,
 	.rxtstamp		= sja1105_rxtstamp,
 	.clocking_setup		= sja1105_clocking_setup,
-	.regs			= &sja1105pqrs_regs,
 	.port_speed		= {
 		[SJA1105_SPEED_AUTO] = 0,
 		[SJA1105_SPEED_10MBPS] = 3,
@@ -3609,10 +3601,8 @@ static const struct sja1105_info sja1105q_info = {
 	.supports_mii		= {true, true, true, true, true},
 	.supports_rmii		= {true, true, true, true, true},
 	.supports_rgmii		= {true, true, true, true, true},
-	.name			= "SJA1105Q",
-};
-
-static const struct sja1105_info sja1105r_info = {
+}, {
+	.name			= "SJA1105R",
 	.device_id		= SJA1105PR_DEVICE_ID,
 	.part_no		= SJA1105R_PART_NO,
 	.static_ops		= sja1105r_table_ops,
@@ -3633,7 +3623,6 @@ static const struct sja1105_info sja1105r_info = {
 	.clocking_setup		= sja1105_clocking_setup,
 	.pcs_mdio_read_c45	= sja1105_pcs_mdio_read_c45,
 	.pcs_mdio_write_c45	= sja1105_pcs_mdio_write_c45,
-	.regs			= &sja1105pqrs_regs,
 	.port_speed		= {
 		[SJA1105_SPEED_AUTO] = 0,
 		[SJA1105_SPEED_10MBPS] = 3,
@@ -3645,15 +3634,12 @@ static const struct sja1105_info sja1105r_info = {
 	.supports_rmii		= {true, true, true, true, true},
 	.supports_rgmii		= {true, true, true, true, true},
 	.supports_sgmii		= {false, false, false, false, true},
-	.name			= "SJA1105R",
-};
-
-static const struct sja1105_info sja1105s_info = {
+}, {
+	.name			= "SJA1105S",
 	.device_id		= SJA1105QS_DEVICE_ID,
 	.part_no		= SJA1105S_PART_NO,
 	.static_ops		= sja1105s_table_ops,
 	.dyn_ops		= sja1105pqrs_dyn_ops,
-	.regs			= &sja1105pqrs_regs,
 	.tag_proto		= DSA_TAG_PROTO_SJA1105,
 	.can_limit_mcast_flood	= true,
 	.ptp_ts_bits		= 32,
@@ -3681,15 +3667,12 @@ static const struct sja1105_info sja1105s_info = {
 	.supports_rmii		= {true, true, true, true, true},
 	.supports_rgmii		= {true, true, true, true, true},
 	.supports_sgmii		= {false, false, false, false, true},
-	.name			= "SJA1105S",
-};
-
-static const struct sja1105_info sja1110a_info = {
+}, {
+	.name			= "SJA1110A",
 	.device_id		= SJA1110_DEVICE_ID,
 	.part_no		= SJA1110A_PART_NO,
 	.static_ops		= sja1110_table_ops,
 	.dyn_ops		= sja1110_dyn_ops,
-	.regs			= &sja1110_regs,
 	.tag_proto		= DSA_TAG_PROTO_SJA1110,
 	.can_limit_mcast_flood	= true,
 	.multiple_cascade_ports	= true,
@@ -3732,15 +3715,12 @@ static const struct sja1105_info sja1110a_info = {
 				   SJA1105_PHY_BASE_T1, SJA1105_PHY_BASE_T1,
 				   SJA1105_PHY_BASE_T1, SJA1105_PHY_BASE_T1,
 				   SJA1105_PHY_BASE_T1},
-	.name			= "SJA1110A",
-};
-
-static const struct sja1105_info sja1110b_info = {
+}, {
+	.name			= "SJA1110B",
 	.device_id		= SJA1110_DEVICE_ID,
 	.part_no		= SJA1110B_PART_NO,
 	.static_ops		= sja1110_table_ops,
 	.dyn_ops		= sja1110_dyn_ops,
-	.regs			= &sja1110_regs,
 	.tag_proto		= DSA_TAG_PROTO_SJA1110,
 	.can_limit_mcast_flood	= true,
 	.multiple_cascade_ports	= true,
@@ -3783,15 +3763,12 @@ static const struct sja1105_info sja1110b_info = {
 				   SJA1105_PHY_BASE_T1, SJA1105_PHY_BASE_T1,
 				   SJA1105_PHY_BASE_T1, SJA1105_PHY_BASE_T1,
 				   SJA1105_NO_PHY},
-	.name			= "SJA1110B",
-};
-
-static const struct sja1105_info sja1110c_info = {
+}, {
+	.name			= "SJA1110C",
 	.device_id		= SJA1110_DEVICE_ID,
 	.part_no		= SJA1110C_PART_NO,
 	.static_ops		= sja1110_table_ops,
 	.dyn_ops		= sja1110_dyn_ops,
-	.regs			= &sja1110_regs,
 	.tag_proto		= DSA_TAG_PROTO_SJA1110,
 	.can_limit_mcast_flood	= true,
 	.multiple_cascade_ports	= true,
@@ -3834,15 +3811,12 @@ static const struct sja1105_info sja1110c_info = {
 				   SJA1105_PHY_BASE_T1, SJA1105_PHY_BASE_T1,
 				   SJA1105_NO_PHY, SJA1105_NO_PHY,
 				   SJA1105_NO_PHY},
-	.name			= "SJA1110C",
-};
-
-static const struct sja1105_info sja1110d_info = {
+}, {
+	.name			= "SJA1110D",
 	.device_id		= SJA1110_DEVICE_ID,
 	.part_no		= SJA1110D_PART_NO,
 	.static_ops		= sja1110_table_ops,
 	.dyn_ops		= sja1110_dyn_ops,
-	.regs			= &sja1110_regs,
 	.tag_proto		= DSA_TAG_PROTO_SJA1110,
 	.can_limit_mcast_flood	= true,
 	.multiple_cascade_ports	= true,
@@ -3885,20 +3859,17 @@ static const struct sja1105_info sja1110d_info = {
 				   SJA1105_PHY_BASE_T1, SJA1105_PHY_BASE_T1,
 				   SJA1105_NO_PHY, SJA1105_NO_PHY,
 				   SJA1105_NO_PHY},
-	.name			= "SJA1110D",
+},
 };
-
-static const struct of_device_id sja1105_dt_ids[];
 
 static int sja1105_check_device_id(struct sja1105_private *priv)
 {
-	const struct sja1105_regs *regs = priv->info->regs;
+	const struct sja1105_regs *regs = priv->regs;
 	u8 prod_id[SJA1105_SIZE_DEVICE_ID] = {0};
 	struct device *dev = &priv->spidev->dev;
-	const struct of_device_id *match;
 	u32 device_id;
 	u64 part_no;
-	int rc;
+	int i, rc;
 
 	rc = sja1105_xfer_u32(priv, SPI_READ, regs->device_id, &device_id,
 			      NULL);
@@ -3912,21 +3883,13 @@ static int sja1105_check_device_id(struct sja1105_private *priv)
 
 	sja1105_unpack(prod_id, &part_no, 19, 4, SJA1105_SIZE_DEVICE_ID);
 
-	for (match = sja1105_dt_ids; match->compatible[0]; match++) {
-		const struct sja1105_info *info = match->data;
+	for (i = 0; i < ARRAY_SIZE(sja1105_info); i++) {
+		const struct sja1105_info *info = &sja1105_info[i];
 
-		/* Is what's been probed in our match table at all? */
 		if (info->device_id != device_id || info->part_no != part_no)
 			continue;
 
-		/* But is it what's in the device tree? */
-		if (priv->info->device_id != device_id ||
-		    priv->info->part_no != part_no) {
-			dev_warn(dev, "Device tree specifies chip %s but found %s, please fix it!\n",
-				 priv->info->name, info->name);
-			/* It isn't. No problem, pick that up. */
-			priv->info = info;
-		}
+		priv->info = info;
 
 		return 0;
 	}
@@ -3999,7 +3962,7 @@ static int sja1105_probe(struct spi_device *spi)
 	if (priv->max_xfer_len > max_msg - SJA1105_SIZE_SPI_MSG_HEADER)
 		priv->max_xfer_len = max_msg - SJA1105_SIZE_SPI_MSG_HEADER;
 
-	priv->info = of_device_get_match_data(dev);
+	priv->regs = of_device_get_match_data(dev);
 
 	/* Detect hardware device */
 	rc = sja1105_check_device_id(priv);
@@ -4067,16 +4030,16 @@ static void sja1105_shutdown(struct spi_device *spi)
 }
 
 static const struct of_device_id sja1105_dt_ids[] = {
-	{ .compatible = "nxp,sja1105e", .data = &sja1105e_info },
-	{ .compatible = "nxp,sja1105t", .data = &sja1105t_info },
-	{ .compatible = "nxp,sja1105p", .data = &sja1105p_info },
-	{ .compatible = "nxp,sja1105q", .data = &sja1105q_info },
-	{ .compatible = "nxp,sja1105r", .data = &sja1105r_info },
-	{ .compatible = "nxp,sja1105s", .data = &sja1105s_info },
-	{ .compatible = "nxp,sja1110a", .data = &sja1110a_info },
-	{ .compatible = "nxp,sja1110b", .data = &sja1110b_info },
-	{ .compatible = "nxp,sja1110c", .data = &sja1110c_info },
-	{ .compatible = "nxp,sja1110d", .data = &sja1110d_info },
+	{ .compatible = "nxp,sja1105e", .data = &sja1105et_regs },
+	{ .compatible = "nxp,sja1105t", .data = &sja1105et_regs },
+	{ .compatible = "nxp,sja1105p", .data = &sja1105pqrs_regs },
+	{ .compatible = "nxp,sja1105q", .data = &sja1105pqrs_regs },
+	{ .compatible = "nxp,sja1105r", .data = &sja1105pqrs_regs },
+	{ .compatible = "nxp,sja1105s", .data = &sja1105pqrs_regs },
+	{ .compatible = "nxp,sja1110a", .data = &sja1110_regs },
+	{ .compatible = "nxp,sja1110b", .data = &sja1110_regs },
+	{ .compatible = "nxp,sja1110c", .data = &sja1110_regs },
+	{ .compatible = "nxp,sja1110d", .data = &sja1110_regs },
 	{ /* sentinel */ },
 };
 MODULE_DEVICE_TABLE(of, sja1105_dt_ids);
