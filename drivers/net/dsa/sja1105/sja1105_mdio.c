@@ -17,8 +17,7 @@ static const struct resource sja1110_mdio_cbtx_resource =
 
 int sja1105_pcs_mdio_read_c45(struct mii_bus *bus, int phy, int mmd, int reg)
 {
-	struct sja1105_mdio_private *mdio_priv = bus->priv;
-	struct sja1105_private *priv = mdio_priv->priv;
+	struct sja1105_private *priv = bus->priv;
 	u64 addr;
 	u32 tmp;
 	int rc;
@@ -43,8 +42,7 @@ int sja1105_pcs_mdio_read_c45(struct mii_bus *bus, int phy, int mmd, int reg)
 int sja1105_pcs_mdio_write_c45(struct mii_bus *bus, int phy, int mmd,
 			       int reg, u16 val)
 {
-	struct sja1105_mdio_private *mdio_priv = bus->priv;
-	struct sja1105_private *priv = mdio_priv->priv;
+	struct sja1105_private *priv = bus->priv;
 	u64 addr;
 	u32 tmp;
 
@@ -59,8 +57,7 @@ int sja1105_pcs_mdio_write_c45(struct mii_bus *bus, int phy, int mmd,
 
 int sja1110_pcs_mdio_read_c45(struct mii_bus *bus, int phy, int mmd, int reg)
 {
-	struct sja1105_mdio_private *mdio_priv = bus->priv;
-	struct sja1105_private *priv = mdio_priv->priv;
+	struct sja1105_private *priv = bus->priv;
 	const struct sja1105_regs *regs = priv->info->regs;
 	int offset, bank;
 	u64 addr;
@@ -105,8 +102,7 @@ int sja1110_pcs_mdio_read_c45(struct mii_bus *bus, int phy, int mmd, int reg)
 int sja1110_pcs_mdio_write_c45(struct mii_bus *bus, int phy, int reg, int mmd,
 			       u16 val)
 {
-	struct sja1105_mdio_private *mdio_priv = bus->priv;
-	struct sja1105_private *priv = mdio_priv->priv;
+	struct sja1105_private *priv = bus->priv;
 	const struct sja1105_regs *regs = priv->info->regs;
 	int offset, bank;
 	u64 addr;
@@ -239,7 +235,6 @@ static void sja1105_mdiobus_base_t1_unregister(struct sja1105_private *priv)
 
 static int sja1105_mdiobus_pcs_register(struct sja1105_private *priv)
 {
-	struct sja1105_mdio_private *mdio_priv;
 	struct dsa_switch *ds = priv->ds;
 	struct mii_bus *bus;
 	int rc = 0;
@@ -248,7 +243,7 @@ static int sja1105_mdiobus_pcs_register(struct sja1105_private *priv)
 	if (!priv->info->pcs_mdio_read_c45 || !priv->info->pcs_mdio_write_c45)
 		return 0;
 
-	bus = mdiobus_alloc_size(sizeof(*mdio_priv));
+	bus = mdiobus_alloc_size(0);
 	if (!bus)
 		return -ENOMEM;
 
@@ -262,8 +257,7 @@ static int sja1105_mdiobus_pcs_register(struct sja1105_private *priv)
 	 * from auto probing.
 	 */
 	bus->phy_mask = ~0;
-	mdio_priv = bus->priv;
-	mdio_priv->priv = priv;
+	bus->priv = priv->soc;
 
 	rc = mdiobus_register(bus);
 	if (rc) {

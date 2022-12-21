@@ -50,10 +50,6 @@
 #include "sja1105_tas.h"
 #include "sja1105_ptp.h"
 
-struct sja1105_mdio_private {
-	struct sja1105_private *priv;
-};
-
 enum {
 	SJA1105_SPEED_AUTO,
 	SJA1105_SPEED_10MBPS,
