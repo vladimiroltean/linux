@@ -6,6 +6,7 @@
 #include <linux/spi/spi.h>
 #include <linux/packing.h>
 #include "sja1105.h"
+#include "sja1105_soc.h"
 
 struct sja1105_chunk {
 	u8	*buf;

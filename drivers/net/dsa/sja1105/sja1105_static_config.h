@@ -9,9 +9,8 @@
 #include <linux/types.h>
 #include <asm/types.h>
 
-#define SJA1105_NUM_PORTS				5
-#define SJA1110_NUM_PORTS				11
-#define SJA1105_MAX_NUM_PORTS				SJA1110_NUM_PORTS
+#include "sja1105_soc.h"
+
 #define SJA1105_NUM_TC					8
 
 #define SJA1105_SIZE_SPI_MSG_HEADER			4
@@ -142,33 +141,6 @@ enum sja1105_blk_idx {
 #define SJA1110_MAX_FRAME_MEMORY			1820
 #define SJA1105_FRAME_MEMORY_RETAGGING_OVERHEAD		19
 #define SJA1105_VL_FRAME_MEMORY				100
-
-#define SJA1105E_DEVICE_ID				0x9C00000Cull
-#define SJA1105T_DEVICE_ID				0x9E00030Eull
-#define SJA1105PR_DEVICE_ID				0xAF00030Eull
-#define SJA1105QS_DEVICE_ID				0xAE00030Eull
-#define SJA1110_DEVICE_ID				0xB700030Full
-
-#define SJA1105ET_PART_NO				0x9A83
-#define SJA1105P_PART_NO				0x9A84
-#define SJA1105Q_PART_NO				0x9A85
-#define SJA1105R_PART_NO				0x9A86
-#define SJA1105S_PART_NO				0x9A87
-#define SJA1110A_PART_NO				0x1110
-#define SJA1110B_PART_NO				0x1111
-#define SJA1110C_PART_NO				0x1112
-#define SJA1110D_PART_NO				0x1113
-
-#define SJA1110_ACU			0x1c4400
-#define SJA1110_RGU			0x1c6000
-#define SJA1110_CGU			0x1c6400
-
-#define SJA1110_SPI_ADDR(x)		((x) / 4)
-#define SJA1110_ACU_ADDR(x)		(SJA1110_ACU + SJA1110_SPI_ADDR(x))
-#define SJA1110_CGU_ADDR(x)		(SJA1110_CGU + SJA1110_SPI_ADDR(x))
-#define SJA1110_RGU_ADDR(x)		(SJA1110_RGU + SJA1110_SPI_ADDR(x))
-
-#define SJA1105_RSV_ADDR		0xffffffffffffffffull
 
 struct sja1105_schedule_entry {
 	u64 winstindex;

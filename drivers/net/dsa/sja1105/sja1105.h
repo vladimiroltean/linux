@@ -11,6 +11,7 @@
 #include <linux/dsa/8021q.h>
 #include <net/dsa.h>
 #include <linux/mutex.h>
+#include "sja1105_soc.h"
 #include "sja1105_static_config.h"
 
 #define SJA1105ET_FDB_BIN_SIZE		4
@@ -41,57 +42,8 @@
 #define SJA1105_RGMII_DELAY_MAX_PS \
 	SJA1105_RGMII_DELAY_PHASE_TO_PS(1017)
 
-typedef enum {
-	SPI_READ = 0,
-	SPI_WRITE = 1,
-} sja1105_spi_rw_mode_t;
-
 #include "sja1105_tas.h"
 #include "sja1105_ptp.h"
-
-enum sja1105_stats_area {
-	MAC,
-	HL1,
-	HL2,
-	ETHER,
-	__MAX_SJA1105_STATS_AREA,
-};
-
-/* Keeps the different addresses between E/T and P/Q/R/S */
-struct sja1105_regs {
-	u64 device_id;
-	u64 prod_id;
-	u64 status;
-	u64 port_control;
-	u64 rgu;
-	u64 vl_status;
-	u64 config;
-	u64 rmii_pll1;
-	u64 ptppinst;
-	u64 ptppindur;
-	u64 ptp_control;
-	u64 ptpclkval;
-	u64 ptpclkrate;
-	u64 ptpclkcorp;
-	u64 ptpsyncts;
-	u64 ptpschtm;
-	u64 ptpegr_ts[SJA1105_MAX_NUM_PORTS];
-	u64 pad_mii_tx[SJA1105_MAX_NUM_PORTS];
-	u64 pad_mii_rx[SJA1105_MAX_NUM_PORTS];
-	u64 pad_mii_id[SJA1105_MAX_NUM_PORTS];
-	u64 cgu_idiv[SJA1105_MAX_NUM_PORTS];
-	u64 mii_tx_clk[SJA1105_MAX_NUM_PORTS];
-	u64 mii_rx_clk[SJA1105_MAX_NUM_PORTS];
-	u64 mii_ext_tx_clk[SJA1105_MAX_NUM_PORTS];
-	u64 mii_ext_rx_clk[SJA1105_MAX_NUM_PORTS];
-	u64 rgmii_tx_clk[SJA1105_MAX_NUM_PORTS];
-	u64 rmii_ref_clk[SJA1105_MAX_NUM_PORTS];
-	u64 rmii_ext_tx_clk[SJA1105_MAX_NUM_PORTS];
-	u64 stats[__MAX_SJA1105_STATS_AREA][SJA1105_MAX_NUM_PORTS];
-	u64 mdio_100base_tx;
-	u64 mdio_100base_t1;
-	u64 pcs_base[SJA1105_MAX_NUM_PORTS];
-};
 
 struct sja1105_mdio_private {
 	struct sja1105_private *priv;
@@ -322,33 +274,6 @@ void sja1105_devlink_teardown(struct dsa_switch *ds);
 int sja1105_devlink_info_get(struct dsa_switch *ds,
 			     struct devlink_info_req *req,
 			     struct netlink_ext_ack *extack);
-
-/* From sja1105_soc.c */
-int sja1105_xfer_buf(const struct sja1105_private *priv,
-		     sja1105_spi_rw_mode_t rw, u64 reg_addr,
-		     u8 *buf, size_t len);
-int sja1105_xfer_u32(const struct sja1105_private *priv,
-		     sja1105_spi_rw_mode_t rw, u64 reg_addr, u32 *value,
-		     struct ptp_system_timestamp *ptp_sts);
-int sja1105_xfer_u64(const struct sja1105_private *priv,
-		     sja1105_spi_rw_mode_t rw, u64 reg_addr, u64 *value,
-		     struct ptp_system_timestamp *ptp_sts);
-int static_config_buf_prepare_for_upload(struct sja1105_private *priv,
-					 void *config_buf, int buf_len);
-int sja1105_static_config_upload(struct sja1105_private *priv);
-int sja1105_inhibit_tx(const struct sja1105_private *priv,
-		       unsigned long port_bitmap, bool tx_inhibited);
-
-extern const struct sja1105_info sja1105e_info;
-extern const struct sja1105_info sja1105t_info;
-extern const struct sja1105_info sja1105p_info;
-extern const struct sja1105_info sja1105q_info;
-extern const struct sja1105_info sja1105r_info;
-extern const struct sja1105_info sja1105s_info;
-extern const struct sja1105_info sja1110a_info;
-extern const struct sja1105_info sja1110b_info;
-extern const struct sja1105_info sja1110c_info;
-extern const struct sja1105_info sja1110d_info;
 
 /* From sja1105_clocking.c */
 
