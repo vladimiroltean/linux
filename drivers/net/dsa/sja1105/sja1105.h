@@ -16,6 +16,7 @@
 #include "sja1105_mdio.h"
 #include "sja1105_soc.h"
 #include "sja1105_static_config.h"
+#include "sja1105_vl.h"
 
 #define SJA1105ET_FDB_BIN_SIZE		4
 /* The hardware value is in multiples of 10 ms.
@@ -119,12 +120,6 @@ struct sja1105_info {
 	bool supports_2500basex[SJA1105_MAX_NUM_PORTS];
 	enum sja1105_internal_phy_t internal_phy[SJA1105_MAX_NUM_PORTS];
 	const u64 port_speed[SJA1105_SPEED_MAX];
-};
-
-enum sja1105_vl_type {
-	SJA1105_VL_NONCRITICAL,
-	SJA1105_VL_RATE_CONSTRAINED,
-	SJA1105_VL_TIME_TRIGGERED,
 };
 
 struct sja1105_rule {

@@ -4,7 +4,16 @@
 #ifndef _SJA1105_VL_H
 #define _SJA1105_VL_H
 
-#include "sja1105.h"
+struct sja1105_key;
+struct sja1105_private;
+struct sja1105_rule;
+struct netlink_ext_ack;
+
+enum sja1105_vl_type {
+	SJA1105_VL_NONCRITICAL,
+	SJA1105_VL_RATE_CONSTRAINED,
+	SJA1105_VL_TIME_TRIGGERED,
+};
 
 #if IS_ENABLED(CONFIG_NET_DSA_SJA1105_VL)
 
