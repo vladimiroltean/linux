@@ -11,6 +11,7 @@
 #include <linux/dsa/8021q.h>
 #include <net/dsa.h>
 #include <linux/mutex.h>
+#include "sja1105_clocking.h"
 #include "sja1105_soc.h"
 #include "sja1105_static_config.h"
 
@@ -270,26 +271,6 @@ void sja1105_devlink_teardown(struct dsa_switch *ds);
 int sja1105_devlink_info_get(struct dsa_switch *ds,
 			     struct devlink_info_req *req,
 			     struct netlink_ext_ack *extack);
-
-/* From sja1105_clocking.c */
-
-typedef enum {
-	XMII_MAC = 0,
-	XMII_PHY = 1,
-} sja1105_mii_role_t;
-
-typedef enum {
-	XMII_MODE_MII		= 0,
-	XMII_MODE_RMII		= 1,
-	XMII_MODE_RGMII		= 2,
-	XMII_MODE_SGMII		= 3,
-} sja1105_phy_interface_t;
-
-int sja1105pqrs_setup_rgmii_delay(const void *ctx, int port);
-int sja1110_setup_rgmii_delay(const void *ctx, int port);
-int sja1105_clocking_setup_port(struct sja1105_private *priv, int port);
-int sja1105_clocking_setup(struct sja1105_private *priv);
-int sja1110_disable_microcontroller(struct sja1105_private *priv);
 
 /* From sja1105_ethtool.c */
 void sja1105_get_ethtool_stats(struct dsa_switch *ds, int port, u64 *data);
