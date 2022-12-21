@@ -246,6 +246,8 @@ enum sja1105_reset_reason {
 	SJA1105_VIRTUAL_LINKS,
 };
 
+int static_config_buf_prepare_for_upload(struct sja1105_private *priv,
+					 void *config_buf, int buf_len);
 int sja1105_static_config_reload(struct sja1105_private *priv,
 				 enum sja1105_reset_reason reason);
 int sja1105_vlan_filtering(struct dsa_switch *ds, int port, bool enabled,
