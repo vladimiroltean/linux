@@ -831,7 +831,7 @@ sja1110_cgu_outclk_packing(void *buf, struct sja1110_cgu_outclk *outclk,
 	sja1105_packing(buf, &outclk->pd,         0,  0, size, op);
 }
 
-int sja1110_disable_microcontroller(struct sja1105_private *priv)
+int sja1110_disable_microcontroller(struct sja1105_soc *soc)
 {
 	u8 packed_buf[SJA1105_SIZE_CGU_CMD] = {0};
 	struct sja1110_cgu_outclk outclk_6_c = {
@@ -842,7 +842,6 @@ int sja1110_disable_microcontroller(struct sja1105_private *priv)
 		.clksrc = 0x5,
 		.pd = true,
 	};
-	struct sja1105_soc *soc = priv->soc;
 	int rc;
 
 	/* Power down the BASE_TIMER_CLK to disable the watchdog timer */
