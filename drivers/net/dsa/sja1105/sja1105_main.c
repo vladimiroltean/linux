@@ -3844,8 +3844,7 @@ static int sja1105_probe_device_id(struct sja1105_private *priv)
 	return -ENODEV;
 }
 
-static int sja1105_switch_probe(struct device *dev,
-				struct sja1105_soc *soc)
+int sja1105_switch_probe(struct device *dev, struct sja1105_soc *soc)
 {
 	struct sja1105_private *priv;
 	struct dsa_switch *ds;
@@ -3902,6 +3901,28 @@ static int sja1105_switch_probe(struct device *dev,
 	return dsa_register_switch(priv->ds);
 }
 
+void sja1105_switch_remove(struct device *dev)
+{
+	struct sja1105_private *priv = dev_get_drvdata(dev);
+
+	if (!priv)
+		return;
+
+	dsa_unregister_switch(priv->ds);
+}
+
+void sja1105_switch_shutdown(struct device *dev)
+{
+	struct sja1105_private *priv = dev_get_drvdata(dev);
+
+	if (!priv)
+		return;
+
+	dsa_switch_shutdown(priv->ds);
+
+	dev_set_drvdata(dev, NULL);
+}
+
 static int sja1105_probe(struct spi_device *spi)
 {
 	const struct sja1105_regs *regs = of_device_get_match_data(&spi->dev);
@@ -3923,24 +3944,12 @@ static int sja1105_probe(struct spi_device *spi)
 
 static void sja1105_remove(struct spi_device *spi)
 {
-	struct sja1105_private *priv = spi_get_drvdata(spi);
-
-	if (!priv)
-		return;
-
-	dsa_unregister_switch(priv->ds);
+	sja1105_switch_remove(&spi->dev);
 }
 
 static void sja1105_shutdown(struct spi_device *spi)
 {
-	struct sja1105_private *priv = spi_get_drvdata(spi);
-
-	if (!priv)
-		return;
-
-	dsa_switch_shutdown(priv->ds);
-
-	spi_set_drvdata(spi, NULL);
+	sja1105_switch_shutdown(&spi->dev);
 }
 
 static const struct of_device_id sja1105_dt_ids[] = {
