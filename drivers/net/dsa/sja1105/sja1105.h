@@ -214,6 +214,10 @@ int sja1105_vlan_filtering(struct dsa_switch *ds, int port, bool enabled,
 			   struct netlink_ext_ack *extack);
 void sja1105_frame_memory_partitioning(struct sja1105_private *priv);
 
+int sja1105_switch_probe(struct device *dev, struct sja1105_soc *soc);
+void sja1105_switch_remove(struct device *dev);
+void sja1105_switch_shutdown(struct device *dev);
+
 /* From sja1105_devlink.c */
 int sja1105_devlink_setup(struct dsa_switch *ds);
 void sja1105_devlink_teardown(struct dsa_switch *ds);
