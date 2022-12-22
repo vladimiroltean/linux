@@ -568,6 +568,16 @@ struct sja1105_soc *sja1105_soc_create(struct spi_device *spi,
 		goto out_free_soc;
 	}
 
+	if (soc->device_id == SJA1110_DEVICE_ID) {
+		rc = sja1110_disable_microcontroller(soc);
+		if (rc < 0) {
+			dev_err(dev,
+				"Failed to disable microcontroller: %pe\n",
+				ERR_PTR(rc));
+			goto out_free_soc;
+		}
+	}
+
 	return soc;
 
 out_free_soc:

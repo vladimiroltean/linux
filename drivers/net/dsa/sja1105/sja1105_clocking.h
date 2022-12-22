@@ -5,6 +5,7 @@
 #define _SJA1105_CLOCKING_H
 
 struct sja1105_private;
+struct sja1105_soc;
 
 typedef enum {
 	XMII_MAC = 0,
@@ -22,6 +23,6 @@ int sja1105pqrs_setup_rgmii_delay(const void *ctx, int port);
 int sja1110_setup_rgmii_delay(const void *ctx, int port);
 int sja1105_clocking_setup_port(struct sja1105_private *priv, int port);
 int sja1105_clocking_setup(struct sja1105_private *priv);
-int sja1110_disable_microcontroller(struct sja1105_private *priv);
+int sja1110_disable_microcontroller(struct sja1105_soc *soc);
 
 #endif

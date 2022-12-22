@@ -3303,16 +3303,6 @@ static int sja1105_setup(struct dsa_switch *ds)
 	struct sja1105_private *priv = ds->priv;
 	int rc;
 
-	if (priv->info->disable_microcontroller) {
-		rc = priv->info->disable_microcontroller(priv);
-		if (rc < 0) {
-			dev_err(ds->dev,
-				"Failed to disable microcontroller: %pe\n",
-				ERR_PTR(rc));
-			return rc;
-		}
-	}
-
 	/* Create and send configuration down to device */
 	rc = sja1105_static_config_load(priv);
 	if (rc < 0) {
@@ -3665,7 +3655,6 @@ static const struct sja1105_info sja1105_info[] = {
 	.ptp_cmd_packing	= sja1105pqrs_ptp_cmd_packing,
 	.rxtstamp		= sja1110_rxtstamp,
 	.txtstamp		= sja1110_txtstamp,
-	.disable_microcontroller = sja1110_disable_microcontroller,
 	.pcs_mdio_read_c45	= sja1110_pcs_mdio_read_c45,
 	.pcs_mdio_write_c45	= sja1110_pcs_mdio_write_c45,
 	.port_speed		= {
@@ -3713,7 +3702,6 @@ static const struct sja1105_info sja1105_info[] = {
 	.ptp_cmd_packing	= sja1105pqrs_ptp_cmd_packing,
 	.rxtstamp		= sja1110_rxtstamp,
 	.txtstamp		= sja1110_txtstamp,
-	.disable_microcontroller = sja1110_disable_microcontroller,
 	.pcs_mdio_read_c45	= sja1110_pcs_mdio_read_c45,
 	.pcs_mdio_write_c45	= sja1110_pcs_mdio_write_c45,
 	.port_speed		= {
@@ -3761,7 +3749,6 @@ static const struct sja1105_info sja1105_info[] = {
 	.ptp_cmd_packing	= sja1105pqrs_ptp_cmd_packing,
 	.rxtstamp		= sja1110_rxtstamp,
 	.txtstamp		= sja1110_txtstamp,
-	.disable_microcontroller = sja1110_disable_microcontroller,
 	.pcs_mdio_read_c45	= sja1110_pcs_mdio_read_c45,
 	.pcs_mdio_write_c45	= sja1110_pcs_mdio_write_c45,
 	.port_speed		= {
@@ -3809,7 +3796,6 @@ static const struct sja1105_info sja1105_info[] = {
 	.ptp_cmd_packing	= sja1105pqrs_ptp_cmd_packing,
 	.rxtstamp		= sja1110_rxtstamp,
 	.txtstamp		= sja1110_txtstamp,
-	.disable_microcontroller = sja1110_disable_microcontroller,
 	.pcs_mdio_read_c45	= sja1110_pcs_mdio_read_c45,
 	.pcs_mdio_write_c45	= sja1110_pcs_mdio_write_c45,
 	.port_speed		= {

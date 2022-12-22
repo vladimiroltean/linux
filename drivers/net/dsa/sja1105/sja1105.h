@@ -107,7 +107,6 @@ struct sja1105_info {
 				 int reg);
 	int (*pcs_mdio_write_c45)(struct mii_bus *bus, int phy, int mmd,
 				  int reg, u16 val);
-	int (*disable_microcontroller)(struct sja1105_private *priv);
 	const char *name;
 	bool supports_mii[SJA1105_MAX_NUM_PORTS];
 	bool supports_rmii[SJA1105_MAX_NUM_PORTS];
