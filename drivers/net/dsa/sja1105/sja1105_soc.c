@@ -6,6 +6,7 @@
 #include <linux/ioport.h>
 #include <linux/mfd/core.h>
 #include <linux/of.h>
+#include <linux/of_device.h>
 #include <linux/platform_device.h>
 #include <linux/packing.h>
 #include <linux/regmap.h>
@@ -139,6 +140,7 @@ int sja1105_xfer_buf(const struct sja1105_soc *soc, sja1105_spi_rw_mode_t rw,
 {
 	return sja1105_xfer(soc, rw, reg_addr, buf, len, NULL);
 }
+EXPORT_SYMBOL_GPL(sja1105_xfer_buf);
 
 /* If @rw is:
  * - SPI_WRITE: creates and sends an SPI write message at absolute
@@ -166,6 +168,7 @@ int sja1105_xfer_u64(const struct sja1105_soc *soc, sja1105_spi_rw_mode_t rw,
 
 	return rc;
 }
+EXPORT_SYMBOL_GPL(sja1105_xfer_u64);
 
 /* Same as above, but transfers only a 4 byte word */
 int sja1105_xfer_u32(const struct sja1105_soc *soc, sja1105_spi_rw_mode_t rw,
@@ -193,6 +196,7 @@ int sja1105_xfer_u32(const struct sja1105_soc *soc, sja1105_spi_rw_mode_t rw,
 
 	return rc;
 }
+EXPORT_SYMBOL_GPL(sja1105_xfer_u32);
 
 static int sja1110_regmap_bus_reg_read(void *context, unsigned int reg,
 				       unsigned int *val)
@@ -261,6 +265,7 @@ struct regmap *sja1110_create_regmap(struct sja1105_soc *soc,
 
 	return devm_regmap_init(dev, &sja1110_regmap_bus, ctx, &regmap_config);
 }
+EXPORT_SYMBOL_GPL(sja1110_create_regmap);
 
 struct platform_device *
 sja1110_compat_device_create(struct device *parent, struct device_node *np,
@@ -293,11 +298,13 @@ out_free_pdev:
 out:
 	return ERR_PTR(err);
 }
+EXPORT_SYMBOL_GPL(sja1110_compat_device_create);
 
 void sja1110_compat_device_destroy(struct platform_device *pdev)
 {
 	platform_device_unregister(pdev);
 }
+EXPORT_SYMBOL_GPL(sja1110_compat_device_destroy);
 
 const struct sja1105_regs sja1105et_regs = {
 	.device_id = 0x0,
@@ -332,6 +339,7 @@ const struct sja1105_regs sja1105et_regs = {
 	.ptpclkrate = 0x1A,
 	.ptpclkcorp = 0x1D,
 };
+EXPORT_SYMBOL_GPL(sja1105et_regs);
 
 const struct sja1105_regs sja1105pqrs_regs = {
 	.device_id = 0x0,
@@ -369,6 +377,7 @@ const struct sja1105_regs sja1105pqrs_regs = {
 	.ptpclkcorp = 0x1E,
 	.ptpsyncts = 0x1F,
 };
+EXPORT_SYMBOL_GPL(sja1105pqrs_regs);
 
 const struct sja1105_regs sja1110_regs = {
 	.device_id = SJA1110_SPI_ADDR(0x0),
@@ -454,6 +463,7 @@ const struct sja1105_regs sja1110_regs = {
 		     SJA1105_RSV_ADDR, SJA1105_RSV_ADDR, SJA1105_RSV_ADDR,
 		     SJA1105_RSV_ADDR, SJA1105_RSV_ADDR, SJA1105_RSV_ADDR},
 };
+EXPORT_SYMBOL_GPL(sja1110_regs);
 
 static int sja1105_soc_read_device_id(struct sja1105_soc *soc)
 {
@@ -587,8 +597,70 @@ out_free_soc:
 out:
 	return ERR_PTR(rc);
 }
+EXPORT_SYMBOL_GPL(sja1105_soc_create);
 
 void sja1105_soc_destroy(struct sja1105_soc *soc)
 {
 	kfree(soc);
 }
+EXPORT_SYMBOL_GPL(sja1105_soc_destroy);
+
+static int sja1105_soc_probe(struct spi_device *spi)
+{
+	const struct sja1105_regs *regs = of_device_get_match_data(&spi->dev);
+	struct device *dev = &spi->dev;
+	struct sja1105_soc *soc;
+	int rc;
+
+	soc = sja1105_soc_create(spi, regs);
+	if (IS_ERR(soc))
+		return PTR_ERR(soc);
+
+	rc = of_platform_populate(dev->of_node, NULL, NULL, dev);
+	if (rc) {
+		sja1105_soc_destroy(soc);
+		return rc;
+	}
+
+	spi_set_drvdata(spi, soc);
+
+	return 0;
+}
+
+static void sja1105_soc_remove(struct spi_device *spi)
+{
+	struct sja1105_soc *soc = spi_get_drvdata(spi);
+	struct device *dev = &spi->dev;
+
+	of_platform_depopulate(dev);
+	sja1105_soc_destroy(soc);
+}
+
+static const struct of_device_id sja1105_soc_dt_ids[] = {
+	{ .compatible = "nxp,sja1110-soc", .data = &sja1110_regs },
+	{ /* sentinel */ },
+};
+MODULE_DEVICE_TABLE(of, sja1105_soc_dt_ids);
+
+static const struct spi_device_id sja1105_soc_spi_ids[] = {
+	{ "sja1110-soc" },
+	{ },
+};
+MODULE_DEVICE_TABLE(spi, sja1105_soc_spi_ids);
+
+static struct spi_driver sja1105_soc_driver = {
+	.driver = {
+		.name  = "sja1105-soc",
+		.owner = THIS_MODULE,
+		.of_match_table = of_match_ptr(sja1105_soc_dt_ids),
+	},
+	.id_table = sja1105_soc_spi_ids,
+	.probe  = sja1105_soc_probe,
+	.remove = sja1105_soc_remove,
+};
+
+module_spi_driver(sja1105_soc_driver);
+
+MODULE_AUTHOR("Vladimir Oltean <vladimir.oltean@nxp.com>");
+MODULE_DESCRIPTION("SJA1105 SoC Driver");
+MODULE_LICENSE("GPL v2");
