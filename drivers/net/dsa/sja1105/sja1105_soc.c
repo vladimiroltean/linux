@@ -4,6 +4,8 @@
  * Copyright (c) 2018-2019, Vladimir Oltean <olteanv@gmail.com>
  */
 #include <linux/ioport.h>
+#include <linux/mdio/mdio-sja1105-pcs.h>
+#include <linux/mdio/mdio-sja1110-pcs.h>
 #include <linux/mfd/core.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
@@ -18,6 +20,26 @@
 
 #define SJA1105_PROD_ID_PART_NO_X(val)		(((val) & GENMASK(19, 4)) >> 4)
 #define SJA1105_PROD_ID_VERSION_X(val)		((val) & GENMASK(3, 0))
+
+static const struct property_entry sja1105_pcs_mdio_properties[] = {
+	PROPERTY_ENTRY_U32("reg", 0),
+	{},
+};
+
+static const struct software_node sja1105_pcs_swnode = {
+	.properties = sja1105_pcs_mdio_properties,
+};
+
+static const struct software_node sja1105_pcs_mdio_swnode = {
+};
+
+static const struct resource sja1105_pcs_resources[] = {
+	DEFINE_RES_REG_NAMED(0x709000, 0x1000, "mdio_cbtx"),
+};
+
+static const struct mfd_cell sja1105_devs[] = {
+	MFD_CELL_RES(MDIO_SJA1105_PCS_NAME, sja1105_pcs_resources),
+};
 
 struct sja1110_regmap_bus_context {
 	unsigned long reg_base;
@@ -511,6 +533,21 @@ static int sja1105_soc_hw_reset(struct device *dev, unsigned int pulse_len,
 	return 0;
 }
 
+static int sja1105_soc_populate_children(struct sja1105_soc *soc)
+{
+	struct device *dev = &soc->spidev->dev;
+
+	return mfd_add_devices(dev, PLATFORM_DEVID_AUTO, sja1105_devs,
+			       ARRAY_SIZE(sja1105_devs), NULL, 0, NULL);
+}
+
+static void sja1105_soc_depopulate_children(struct sja1105_soc *soc)
+{
+	struct device *dev = &soc->spidev->dev;
+
+	mfd_remove_devices(dev);
+}
+
 struct sja1105_soc *sja1105_soc_create(struct spi_device *spi,
 				       const struct sja1105_regs *regs)
 {
@@ -590,6 +627,13 @@ struct sja1105_soc *sja1105_soc_create(struct spi_device *spi,
 		}
 	}
 
+	rc = sja1105_soc_populate_children(soc);
+	if (rc) {
+		dev_err(dev, "Failed to populate children: %pe\n",
+			ERR_PTR(rc));
+		goto out_free_soc;
+	}
+
 	return soc;
 
 out_free_soc:
@@ -601,6 +645,7 @@ EXPORT_SYMBOL_GPL(sja1105_soc_create);
 
 void sja1105_soc_destroy(struct sja1105_soc *soc)
 {
+	sja1105_soc_depopulate_children(soc);
 	kfree(soc);
 }
 EXPORT_SYMBOL_GPL(sja1105_soc_destroy);
@@ -608,7 +653,6 @@ EXPORT_SYMBOL_GPL(sja1105_soc_destroy);
 static int sja1105_soc_probe(struct spi_device *spi)
 {
 	const struct sja1105_regs *regs = of_device_get_match_data(&spi->dev);
-	struct device *dev = &spi->dev;
 	struct sja1105_soc *soc;
 	int rc;
 
@@ -616,7 +660,7 @@ static int sja1105_soc_probe(struct spi_device *spi)
 	if (IS_ERR(soc))
 		return PTR_ERR(soc);
 
-	rc = of_platform_populate(dev->of_node, NULL, NULL, dev);
+	rc = sja1105_soc_populate_children(soc);
 	if (rc) {
 		sja1105_soc_destroy(soc);
 		return rc;
@@ -630,9 +674,8 @@ static int sja1105_soc_probe(struct spi_device *spi)
 static void sja1105_soc_remove(struct spi_device *spi)
 {
 	struct sja1105_soc *soc = spi_get_drvdata(spi);
-	struct device *dev = &spi->dev;
 
-	of_platform_depopulate(dev);
+	sja1105_soc_depopulate_children(soc);
 	sja1105_soc_destroy(soc);
 }
 
