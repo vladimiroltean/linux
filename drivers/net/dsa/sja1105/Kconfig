@@ -3,6 +3,7 @@ config NET_DSA_SJA1105
 tristate "NXP SJA1105 Ethernet switch family support"
 	depends on NET_DSA && SPI
 	depends on PTP_1588_CLOCK_OPTIONAL
+	select NET_DSA_SJA1105_SOC
 	select NET_DSA_TAG_SJA1105
 	select PCS_XPCS
 	select PACKING
@@ -49,3 +50,14 @@ config NET_DSA_SJA1105_VL
 	  (SJA1105T, SJA1105Q, SJA1105S). The following actions are supported:
 	  - redirect, trap, drop
 	  - time-based ingress policing, via the tc-gate action
+
+config NET_DSA_SJA1105_SOC
+tristate "NXP SJA1105 SoC support"
+	depends on SPI
+	select PACKING
+	select REGMAP
+	help
+	  This enables support for treating the SJA1105 and SJA1110 switches as
+	  complex SoCs with multiple peripherals other than the main switching
+	  IP, like interrupt controllers, GPIO controller, reset control and
+	  others.
