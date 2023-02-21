@@ -177,6 +177,13 @@ config MDIO_SJA1110_CBTX
 	  automotive Ethernet switches, which is used to access the internal
 	  100BASE-TX PHY over SPI.
 
+config MDIO_SJA1110_PCS
+	tristate "NXP SJA1110 PCS MDIO bus"
+	help
+	  This driver supports the MDIO controller embedded in the NXP SJA1110
+	  automotive Ethernet switches, which is used to access the internal
+	  SGMII XPCS over SPI.
+
 config MDIO_OCTEON
 	tristate "Octeon and some ThunderX SOCs MDIO buses"
 	depends on (64BIT && OF_MDIO) || COMPILE_TEST
