@@ -124,8 +124,8 @@ struct dsa_switch_tree {
 	/* List of switch ports */
 	struct list_head ports;
 
-	/* Notifier chain for switch-wide events */
-	struct raw_notifier_head	nh;
+	/* List of switches */
+	struct list_head switches;
 
 	/* Tree identifier */
 	unsigned int index;
@@ -423,8 +423,7 @@ struct dsa_switch {
 	 */
 	u32			fdb_isolation:1;
 
-	/* Listener for switch fabric events */
-	struct notifier_block	nb;
+	struct list_head	list;
 
 	/*
 	 * Give the switch driver somewhere to hang its private data

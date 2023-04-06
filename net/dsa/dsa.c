@@ -220,7 +220,7 @@ static struct dsa_switch_tree *dsa_tree_alloc(int index)
 	dst->index = index;
 
 	INIT_LIST_HEAD(&dst->rtable);
-
+	INIT_LIST_HEAD(&dst->switches);
 	INIT_LIST_HEAD(&dst->ports);
 
 	INIT_LIST_HEAD(&dst->list);
@@ -621,15 +621,13 @@ static int dsa_switch_setup(struct dsa_switch *ds)
 	if (err)
 		return err;
 
-	err = dsa_switch_register_notifier(ds);
-	if (err)
-		goto devlink_free;
+	list_add_tail(&ds->list, &ds->dst->switches);
 
 	ds->configure_vlan_while_not_filtering = true;
 
 	err = ds->ops->setup(ds);
 	if (err < 0)
-		goto unregister_notifier;
+		goto remove_from_list;
 
 	err = dsa_switch_setup_tag_protocol(ds);
 	if (err)
@@ -663,9 +661,8 @@ free_slave_mii_bus:
 teardown:
 	if (ds->ops->teardown)
 		ds->ops->teardown(ds);
-unregister_notifier:
-	dsa_switch_unregister_notifier(ds);
-devlink_free:
+remove_from_list:
+	list_del(&ds->list);
 	dsa_switch_devlink_free(ds);
 	return err;
 }
@@ -688,7 +685,7 @@ static void dsa_switch_teardown(struct dsa_switch *ds)
 	if (ds->ops->teardown)
 		ds->ops->teardown(ds);
 
-	dsa_switch_unregister_notifier(ds);
+	list_del(&ds->list);
 
 	dsa_switch_devlink_free(ds);
 

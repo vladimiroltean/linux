@@ -8,7 +8,6 @@
 
 #include <linux/if_bridge.h>
 #include <linux/netdevice.h>
-#include <linux/notifier.h>
 #include <linux/if_vlan.h>
 #include <net/switchdev.h>
 
@@ -950,10 +949,9 @@ dsa_switch_master_state_change(struct dsa_switch *ds,
 	return 0;
 }
 
-static int dsa_switch_event(struct notifier_block *nb,
-			    unsigned long event, void *info)
+static int dsa_switch_event(struct dsa_switch *ds, unsigned long event,
+			    void *info)
 {
-	struct dsa_switch *ds = container_of(nb, struct dsa_switch, nb);
 	int err;
 
 	switch (event) {
@@ -1047,7 +1045,7 @@ static int dsa_switch_event(struct notifier_block *nb,
 		dev_dbg(ds->dev, "breaking chain for DSA event %lu (%d)\n",
 			event, err);
 
-	return notifier_from_errno(err);
+	return err;
 }
 
 /**
@@ -1057,17 +1055,20 @@ static int dsa_switch_event(struct notifier_block *nb,
  * @v: event-specific value.
  *
  * Given a struct dsa_switch_tree, this can be used to run a function once for
- * each member DSA switch. The other alternative of traversing the tree is only
- * through its ports list, which does not uniquely list the switches.
+ * each member DSA switch.
  */
 int dsa_tree_notify(struct dsa_switch_tree *dst, unsigned long e, void *v)
 {
-	struct raw_notifier_head *nh = &dst->nh;
+	struct dsa_switch *ds;
 	int err;
 
-	err = raw_notifier_call_chain(nh, e, v);
+	list_for_each_entry(ds, &dst->switches, list) {
+		err = dsa_switch_event(ds, e, v);
+		if (err)
+			return err;
+	}
 
-	return notifier_to_errno(err);
+	return 0;
 }
 
 /**
@@ -1094,20 +1095,4 @@ int dsa_broadcast(unsigned long e, void *v)
 	}
 
 	return err;
-}
-
-int dsa_switch_register_notifier(struct dsa_switch *ds)
-{
-	ds->nb.notifier_call = dsa_switch_event;
-
-	return raw_notifier_chain_register(&ds->dst->nh, &ds->nb);
-}
-
-void dsa_switch_unregister_notifier(struct dsa_switch *ds)
-{
-	int err;
-
-	err = raw_notifier_chain_unregister(&ds->dst->nh, &ds->nb);
-	if (err)
-		dev_err(ds->dev, "failed to unregister notifier (%d)\n", err);
 }
