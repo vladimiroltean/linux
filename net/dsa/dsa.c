@@ -935,22 +935,18 @@ static int dsa_tree_bind_tag_proto(struct dsa_switch_tree *dst,
 	 * to the new tagger
 	 */
 	info.tag_ops = tag_ops;
-	err = dsa_tree_notify(dst, DSA_NOTIFIER_TAG_PROTO_CONNECT, &info);
-	if (err && err != -EOPNOTSUPP)
-		goto out_disconnect;
+	err = dsa_tree_notify_robust(dst, DSA_NOTIFIER_TAG_PROTO_CONNECT, &info,
+				     DSA_NOTIFIER_TAG_PROTO_DISCONNECT, &info);
+	if (err && err != -EOPNOTSUPP) {
+		dst->tag_ops = old_tag_ops;
+		return err;
+	}
 
 	/* Notify the old tagger about the disconnection from this tree */
 	info.tag_ops = old_tag_ops;
 	dsa_tree_notify(dst, DSA_NOTIFIER_TAG_PROTO_DISCONNECT, &info);
 
 	return 0;
-
-out_disconnect:
-	info.tag_ops = tag_ops;
-	dsa_tree_notify(dst, DSA_NOTIFIER_TAG_PROTO_DISCONNECT, &info);
-	dst->tag_ops = old_tag_ops;
-
-	return err;
 }
 
 /* Since the dsa/tagging sysfs device attribute is per master, the assumption
@@ -990,21 +986,15 @@ int dsa_tree_change_tag_proto(struct dsa_switch_tree *dst,
 	info.tag_ops = tag_ops;
 	err = dsa_tree_notify(dst, DSA_NOTIFIER_TAG_PROTO, &info);
 	if (err)
-		goto out_unwind_tagger;
+		goto out_unlock;
 
 	err = dsa_tree_bind_tag_proto(dst, tag_ops);
 	if (err)
-		goto out_unwind_tagger;
+		dsa_tree_notify(dst, DSA_NOTIFIER_TAG_PROTO, &old_info);
 
-	rtnl_unlock();
-
-	return 0;
-
-out_unwind_tagger:
-	info.tag_ops = old_tag_ops;
-	dsa_tree_notify(dst, DSA_NOTIFIER_TAG_PROTO, &info);
 out_unlock:
 	rtnl_unlock();
+
 	return err;
 }
 
