@@ -1307,7 +1307,7 @@ static void ipv6_del_addr(struct inet6_ifaddr *ifp)
 
 	ipv6_ifa_notify(RTM_DELADDR, ifp);
 
-	inet6addr_notifier_call_chain(NETDEV_DOWN, ifp);
+	inet6addr_notifier_call_chain(NETDEV_GOING_DOWN, ifp);
 
 	if (action != CLEANUP_PREFIX_RT_NOP) {
 		cleanup_prefix_route(ifp, expires,
@@ -3670,12 +3670,12 @@ static int addrconf_notify(struct notifier_block *this, unsigned long event,
 		}
 		break;
 
-	case NETDEV_DOWN:
+	case NETDEV_GOING_DOWN:
 	case NETDEV_UNREGISTER:
 		/*
 		 *	Remove all addresses from this interface.
 		 */
-		addrconf_ifdown(dev, event != NETDEV_DOWN);
+		addrconf_ifdown(dev, event != NETDEV_GOING_DOWN);
 		break;
 
 	case NETDEV_CHANGENAME:
@@ -3741,7 +3741,7 @@ static bool addr_is_local(const struct in6_addr *addr)
 
 static int addrconf_ifdown(struct net_device *dev, bool unregister)
 {
-	unsigned long event = unregister ? NETDEV_UNREGISTER : NETDEV_DOWN;
+	unsigned long event = unregister ? NETDEV_UNREGISTER : NETDEV_GOING_DOWN;
 	struct net *net = dev_net(dev);
 	struct inet6_dev *idev;
 	struct inet6_ifaddr *ifa;
@@ -3877,7 +3877,7 @@ restart:
 
 		if (state != INET6_IFADDR_STATE_DEAD) {
 			__ipv6_ifa_notify(RTM_DELADDR, ifa);
-			inet6addr_notifier_call_chain(NETDEV_DOWN, ifa);
+			inet6addr_notifier_call_chain(NETDEV_GOING_DOWN, ifa);
 		} else {
 			if (idev->cnf.forwarding)
 				addrconf_leave_anycast(ifa);
@@ -6252,7 +6252,7 @@ static void dev_disable_change(struct inet6_dev *idev)
 
 	netdev_notifier_info_init(&info, idev->dev);
 	if (idev->cnf.disable_ipv6)
-		addrconf_notify(NULL, NETDEV_DOWN, &info);
+		addrconf_notify(NULL, NETDEV_GOING_DOWN, &info);
 	else
 		addrconf_notify(NULL, NETDEV_UP, &info);
 }

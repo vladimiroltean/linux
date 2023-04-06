@@ -392,7 +392,8 @@ static void __inet_del_ifa(struct in_device *in_dev,
 
 				rtmsg_ifa(RTM_DELADDR, ifa, nlh, portid);
 				blocking_notifier_call_chain(&inetaddr_chain,
-						NETDEV_DOWN, ifa);
+							     NETDEV_GOING_DOWN,
+							     ifa);
 				inet_free_ifa(ifa);
 			} else {
 				promote = ifa;
@@ -429,7 +430,7 @@ no_promotions:
 	   So that, this order is correct.
 	 */
 	rtmsg_ifa(RTM_DELADDR, ifa1, nlh, portid);
-	blocking_notifier_call_chain(&inetaddr_chain, NETDEV_DOWN, ifa1);
+	blocking_notifier_call_chain(&inetaddr_chain, NETDEV_GOING_DOWN, ifa1);
 
 	if (promote) {
 		struct in_ifaddr *next_sec;
@@ -1588,7 +1589,7 @@ static int inetdev_event(struct notifier_block *this, unsigned long event,
 		/* Send gratuitous ARP to notify of link change */
 		inetdev_send_gratuitous_arp(dev, in_dev);
 		break;
-	case NETDEV_DOWN:
+	case NETDEV_GOING_DOWN:
 		ip_mc_down(in_dev);
 		break;
 	case NETDEV_PRE_TYPE_CHANGE:
