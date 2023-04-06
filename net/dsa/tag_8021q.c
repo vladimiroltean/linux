@@ -218,10 +218,10 @@ int dsa_switch_tag_8021q_vlan_add(struct dsa_switch *ds,
 	struct dsa_port *dp;
 	int err;
 
-	/* Since we use dsa_broadcast(), there might be other switches in other
-	 * trees which don't support tag_8021q, so don't return an error.
-	 * Or they might even support tag_8021q but have not registered yet to
-	 * use it (maybe they use another tagger currently).
+	/* Since we use dsa_broadcast_robust(), there might be other switches
+	 * in other trees which don't support tag_8021q, so don't return an
+	 * error. Or they might even support tag_8021q but have not registered
+	 * yet to use it (maybe they use another tagger currently).
 	 */
 	if (!ds->ops->tag_8021q_vlan_add || !ds->tag_8021q_ctx)
 		return 0;

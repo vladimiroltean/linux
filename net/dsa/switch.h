@@ -115,5 +115,7 @@ int dsa_tree_notify(struct dsa_switch_tree *dst, unsigned long e, void *v);
 int dsa_tree_notify_robust(struct dsa_switch_tree *dst, unsigned long e,
 			   void *v, unsigned long e_rollback, void *v_rollback);
 int dsa_broadcast(unsigned long e, void *v);
+int dsa_broadcast_robust(unsigned long e, void *v, unsigned long e_rollback,
+			 void *v_rollback);
 
 #endif

@@ -506,7 +506,8 @@ int dsa_port_bridge_join(struct dsa_port *dp, struct net_device *br,
 	brport_dev = dsa_port_to_bridge_port(dp);
 
 	info.bridge = *dp->bridge;
-	err = dsa_broadcast(DSA_NOTIFIER_BRIDGE_JOIN, &info);
+	err = dsa_broadcast_robust(DSA_NOTIFIER_BRIDGE_JOIN, &info,
+				   DSA_NOTIFIER_BRIDGE_LEAVE, &info);
 	if (err)
 		goto out_rollback;
 
@@ -2073,7 +2074,8 @@ int dsa_port_tag_8021q_vlan_add(struct dsa_port *dp, u16 vid, bool broadcast)
 	};
 
 	if (broadcast)
-		return dsa_broadcast(DSA_NOTIFIER_TAG_8021Q_VLAN_ADD, &info);
+		return dsa_broadcast_robust(DSA_NOTIFIER_TAG_8021Q_VLAN_ADD, &info,
+					    DSA_NOTIFIER_TAG_8021Q_VLAN_DEL, &info);
 
 	return dsa_port_notify(dp, DSA_NOTIFIER_TAG_8021Q_VLAN_ADD, &info);
 }
