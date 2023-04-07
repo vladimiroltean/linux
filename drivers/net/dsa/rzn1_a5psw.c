@@ -275,14 +275,10 @@ static int a5psw_set_ageing_time(struct dsa_switch *ds, unsigned int msecs)
 {
 	struct a5psw *a5psw = ds->priv;
 	unsigned long rate;
-	u64 max, tmp;
 	u32 agetime;
+	u64 tmp;
 
 	rate = clk_get_rate(a5psw->clk);
-	max = div64_ul(((u64)A5PSW_LK_AGETIME_MASK * A5PSW_TABLE_ENTRIES * 1024),
-		       rate) * 1000;
-	if (msecs > max)
-		return -EINVAL;
 
 	tmp = div_u64(rate, MSEC_PER_SEC);
 	agetime = div_u64(msecs * tmp, 1024 * A5PSW_TABLE_ENTRIES);
@@ -935,6 +931,7 @@ static int a5psw_probe(struct platform_device *pdev)
 	struct device_node *mdio;
 	struct dsa_switch *ds;
 	struct a5psw *a5psw;
+	unsigned long rate;
 	int ret;
 
 	a5psw = devm_kzalloc(dev, sizeof(*a5psw), GFP_KERNEL);
@@ -991,6 +988,10 @@ static int a5psw_probe(struct platform_device *pdev)
 	ds->num_ports = A5PSW_PORTS_NUM;
 	ds->ops = &a5psw_switch_ops;
 	ds->priv = a5psw;
+
+	rate = clk_get_rate(a5psw->clk);
+	ds->ageing_time_max = div64_ul(A5PSW_AGETIME_MAX_CYCLES, rate) *
+			      MSEC_PER_SEC;
 
 	ret = dsa_register_switch(ds);
 	if (ret) {
