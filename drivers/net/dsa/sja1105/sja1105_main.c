@@ -1822,11 +1822,12 @@ static int sja1105_fdb_add(struct dsa_switch *ds, int port,
 	return priv->info->fdb_add_cmd(ds, port, addr, vid);
 }
 
-static int sja1105_fdb_del(struct dsa_switch *ds, int port,
-			   const unsigned char *addr, u16 vid,
-			   struct dsa_db db)
+static void sja1105_fdb_del(struct dsa_switch *ds, int port,
+			    const unsigned char *addr, u16 vid,
+			    struct dsa_db db)
 {
 	struct sja1105_private *priv = ds->priv;
+	int rc;
 
 	if (!vid) {
 		switch (db.type) {
@@ -1837,11 +1838,15 @@ static int sja1105_fdb_del(struct dsa_switch *ds, int port,
 			vid = dsa_tag_8021q_bridge_vid(db.bridge.num);
 			break;
 		default:
-			return -EOPNOTSUPP;
+			return;
 		}
 	}
 
-	return priv->info->fdb_del_cmd(ds, port, addr, vid);
+	rc = priv->info->fdb_del_cmd(ds, port, addr, vid);
+	if (rc)
+		dev_warn(ds->dev,
+			 "Failed to delete FDB entry %pM vid %u from port %d: %pe\n",
+			 addr, vid, port, ERR_PTR(rc));
 }
 
 static int sja1105_fdb_dump(struct dsa_switch *ds, int port,
@@ -1930,13 +1935,7 @@ static void sja1105_fast_age(struct dsa_switch *ds, int port)
 
 		u64_to_ether_addr(l2_lookup.macaddr, macaddr);
 
-		rc = sja1105_fdb_del(ds, port, macaddr, l2_lookup.vlanid, db);
-		if (rc) {
-			dev_err(ds->dev,
-				"Failed to delete FDB entry %pM vid %lld: %pe\n",
-				macaddr, l2_lookup.vlanid, ERR_PTR(rc));
-			return;
-		}
+		sja1105_fdb_del(ds, port, macaddr, l2_lookup.vlanid, db);
 	}
 }
 
@@ -1947,11 +1946,11 @@ static int sja1105_mdb_add(struct dsa_switch *ds, int port,
 	return sja1105_fdb_add(ds, port, mdb->addr, mdb->vid, db);
 }
 
-static int sja1105_mdb_del(struct dsa_switch *ds, int port,
-			   const struct switchdev_obj_port_mdb *mdb,
-			   struct dsa_db db)
+static void sja1105_mdb_del(struct dsa_switch *ds, int port,
+			    const struct switchdev_obj_port_mdb *mdb,
+			    struct dsa_db db)
 {
-	return sja1105_fdb_del(ds, port, mdb->addr, mdb->vid, db);
+	sja1105_fdb_del(ds, port, mdb->addr, mdb->vid, db);
 }
 
 /* Common function for unicast and broadcast flood configuration.

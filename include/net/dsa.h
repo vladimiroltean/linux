@@ -1031,7 +1031,7 @@ struct dsa_switch_ops {
 	int	(*port_fdb_add)(struct dsa_switch *ds, int port,
 				const unsigned char *addr, u16 vid,
 				struct dsa_db db);
-	int	(*port_fdb_del)(struct dsa_switch *ds, int port,
+	void	(*port_fdb_del)(struct dsa_switch *ds, int port,
 				const unsigned char *addr, u16 vid,
 				struct dsa_db db);
 	int	(*port_fdb_dump)(struct dsa_switch *ds, int port,
@@ -1039,7 +1039,7 @@ struct dsa_switch_ops {
 	int	(*lag_fdb_add)(struct dsa_switch *ds, struct dsa_lag lag,
 			       const unsigned char *addr, u16 vid,
 			       struct dsa_db db);
-	int	(*lag_fdb_del)(struct dsa_switch *ds, struct dsa_lag lag,
+	void	(*lag_fdb_del)(struct dsa_switch *ds, struct dsa_lag lag,
 			       const unsigned char *addr, u16 vid,
 			       struct dsa_db db);
 
@@ -1049,7 +1049,7 @@ struct dsa_switch_ops {
 	int	(*port_mdb_add)(struct dsa_switch *ds, int port,
 				const struct switchdev_obj_port_mdb *mdb,
 				struct dsa_db db);
-	int	(*port_mdb_del)(struct dsa_switch *ds, int port,
+	void	(*port_mdb_del)(struct dsa_switch *ds, int port,
 				const struct switchdev_obj_port_mdb *mdb,
 				struct dsa_db db);
 	/*

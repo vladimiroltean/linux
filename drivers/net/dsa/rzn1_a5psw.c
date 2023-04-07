@@ -445,9 +445,9 @@ lk_unlock:
 	return ret;
 }
 
-static int a5psw_port_fdb_del(struct dsa_switch *ds, int port,
-			      const unsigned char *addr, u16 vid,
-			      struct dsa_db db)
+static void a5psw_port_fdb_del(struct dsa_switch *ds, int port,
+			       const unsigned char *addr, u16 vid,
+			       struct dsa_db db)
 {
 	struct a5psw *a5psw = ds->priv;
 	union lk_data lk_data = {0};
@@ -501,7 +501,10 @@ static int a5psw_port_fdb_del(struct dsa_switch *ds, int port,
 lk_unlock:
 	mutex_unlock(&a5psw->lk_lock);
 
-	return ret;
+	if (ret)
+		dev_warn(ds->dev,
+			 "Failed to delete FDB entry %pM vid %u from port %d: %pe\n",
+			 addr, vid, port, ERR_PTR(ret));
 }
 
 static int a5psw_port_fdb_dump(struct dsa_switch *ds, int port,

@@ -2407,16 +2407,21 @@ static int ksz_port_fdb_add(struct dsa_switch *ds, int port,
 	return dev->dev_ops->fdb_add(dev, port, addr, vid, db);
 }
 
-static int ksz_port_fdb_del(struct dsa_switch *ds, int port,
-			    const unsigned char *addr,
-			    u16 vid, struct dsa_db db)
+static void ksz_port_fdb_del(struct dsa_switch *ds, int port,
+			     const unsigned char *addr,
+			     u16 vid, struct dsa_db db)
 {
 	struct ksz_device *dev = ds->priv;
+	int ret;
 
 	if (!dev->dev_ops->fdb_del)
-		return -EOPNOTSUPP;
+		return;
 
-	return dev->dev_ops->fdb_del(dev, port, addr, vid, db);
+	ret = dev->dev_ops->fdb_del(dev, port, addr, vid, db);
+	if (ret)
+		dev_warn(ds->dev,
+			 "Failed to delete FDB entry %pM vid %u from port %d: %pe\n",
+			 addr, vid, port, ERR_PTR(ret));
 }
 
 static int ksz_port_fdb_dump(struct dsa_switch *ds, int port,
@@ -2442,16 +2447,21 @@ static int ksz_port_mdb_add(struct dsa_switch *ds, int port,
 	return dev->dev_ops->mdb_add(dev, port, mdb, db);
 }
 
-static int ksz_port_mdb_del(struct dsa_switch *ds, int port,
-			    const struct switchdev_obj_port_mdb *mdb,
-			    struct dsa_db db)
+static void ksz_port_mdb_del(struct dsa_switch *ds, int port,
+			     const struct switchdev_obj_port_mdb *mdb,
+			     struct dsa_db db)
 {
 	struct ksz_device *dev = ds->priv;
+	int ret;
 
 	if (!dev->dev_ops->mdb_del)
-		return -EOPNOTSUPP;
+		return;
 
-	return dev->dev_ops->mdb_del(dev, port, mdb, db);
+	ret = dev->dev_ops->mdb_del(dev, port, mdb, db);
+	if (ret)
+		dev_warn(ds->dev,
+			 "Failed to delete FDB entry %pM vid %u from port %d: %pe\n",
+			 mdb->addr, mdb->vid, port, ERR_PTR(ret));
 }
 
 static int ksz_enable_port(struct dsa_switch *ds, int port,

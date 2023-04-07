@@ -21,7 +21,7 @@
 void dsa_db_print(const struct dsa_db *db, char buf[DSA_DB_BUFSIZ]);
 const char *dsa_port_kind(const struct dsa_port *dp);
 
-DECLARE_EVENT_CLASS(dsa_port_addr_op_hw,
+DECLARE_EVENT_CLASS(dsa_port_addr_add_hw,
 
 	TP_PROTO(const struct dsa_port *dp, const unsigned char *addr, u16 vid,
 		 const struct dsa_db *db, int err),
@@ -57,28 +57,71 @@ DECLARE_EVENT_CLASS(dsa_port_addr_op_hw,
  * (where no refcounting is kept), or on shared ports when the entry
  * is first seen and its refcount is 1.
  */
-DEFINE_EVENT(dsa_port_addr_op_hw, dsa_fdb_add_hw,
+DEFINE_EVENT(dsa_port_addr_add_hw, dsa_fdb_add_hw,
 	     TP_PROTO(const struct dsa_port *dp, const unsigned char *addr,
 		      u16 vid, const struct dsa_db *db, int err),
 	     TP_ARGS(dp, addr, vid, db, err));
 
-DEFINE_EVENT(dsa_port_addr_op_hw, dsa_mdb_add_hw,
+DEFINE_EVENT(dsa_port_addr_add_hw, dsa_mdb_add_hw,
 	     TP_PROTO(const struct dsa_port *dp, const unsigned char *addr,
 		      u16 vid, const struct dsa_db *db, int err),
 	     TP_ARGS(dp, addr, vid, db, err));
+
+DECLARE_EVENT_CLASS(dsa_port_addr_del,
+
+	TP_PROTO(const struct dsa_port *dp, const unsigned char *addr, u16 vid,
+		 const struct dsa_db *db),
+
+	TP_ARGS(dp, addr, vid, db),
+
+	TP_STRUCT__entry(
+		__string(dev, dev_name(dp->ds->dev))
+		__string(kind, dsa_port_kind(dp))
+		__field(int, port)
+		__array(unsigned char, addr, ETH_ALEN)
+		__field(u16, vid)
+		__array(char, db_buf, DSA_DB_BUFSIZ)
+	),
+
+	TP_fast_assign(
+		__assign_str(dev, dev_name(dp->ds->dev));
+		__assign_str(kind, dsa_port_kind(dp));
+		__entry->port = dp->index;
+		ether_addr_copy(__entry->addr, addr);
+		__entry->vid = vid;
+		dsa_db_print(db, __entry->db_buf);
+	),
+
+	TP_printk("%s %s port %d addr %pM vid %u db \"%s\"",
+		  __get_str(dev), __get_str(kind), __entry->port,
+		  __entry->addr, __entry->vid, __entry->db_buf)
+);
 
 /* Delete unicast/multicast address from hardware, either on user ports or
  * when the refcount on shared ports reaches 0
  */
-DEFINE_EVENT(dsa_port_addr_op_hw, dsa_fdb_del_hw,
+DEFINE_EVENT(dsa_port_addr_del, dsa_fdb_del_hw,
 	     TP_PROTO(const struct dsa_port *dp, const unsigned char *addr,
-		      u16 vid, const struct dsa_db *db, int err),
-	     TP_ARGS(dp, addr, vid, db, err));
+		      u16 vid, const struct dsa_db *db),
+	     TP_ARGS(dp, addr, vid, db));
 
-DEFINE_EVENT(dsa_port_addr_op_hw, dsa_mdb_del_hw,
+DEFINE_EVENT(dsa_port_addr_del, dsa_mdb_del_hw,
 	     TP_PROTO(const struct dsa_port *dp, const unsigned char *addr,
-		      u16 vid, const struct dsa_db *db, int err),
-	     TP_ARGS(dp, addr, vid, db, err));
+		      u16 vid, const struct dsa_db *db),
+	     TP_ARGS(dp, addr, vid, db));
+
+/* Attempt to delete a unicast/multicast address on shared ports for which
+ * the delete operation was called more times than the addition
+ */
+DEFINE_EVENT(dsa_port_addr_del, dsa_fdb_del_not_found,
+	     TP_PROTO(const struct dsa_port *dp, const unsigned char *addr,
+		      u16 vid, const struct dsa_db *db),
+	     TP_ARGS(dp, addr, vid, db));
+
+DEFINE_EVENT(dsa_port_addr_del, dsa_mdb_del_not_found,
+	     TP_PROTO(const struct dsa_port *dp, const unsigned char *addr,
+		      u16 vid, const struct dsa_db *db),
+	     TP_ARGS(dp, addr, vid, db));
 
 DECLARE_EVENT_CLASS(dsa_port_addr_op_refcount,
 
@@ -140,49 +183,6 @@ DEFINE_EVENT(dsa_port_addr_op_refcount, dsa_mdb_del_drop,
 		      const refcount_t *refcount),
 	     TP_ARGS(dp, addr, vid, db, refcount));
 
-DECLARE_EVENT_CLASS(dsa_port_addr_del_not_found,
-
-	TP_PROTO(const struct dsa_port *dp, const unsigned char *addr, u16 vid,
-		 const struct dsa_db *db),
-
-	TP_ARGS(dp, addr, vid, db),
-
-	TP_STRUCT__entry(
-		__string(dev, dev_name(dp->ds->dev))
-		__string(kind, dsa_port_kind(dp))
-		__field(int, port)
-		__array(unsigned char, addr, ETH_ALEN)
-		__field(u16, vid)
-		__array(char, db_buf, DSA_DB_BUFSIZ)
-	),
-
-	TP_fast_assign(
-		__assign_str(dev, dev_name(dp->ds->dev));
-		__assign_str(kind, dsa_port_kind(dp));
-		__entry->port = dp->index;
-		ether_addr_copy(__entry->addr, addr);
-		__entry->vid = vid;
-		dsa_db_print(db, __entry->db_buf);
-	),
-
-	TP_printk("%s %s port %d addr %pM vid %u db \"%s\"",
-		  __get_str(dev), __get_str(kind), __entry->port,
-		  __entry->addr, __entry->vid, __entry->db_buf)
-);
-
-/* Attempt to delete a unicast/multicast address on shared ports for which
- * the delete operation was called more times than the addition
- */
-DEFINE_EVENT(dsa_port_addr_del_not_found, dsa_fdb_del_not_found,
-	     TP_PROTO(const struct dsa_port *dp, const unsigned char *addr,
-		      u16 vid, const struct dsa_db *db),
-	     TP_ARGS(dp, addr, vid, db));
-
-DEFINE_EVENT(dsa_port_addr_del_not_found, dsa_mdb_del_not_found,
-	     TP_PROTO(const struct dsa_port *dp, const unsigned char *addr,
-		      u16 vid, const struct dsa_db *db),
-	     TP_ARGS(dp, addr, vid, db));
-
 TRACE_EVENT(dsa_lag_fdb_add_hw,
 
 	TP_PROTO(const struct net_device *lag_dev, const unsigned char *addr,
@@ -239,34 +239,6 @@ TRACE_EVENT(dsa_lag_fdb_add_bump,
 		  __entry->db_buf, __entry->refcount)
 );
 
-TRACE_EVENT(dsa_lag_fdb_del_hw,
-
-	TP_PROTO(const struct net_device *lag_dev, const unsigned char *addr,
-		 u16 vid, const struct dsa_db *db, int err),
-
-	TP_ARGS(lag_dev, addr, vid, db, err),
-
-	TP_STRUCT__entry(
-		__string(dev, lag_dev->name)
-		__array(unsigned char, addr, ETH_ALEN)
-		__field(u16, vid)
-		__array(char, db_buf, DSA_DB_BUFSIZ)
-		__field(int, err)
-	),
-
-	TP_fast_assign(
-		__assign_str(dev, lag_dev->name);
-		ether_addr_copy(__entry->addr, addr);
-		__entry->vid = vid;
-		dsa_db_print(db, __entry->db_buf);
-		__entry->err = err;
-	),
-
-	TP_printk("%s addr %pM vid %u db \"%s\" err %d",
-		  __get_str(dev), __entry->addr, __entry->vid,
-		  __entry->db_buf, __entry->err)
-);
-
 TRACE_EVENT(dsa_lag_fdb_del_drop,
 
 	TP_PROTO(const struct net_device *lag_dev, const unsigned char *addr,
@@ -295,7 +267,7 @@ TRACE_EVENT(dsa_lag_fdb_del_drop,
 		  __entry->db_buf, __entry->refcount)
 );
 
-TRACE_EVENT(dsa_lag_fdb_del_not_found,
+DECLARE_EVENT_CLASS(dsa_lag_fdb_del,
 
 	TP_PROTO(const struct net_device *lag_dev, const unsigned char *addr,
 		 u16 vid, const struct dsa_db *db),
@@ -319,6 +291,18 @@ TRACE_EVENT(dsa_lag_fdb_del_not_found,
 	TP_printk("%s addr %pM vid %u db \"%s\"",
 		  __get_str(dev), __entry->addr, __entry->vid, __entry->db_buf)
 );
+
+DEFINE_EVENT(dsa_lag_fdb_del, dsa_lag_fdb_del_hw,
+	     TP_PROTO(const struct net_device *lag_dev,
+		      const unsigned char *addr, u16 vid,
+		      const struct dsa_db *db),
+	     TP_ARGS(lag_dev, addr, vid, db));
+
+DEFINE_EVENT(dsa_lag_fdb_del, dsa_lag_fdb_del_not_found,
+	     TP_PROTO(const struct net_device *lag_dev,
+		      const unsigned char *addr, u16 vid,
+		      const struct dsa_db *db),
+	     TP_ARGS(lag_dev, addr, vid, db));
 
 DECLARE_EVENT_CLASS(dsa_vlan_op_hw,
 

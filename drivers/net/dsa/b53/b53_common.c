@@ -1753,9 +1753,9 @@ int b53_fdb_add(struct dsa_switch *ds, int port,
 }
 EXPORT_SYMBOL(b53_fdb_add);
 
-int b53_fdb_del(struct dsa_switch *ds, int port,
-		const unsigned char *addr, u16 vid,
-		struct dsa_db db)
+void b53_fdb_del(struct dsa_switch *ds, int port,
+		 const unsigned char *addr, u16 vid,
+		 struct dsa_db db)
 {
 	struct b53_device *priv = ds->priv;
 	int ret;
@@ -1764,7 +1764,10 @@ int b53_fdb_del(struct dsa_switch *ds, int port,
 	ret = b53_arl_op(priv, 0, port, addr, vid, false);
 	mutex_unlock(&priv->arl_mutex);
 
-	return ret;
+	if (ret)
+		dev_warn(ds->dev,
+			 "Failed to delete FDB entry %pM vid %u from port %d: %pe\n",
+			 addr, vid, port, ERR_PTR(ret));
 }
 EXPORT_SYMBOL(b53_fdb_del);
 
@@ -1876,7 +1879,7 @@ int b53_mdb_add(struct dsa_switch *ds, int port,
 }
 EXPORT_SYMBOL(b53_mdb_add);
 
-int b53_mdb_del(struct dsa_switch *ds, int port,
+void b53_mdb_del(struct dsa_switch *ds, int port,
 		const struct switchdev_obj_port_mdb *mdb,
 		struct dsa_db db)
 {
@@ -1887,9 +1890,8 @@ int b53_mdb_del(struct dsa_switch *ds, int port,
 	ret = b53_arl_op(priv, 0, port, mdb->addr, mdb->vid, false);
 	mutex_unlock(&priv->arl_mutex);
 	if (ret)
-		dev_err(ds->dev, "failed to delete MDB entry\n");
-
-	return ret;
+		dev_warn(ds->dev, "Failed to delete MDB entry %pM vid %u from port %d: %pe\n",
+			 mdb->addr, mdb->vid, port, ERR_PTR(ret));
 }
 EXPORT_SYMBOL(b53_mdb_del);
 

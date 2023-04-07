@@ -883,9 +883,9 @@ out:
 	return ret;
 }
 
-static int hellcreek_fdb_del(struct dsa_switch *ds, int port,
-			     const unsigned char *addr, u16 vid,
-			     struct dsa_db db)
+static void hellcreek_fdb_del(struct dsa_switch *ds, int port,
+			      const unsigned char *addr, u16 vid,
+			      struct dsa_db db)
 {
 	struct hellcreek_fdb_entry entry = { 0 };
 	struct hellcreek *hellcreek = ds->priv;
@@ -920,8 +920,6 @@ static int hellcreek_fdb_del(struct dsa_switch *ds, int port,
 
 out:
 	mutex_unlock(&hellcreek->reg_lock);
-
-	return ret;
 }
 
 static int hellcreek_fdb_dump(struct dsa_switch *ds, int port,

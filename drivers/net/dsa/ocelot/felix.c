@@ -799,25 +799,30 @@ static int felix_fdb_add(struct dsa_switch *ds, int port,
 	return ocelot_fdb_add(ocelot, port, addr, vid, bridge_dev);
 }
 
-static int felix_fdb_del(struct dsa_switch *ds, int port,
-			 const unsigned char *addr, u16 vid,
-			 struct dsa_db db)
+static void felix_fdb_del(struct dsa_switch *ds, int port,
+			  const unsigned char *addr, u16 vid,
+			  struct dsa_db db)
 {
 	struct net_device *bridge_dev = felix_classify_db(db);
 	struct dsa_port *dp = dsa_to_port(ds, port);
 	struct ocelot *ocelot = ds->priv;
+	int err;
 
 	if (IS_ERR(bridge_dev))
-		return PTR_ERR(bridge_dev);
+		return;
 
 	if (dsa_port_is_cpu(dp) && !bridge_dev &&
 	    dsa_fdb_present_in_other_db(ds, port, addr, vid, db))
-		return 0;
+		return;
 
 	if (dsa_port_is_cpu(dp))
 		port = PGID_CPU;
 
-	return ocelot_fdb_del(ocelot, port, addr, vid, bridge_dev);
+	err = ocelot_fdb_del(ocelot, port, addr, vid, bridge_dev);
+	if (err)
+		dev_warn(ds->dev,
+			 "Failed to delete FDB entry %pM vid %u from port %d: %pe\n",
+			 addr, vid, port, ERR_PTR(err));
 }
 
 static int felix_lag_fdb_add(struct dsa_switch *ds, struct dsa_lag lag,
@@ -833,17 +838,22 @@ static int felix_lag_fdb_add(struct dsa_switch *ds, struct dsa_lag lag,
 	return ocelot_lag_fdb_add(ocelot, lag.dev, addr, vid, bridge_dev);
 }
 
-static int felix_lag_fdb_del(struct dsa_switch *ds, struct dsa_lag lag,
-			     const unsigned char *addr, u16 vid,
-			     struct dsa_db db)
+static void felix_lag_fdb_del(struct dsa_switch *ds, struct dsa_lag lag,
+			      const unsigned char *addr, u16 vid,
+			      struct dsa_db db)
 {
 	struct net_device *bridge_dev = felix_classify_db(db);
 	struct ocelot *ocelot = ds->priv;
+	int err;
 
 	if (IS_ERR(bridge_dev))
-		return PTR_ERR(bridge_dev);
+		return;
 
-	return ocelot_lag_fdb_del(ocelot, lag.dev, addr, vid, bridge_dev);
+	err = ocelot_lag_fdb_del(ocelot, lag.dev, addr, vid, bridge_dev);
+	if (err)
+		dev_warn(ds->dev,
+			 "Failed to delete FDB entry %pM vid %u from LAG %s: %pe\n",
+			 addr, vid, lag.dev->name, ERR_PTR(err));
 }
 
 static int felix_mdb_add(struct dsa_switch *ds, int port,
@@ -866,24 +876,29 @@ static int felix_mdb_add(struct dsa_switch *ds, int port,
 	return ocelot_port_mdb_add(ocelot, port, mdb, bridge_dev);
 }
 
-static int felix_mdb_del(struct dsa_switch *ds, int port,
-			 const struct switchdev_obj_port_mdb *mdb,
-			 struct dsa_db db)
+static void felix_mdb_del(struct dsa_switch *ds, int port,
+			  const struct switchdev_obj_port_mdb *mdb,
+			  struct dsa_db db)
 {
 	struct net_device *bridge_dev = felix_classify_db(db);
 	struct ocelot *ocelot = ds->priv;
+	int err;
 
 	if (IS_ERR(bridge_dev))
-		return PTR_ERR(bridge_dev);
+		return;
 
 	if (dsa_is_cpu_port(ds, port) && !bridge_dev &&
 	    dsa_mdb_present_in_other_db(ds, port, mdb, db))
-		return 0;
+		return;
 
 	if (port == ocelot->npi)
 		port = ocelot->num_phys_ports;
 
-	return ocelot_port_mdb_del(ocelot, port, mdb, bridge_dev);
+	err = ocelot_port_mdb_del(ocelot, port, mdb, bridge_dev);
+	if (err)
+		dev_warn(ds->dev,
+			 "Failed to delete MDB entry %pM vid %u from port %d: %pe\n",
+			 mdb->addr, mdb->vid, port, ERR_PTR(err));
 }
 
 static void felix_bridge_stp_state_set(struct dsa_switch *ds, int port,

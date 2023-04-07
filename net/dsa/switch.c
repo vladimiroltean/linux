@@ -218,10 +218,10 @@ static int dsa_port_do_mdb_del(struct dsa_port *dp,
 
 	/* No need to bother with refcounting for user ports */
 	if (!(dsa_port_is_cpu(dp) || dsa_port_is_dsa(dp))) {
-		err = ds->ops->port_mdb_del(ds, port, mdb, db);
-		trace_dsa_mdb_del_hw(dp, mdb->addr, mdb->vid, &db, err);
+		ds->ops->port_mdb_del(ds, port, mdb, db);
+		trace_dsa_mdb_del_hw(dp, mdb->addr, mdb->vid, &db);
 
-		return err;
+		return 0;
 	}
 
 	mutex_lock(&dp->addr_lists_lock);
@@ -239,12 +239,8 @@ static int dsa_port_do_mdb_del(struct dsa_port *dp,
 		goto out;
 	}
 
-	err = ds->ops->port_mdb_del(ds, port, mdb, db);
-	trace_dsa_mdb_del_hw(dp, mdb->addr, mdb->vid, &db, err);
-	if (err) {
-		refcount_set(&a->refcount, 1);
-		goto out;
-	}
+	ds->ops->port_mdb_del(ds, port, mdb, db);
+	trace_dsa_mdb_del_hw(dp, mdb->addr, mdb->vid, &db);
 
 	list_del(&a->list);
 	kfree(a);
@@ -315,10 +311,10 @@ static int dsa_port_do_fdb_del(struct dsa_port *dp, const unsigned char *addr,
 
 	/* No need to bother with refcounting for user ports */
 	if (!(dsa_port_is_cpu(dp) || dsa_port_is_dsa(dp))) {
-		err = ds->ops->port_fdb_del(ds, port, addr, vid, db);
-		trace_dsa_fdb_del_hw(dp, addr, vid, &db, err);
+		ds->ops->port_fdb_del(ds, port, addr, vid, db);
+		trace_dsa_fdb_del_hw(dp, addr, vid, &db);
 
-		return err;
+		return 0;
 	}
 
 	mutex_lock(&dp->addr_lists_lock);
@@ -335,12 +331,8 @@ static int dsa_port_do_fdb_del(struct dsa_port *dp, const unsigned char *addr,
 		goto out;
 	}
 
-	err = ds->ops->port_fdb_del(ds, port, addr, vid, db);
-	trace_dsa_fdb_del_hw(dp, addr, vid, &db, err);
-	if (err) {
-		refcount_set(&a->refcount, 1);
-		goto out;
-	}
+	ds->ops->port_fdb_del(ds, port, addr, vid, db);
+	trace_dsa_fdb_del_hw(dp, addr, vid, &db);
 
 	list_del(&a->list);
 	kfree(a);
@@ -415,12 +407,8 @@ static int dsa_switch_do_lag_fdb_del(struct dsa_switch *ds, struct dsa_lag *lag,
 		goto out;
 	}
 
-	err = ds->ops->lag_fdb_del(ds, *lag, addr, vid, db);
-	trace_dsa_lag_fdb_del_hw(lag->dev, addr, vid, &db, err);
-	if (err) {
-		refcount_set(&a->refcount, 1);
-		goto out;
-	}
+	ds->ops->lag_fdb_del(ds, *lag, addr, vid, db);
+	trace_dsa_lag_fdb_del_hw(lag->dev, addr, vid, &db);
 
 	list_del(&a->list);
 	kfree(a);

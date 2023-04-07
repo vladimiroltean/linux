@@ -548,9 +548,9 @@ int qca8k_port_fdb_insert(struct qca8k_priv *priv, const u8 *addr,
 int qca8k_port_fdb_add(struct dsa_switch *ds, int port,
 		       const unsigned char *addr, u16 vid,
 		       struct dsa_db db);
-int qca8k_port_fdb_del(struct dsa_switch *ds, int port,
-		       const unsigned char *addr, u16 vid,
-		       struct dsa_db db);
+void qca8k_port_fdb_del(struct dsa_switch *ds, int port,
+			const unsigned char *addr, u16 vid,
+			struct dsa_db db);
 int qca8k_port_fdb_dump(struct dsa_switch *ds, int port,
 			dsa_fdb_dump_cb_t *cb, void *data);
 
@@ -558,9 +558,9 @@ int qca8k_port_fdb_dump(struct dsa_switch *ds, int port,
 int qca8k_port_mdb_add(struct dsa_switch *ds, int port,
 		       const struct switchdev_obj_port_mdb *mdb,
 		       struct dsa_db db);
-int qca8k_port_mdb_del(struct dsa_switch *ds, int port,
-		       const struct switchdev_obj_port_mdb *mdb,
-		       struct dsa_db db);
+void qca8k_port_mdb_del(struct dsa_switch *ds, int port,
+			const struct switchdev_obj_port_mdb *mdb,
+			struct dsa_db db);
 
 /* Common port mirror function */
 int qca8k_port_mirror_add(struct dsa_switch *ds, int port,

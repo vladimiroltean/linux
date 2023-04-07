@@ -1380,21 +1380,24 @@ mt7530_port_fdb_add(struct dsa_switch *ds, int port,
 	return ret;
 }
 
-static int
+static void
 mt7530_port_fdb_del(struct dsa_switch *ds, int port,
 		    const unsigned char *addr, u16 vid,
 		    struct dsa_db db)
 {
 	struct mt7530_priv *priv = ds->priv;
-	int ret;
 	u8 port_mask = BIT(port);
+	int ret;
 
 	mutex_lock(&priv->reg_mutex);
 	mt7530_fdb_write(priv, vid, port_mask, addr, -1, STATIC_EMP);
 	ret = mt7530_fdb_cmd(priv, MT7530_FDB_WRITE, NULL);
 	mutex_unlock(&priv->reg_mutex);
 
-	return ret;
+	if (ret)
+		dev_warn(ds->dev,
+			 "Failed to delete FDB entry %pM vid %u from port %d: %pe\n",
+			 addr, vid, port, ERR_PTR(ret));
 }
 
 static int
@@ -1459,7 +1462,7 @@ mt7530_port_mdb_add(struct dsa_switch *ds, int port,
 	return ret;
 }
 
-static int
+static void
 mt7530_port_mdb_del(struct dsa_switch *ds, int port,
 		    const struct switchdev_obj_port_mdb *mdb,
 		    struct dsa_db db)
@@ -1484,7 +1487,12 @@ mt7530_port_mdb_del(struct dsa_switch *ds, int port,
 
 	mutex_unlock(&priv->reg_mutex);
 
-	return ret;
+	if (ret)
+		dev_warn(ds->dev,
+			 "Failed to delete FDB entry %pM vid %u from port %d: %pe\n",
+			 addr, vid, port, ERR_PTR(ret));
+
+	return;
 }
 
 static int

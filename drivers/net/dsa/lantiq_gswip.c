@@ -1404,11 +1404,11 @@ static int gswip_port_fdb_add(struct dsa_switch *ds, int port,
 	return gswip_port_fdb(ds, port, addr, vid, true);
 }
 
-static int gswip_port_fdb_del(struct dsa_switch *ds, int port,
-			      const unsigned char *addr, u16 vid,
-			      struct dsa_db db)
+static void gswip_port_fdb_del(struct dsa_switch *ds, int port,
+			       const unsigned char *addr, u16 vid,
+			       struct dsa_db db)
 {
-	return gswip_port_fdb(ds, port, addr, vid, false);
+	gswip_port_fdb(ds, port, addr, vid, false);
 }
 
 static int gswip_port_fdb_dump(struct dsa_switch *ds, int port,

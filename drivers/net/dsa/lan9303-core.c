@@ -1194,18 +1194,17 @@ static int lan9303_port_fdb_add(struct dsa_switch *ds, int port,
 	return lan9303_alr_add_port(chip, addr, port, false);
 }
 
-static int lan9303_port_fdb_del(struct dsa_switch *ds, int port,
-				const unsigned char *addr, u16 vid,
-				struct dsa_db db)
+static void lan9303_port_fdb_del(struct dsa_switch *ds, int port,
+				 const unsigned char *addr, u16 vid,
+				 struct dsa_db db)
 {
 	struct lan9303 *chip = ds->priv;
 
 	dev_dbg(chip->dev, "%s(%d, %pM, %d)\n", __func__, port, addr, vid);
 	if (vid)
-		return -EOPNOTSUPP;
-	lan9303_alr_del_port(chip, addr, port);
+		return;
 
-	return 0;
+	lan9303_alr_del_port(chip, addr, port);
 }
 
 static int lan9303_port_fdb_dump(struct dsa_switch *ds, int port,
@@ -1255,19 +1254,18 @@ static int lan9303_port_mdb_add(struct dsa_switch *ds, int port,
 	return lan9303_alr_add_port(chip, mdb->addr, port, false);
 }
 
-static int lan9303_port_mdb_del(struct dsa_switch *ds, int port,
-				const struct switchdev_obj_port_mdb *mdb,
-				struct dsa_db db)
+static void lan9303_port_mdb_del(struct dsa_switch *ds, int port,
+				 const struct switchdev_obj_port_mdb *mdb,
+				 struct dsa_db db)
 {
 	struct lan9303 *chip = ds->priv;
 
 	dev_dbg(chip->dev, "%s(%d, %pM, %d)\n", __func__, port, mdb->addr,
 		mdb->vid);
 	if (mdb->vid)
-		return -EOPNOTSUPP;
-	lan9303_alr_del_port(chip, mdb->addr, port);
+		return;
 
-	return 0;
+	lan9303_alr_del_port(chip, mdb->addr, port);
 }
 
 static void lan9303_phylink_get_caps(struct dsa_switch *ds, int port,

@@ -2737,9 +2737,9 @@ static int mv88e6xxx_port_fdb_add(struct dsa_switch *ds, int port,
 	return err;
 }
 
-static int mv88e6xxx_port_fdb_del(struct dsa_switch *ds, int port,
-				  const unsigned char *addr, u16 vid,
-				  struct dsa_db db)
+static void mv88e6xxx_port_fdb_del(struct dsa_switch *ds, int port,
+				   const unsigned char *addr, u16 vid,
+				   struct dsa_db db)
 {
 	struct mv88e6xxx_chip *chip = ds->priv;
 	int err;
@@ -2748,7 +2748,10 @@ static int mv88e6xxx_port_fdb_del(struct dsa_switch *ds, int port,
 	err = mv88e6xxx_port_db_load_purge(chip, port, addr, vid, 0);
 	mv88e6xxx_reg_unlock(chip);
 
-	return err;
+	if (err)
+		dev_warn(ds->dev,
+			 "Failed to delete FDB entry %pM vid %u from port %d: %pe\n",
+			 addr, vid, port, ERR_PTR(err));
 }
 
 static int mv88e6xxx_port_db_dump_fid(struct mv88e6xxx_chip *chip,
@@ -6543,9 +6546,9 @@ static int mv88e6xxx_port_mdb_add(struct dsa_switch *ds, int port,
 	return err;
 }
 
-static int mv88e6xxx_port_mdb_del(struct dsa_switch *ds, int port,
-				  const struct switchdev_obj_port_mdb *mdb,
-				  struct dsa_db db)
+static void mv88e6xxx_port_mdb_del(struct dsa_switch *ds, int port,
+				   const struct switchdev_obj_port_mdb *mdb,
+				   struct dsa_db db)
 {
 	struct mv88e6xxx_chip *chip = ds->priv;
 	int err;
@@ -6554,7 +6557,10 @@ static int mv88e6xxx_port_mdb_del(struct dsa_switch *ds, int port,
 	err = mv88e6xxx_port_db_load_purge(chip, port, mdb->addr, mdb->vid, 0);
 	mv88e6xxx_reg_unlock(chip);
 
-	return err;
+	if (err)
+		dev_warn(ds->dev,
+			 "Failed to delete FDB entry %pM vid %u from port %d: %pe\n",
+			 mdb->addr, mdb->vid, port, ERR_PTR(err));
 }
 
 static int mv88e6xxx_port_mirror_add(struct dsa_switch *ds, int port,

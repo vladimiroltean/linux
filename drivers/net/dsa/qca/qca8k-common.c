@@ -766,17 +766,22 @@ int qca8k_port_fdb_add(struct dsa_switch *ds, int port,
 	return qca8k_port_fdb_insert(priv, addr, port_mask, vid);
 }
 
-int qca8k_port_fdb_del(struct dsa_switch *ds, int port,
-		       const unsigned char *addr, u16 vid,
-		       struct dsa_db db)
+void qca8k_port_fdb_del(struct dsa_switch *ds, int port,
+			const unsigned char *addr, u16 vid,
+			struct dsa_db db)
 {
 	struct qca8k_priv *priv = (struct qca8k_priv *)ds->priv;
 	u16 port_mask = BIT(port);
+	int ret;
 
 	if (!vid)
 		vid = QCA8K_PORT_VID_DEF;
 
-	return qca8k_fdb_del(priv, addr, port_mask, vid);
+	ret = qca8k_fdb_del(priv, addr, port_mask, vid);
+	if (ret)
+		dev_warn(ds->dev,
+			 "Failed to delete FDB entry %pM vid %u from port %d: %pe\n",
+			 addr, vid, port, ERR_PTR(ret));
 }
 
 int qca8k_port_fdb_dump(struct dsa_switch *ds, int port,
@@ -813,15 +818,20 @@ int qca8k_port_mdb_add(struct dsa_switch *ds, int port,
 	return qca8k_fdb_search_and_insert(priv, BIT(port), addr, vid);
 }
 
-int qca8k_port_mdb_del(struct dsa_switch *ds, int port,
-		       const struct switchdev_obj_port_mdb *mdb,
-		       struct dsa_db db)
+void qca8k_port_mdb_del(struct dsa_switch *ds, int port,
+			const struct switchdev_obj_port_mdb *mdb,
+			struct dsa_db db)
 {
 	struct qca8k_priv *priv = ds->priv;
 	const u8 *addr = mdb->addr;
 	u16 vid = mdb->vid;
+	int ret;
 
-	return qca8k_fdb_search_and_del(priv, BIT(port), addr, vid);
+	ret = qca8k_fdb_search_and_del(priv, BIT(port), addr, vid);
+	if (ret)
+		dev_warn(ds->dev,
+			 "Failed to delete FDB entry %pM vid %u from port %d: %pe\n",
+			 addr, vid, port, ERR_PTR(ret));
 }
 
 int qca8k_port_mirror_add(struct dsa_switch *ds, int port,
