@@ -304,7 +304,7 @@ DEFINE_EVENT(dsa_lag_fdb_del, dsa_lag_fdb_del_not_found,
 		      const struct dsa_db *db),
 	     TP_ARGS(lag_dev, addr, vid, db));
 
-DECLARE_EVENT_CLASS(dsa_vlan_op_hw,
+TRACE_EVENT(dsa_vlan_add_hw,
 
 	TP_PROTO(const struct dsa_port *dp,
 		 const struct switchdev_obj_port_vlan *vlan, int err),
@@ -338,15 +338,40 @@ DECLARE_EVENT_CLASS(dsa_vlan_op_hw,
 		  __entry->changed ? " (changed)" : "")
 );
 
-DEFINE_EVENT(dsa_vlan_op_hw, dsa_vlan_add_hw,
-	     TP_PROTO(const struct dsa_port *dp,
-		      const struct switchdev_obj_port_vlan *vlan, int err),
-	     TP_ARGS(dp, vlan, err));
+DECLARE_EVENT_CLASS(dsa_vlan_del,
 
-DEFINE_EVENT(dsa_vlan_op_hw, dsa_vlan_del_hw,
+	TP_PROTO(const struct dsa_port *dp,
+		 const struct switchdev_obj_port_vlan *vlan),
+
+	TP_ARGS(dp, vlan),
+
+	TP_STRUCT__entry(
+		__string(dev, dev_name(dp->ds->dev))
+		__string(kind, dsa_port_kind(dp))
+		__field(int, port)
+		__field(u16, vid)
+	),
+
+	TP_fast_assign(
+		__assign_str(dev, dev_name(dp->ds->dev));
+		__assign_str(kind, dsa_port_kind(dp));
+		__entry->port = dp->index;
+		__entry->vid = vlan->vid;
+	),
+
+	TP_printk("%s %s port %d vid %u",
+		  __get_str(dev), __get_str(kind), __entry->port, __entry->vid)
+);
+
+DEFINE_EVENT(dsa_vlan_del, dsa_vlan_del_hw,
 	     TP_PROTO(const struct dsa_port *dp,
-		      const struct switchdev_obj_port_vlan *vlan, int err),
-	     TP_ARGS(dp, vlan, err));
+		      const struct switchdev_obj_port_vlan *vlan),
+	     TP_ARGS(dp, vlan));
+
+DEFINE_EVENT(dsa_vlan_del, dsa_vlan_del_not_found,
+	     TP_PROTO(const struct dsa_port *dp,
+		      const struct switchdev_obj_port_vlan *vlan),
+	     TP_ARGS(dp, vlan));
 
 DECLARE_EVENT_CLASS(dsa_vlan_op_refcount,
 
@@ -394,31 +419,6 @@ DEFINE_EVENT(dsa_vlan_op_refcount, dsa_vlan_del_drop,
 		      const struct switchdev_obj_port_vlan *vlan,
 		      const refcount_t *refcount),
 	     TP_ARGS(dp, vlan, refcount));
-
-TRACE_EVENT(dsa_vlan_del_not_found,
-
-	TP_PROTO(const struct dsa_port *dp,
-		 const struct switchdev_obj_port_vlan *vlan),
-
-	TP_ARGS(dp, vlan),
-
-	TP_STRUCT__entry(
-		__string(dev, dev_name(dp->ds->dev))
-		__string(kind, dsa_port_kind(dp))
-		__field(int, port)
-		__field(u16, vid)
-	),
-
-	TP_fast_assign(
-		__assign_str(dev, dev_name(dp->ds->dev));
-		__assign_str(kind, dsa_port_kind(dp));
-		__entry->port = dp->index;
-		__entry->vid = vlan->vid;
-	),
-
-	TP_printk("%s %s port %d vid %u",
-		  __get_str(dev), __get_str(kind), __entry->port, __entry->vid)
-);
 
 #endif /* _NET_DSA_TRACE_H */
 

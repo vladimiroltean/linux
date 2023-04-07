@@ -2466,7 +2466,7 @@ static int sja1105_vlan_add(struct sja1105_private *priv, int port, u16 vid,
 					    &vlan[match], true);
 }
 
-static int sja1105_vlan_del(struct sja1105_private *priv, int port, u16 vid)
+static void sja1105_vlan_del(struct sja1105_private *priv, int port, u16 vid)
 {
 	struct sja1105_vlan_lookup_entry *vlan;
 	struct sja1105_table *table;
@@ -2478,7 +2478,7 @@ static int sja1105_vlan_del(struct sja1105_private *priv, int port, u16 vid)
 	match = sja1105_is_vlan_configured(priv, vid);
 	/* Can't delete a missing entry. */
 	if (match < 0)
-		return 0;
+		return;
 
 	/* Assign pointer after the resize (it's new memory) */
 	vlan = table->entries;
@@ -2500,12 +2500,12 @@ static int sja1105_vlan_del(struct sja1105_private *priv, int port, u16 vid)
 	rc = sja1105_dynamic_config_write(priv, BLK_IDX_VLAN_LOOKUP, vid,
 					  &vlan[match], keep);
 	if (rc < 0)
-		return rc;
+		dev_warn(priv->ds->dev,
+			 "Failed to access VLAN lookup table for VID %u: %pe\n",
+			 vid, ERR_PTR(rc));
 
 	if (!keep)
-		return sja1105_table_delete_entry(table, match);
-
-	return 0;
+		sja1105_table_delete_entry(table, match);
 }
 
 static int sja1105_bridge_vlan_add(struct dsa_switch *ds, int port,
@@ -2538,20 +2538,21 @@ static int sja1105_bridge_vlan_add(struct dsa_switch *ds, int port,
 	return sja1105_commit_pvid(ds, port);
 }
 
-static int sja1105_bridge_vlan_del(struct dsa_switch *ds, int port,
-				   const struct switchdev_obj_port_vlan *vlan)
+static void sja1105_bridge_vlan_del(struct dsa_switch *ds, int port,
+				    const struct switchdev_obj_port_vlan *vlan)
 {
 	struct sja1105_private *priv = ds->priv;
 	int rc;
 
-	rc = sja1105_vlan_del(priv, port, vlan->vid);
-	if (rc)
-		return rc;
+	sja1105_vlan_del(priv, port, vlan->vid);
 
 	/* In case the pvid was deleted, make sure that untagged packets will
 	 * be dropped.
 	 */
-	return sja1105_commit_pvid(ds, port);
+	rc = sja1105_commit_pvid(ds, port);
+	if (rc)
+		dev_warn(ds->dev, "Failed to change PVID of port %d: %pe\n",
+			 port, ERR_PTR(rc));
 }
 
 static int sja1105_dsa_8021q_vlan_add(struct dsa_switch *ds, int port, u16 vid,
@@ -2577,11 +2578,11 @@ static int sja1105_dsa_8021q_vlan_add(struct dsa_switch *ds, int port, u16 vid,
 	return sja1105_commit_pvid(ds, port);
 }
 
-static int sja1105_dsa_8021q_vlan_del(struct dsa_switch *ds, int port, u16 vid)
+static void sja1105_dsa_8021q_vlan_del(struct dsa_switch *ds, int port, u16 vid)
 {
 	struct sja1105_private *priv = ds->priv;
 
-	return sja1105_vlan_del(priv, port, vid);
+	sja1105_vlan_del(priv, port, vid);
 }
 
 static int sja1105_prechangeupper(struct dsa_switch *ds, int port,

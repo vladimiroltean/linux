@@ -347,8 +347,8 @@ int rtl8366_vlan_add(struct dsa_switch *ds, int port,
 }
 EXPORT_SYMBOL_GPL(rtl8366_vlan_add);
 
-int rtl8366_vlan_del(struct dsa_switch *ds, int port,
-		     const struct switchdev_obj_port_vlan *vlan)
+void rtl8366_vlan_del(struct dsa_switch *ds, int port,
+		      const struct switchdev_obj_port_vlan *vlan)
 {
 	struct realtek_priv *priv = ds->priv;
 	int ret, i;
@@ -359,8 +359,11 @@ int rtl8366_vlan_del(struct dsa_switch *ds, int port,
 		struct rtl8366_vlan_mc vlanmc;
 
 		ret = priv->ops->get_vlan_mc(priv, i, &vlanmc);
-		if (ret)
-			return ret;
+		if (ret) {
+			dev_err(priv->dev, "error searching for VLAN MC %d for VID %d\n",
+				i, vid);
+			break;
+		}
 
 		if (vlan->vid == vlanmc.vid) {
 			/* Remove this port from the VLAN */
@@ -381,13 +384,10 @@ int rtl8366_vlan_del(struct dsa_switch *ds, int port,
 				dev_err(priv->dev,
 					"failed to remove VLAN %04x\n",
 					vlan->vid);
-				return ret;
 			}
 			break;
 		}
 	}
-
-	return 0;
 }
 EXPORT_SYMBOL_GPL(rtl8366_vlan_del);
 

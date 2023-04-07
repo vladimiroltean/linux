@@ -2614,8 +2614,8 @@ static int mv88e6xxx_port_vlan_leave(struct mv88e6xxx_chip *chip,
 	return mv88e6xxx_g1_atu_remove(chip, vlan.fid, port, false);
 }
 
-static int mv88e6xxx_port_vlan_del(struct dsa_switch *ds, int port,
-				   const struct switchdev_obj_port_vlan *vlan)
+static void mv88e6xxx_port_vlan_del(struct dsa_switch *ds, int port,
+				    const struct switchdev_obj_port_vlan *vlan)
 {
 	struct mv88e6xxx_chip *chip = ds->priv;
 	struct mv88e6xxx_port *p = &chip->ports[port];
@@ -2623,7 +2623,7 @@ static int mv88e6xxx_port_vlan_del(struct dsa_switch *ds, int port,
 	u16 pvid;
 
 	if (!mv88e6xxx_max_vid(chip))
-		return -EOPNOTSUPP;
+		return;
 
 	/* The ATU removal procedure needs the FID to be mapped in the VTU,
 	 * but FDB deletion runs concurrently with VLAN deletion. Flush the DSA
@@ -2653,7 +2653,9 @@ static int mv88e6xxx_port_vlan_del(struct dsa_switch *ds, int port,
 unlock:
 	mv88e6xxx_reg_unlock(chip);
 
-	return err;
+	if (err)
+		dev_warn(ds->dev, "Failed to delete VLAN %u from port %d: %pe\n",
+			 vlan->vid, port, ERR_PTR(err));
 }
 
 static int mv88e6xxx_port_vlan_fast_age(struct dsa_switch *ds, int port, u16 vid)

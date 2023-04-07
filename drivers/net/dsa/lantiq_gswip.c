@@ -1268,12 +1268,13 @@ static int gswip_port_vlan_add(struct dsa_switch *ds, int port,
 				    untagged, pvid);
 }
 
-static int gswip_port_vlan_del(struct dsa_switch *ds, int port,
-			       const struct switchdev_obj_port_vlan *vlan)
+static void gswip_port_vlan_del(struct dsa_switch *ds, int port,
+				const struct switchdev_obj_port_vlan *vlan)
 {
 	struct net_device *bridge = dsa_port_bridge_dev_get(dsa_to_port(ds, port));
-	struct gswip_priv *priv = ds->priv;
 	bool pvid = vlan->flags & BRIDGE_VLAN_INFO_PVID;
+	struct gswip_priv *priv = ds->priv;
+	int err;
 
 	/* We have to receive all packets on the CPU port and should not
 	 * do any VLAN filtering here. This is also called with bridge
@@ -1281,9 +1282,12 @@ static int gswip_port_vlan_del(struct dsa_switch *ds, int port,
 	 * this.
 	 */
 	if (dsa_is_cpu_port(ds, port))
-		return 0;
+		return;
 
-	return gswip_vlan_remove(priv, bridge, port, vlan->vid, pvid, true);
+	err = gswip_vlan_remove(priv, bridge, port, vlan->vid, pvid, true);
+	if (err)
+		dev_warn(ds->dev, "Failed to remove VLAN %u from port %d: %pe\n",
+			 vlan->vid, port, ERR_PTR(err));
 }
 
 static void gswip_port_fast_age(struct dsa_switch *ds, int port)

@@ -741,8 +741,8 @@ static int dsa_port_do_vlan_del(struct dsa_port *dp,
 
 	/* No need to bother with refcounting for user ports */
 	if (!(dsa_port_is_cpu(dp) || dsa_port_is_dsa(dp))) {
-		err = ds->ops->port_vlan_del(ds, port, vlan);
-		trace_dsa_vlan_del_hw(dp, vlan, err);
+		ds->ops->port_vlan_del(ds, port, vlan);
+		trace_dsa_vlan_del_hw(dp, vlan);
 
 		return err;
 	}
@@ -761,12 +761,8 @@ static int dsa_port_do_vlan_del(struct dsa_port *dp,
 		goto out;
 	}
 
-	err = ds->ops->port_vlan_del(ds, port, vlan);
-	trace_dsa_vlan_del_hw(dp, vlan, err);
-	if (err) {
-		refcount_set(&v->refcount, 1);
-		goto out;
-	}
+	ds->ops->port_vlan_del(ds, port, vlan);
+	trace_dsa_vlan_del_hw(dp, vlan);
 
 	list_del(&v->list);
 	kfree(v);

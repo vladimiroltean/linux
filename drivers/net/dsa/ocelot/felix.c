@@ -104,8 +104,8 @@ static int felix_tag_8021q_vlan_add_rx(struct dsa_switch *ds, int port,
 	return err;
 }
 
-static int felix_tag_8021q_vlan_del_rx(struct dsa_switch *ds, int port,
-				       int upstream, u16 vid)
+static void felix_tag_8021q_vlan_del_rx(struct dsa_switch *ds, int port,
+					int upstream, u16 vid)
 {
 	struct ocelot_vcap_filter *outer_tagging_rule;
 	struct ocelot_vcap_block *block_vcap_es0;
@@ -117,12 +117,10 @@ static int felix_tag_8021q_vlan_del_rx(struct dsa_switch *ds, int port,
 
 	outer_tagging_rule = ocelot_vcap_block_find_filter_by_id(block_vcap_es0,
 								 cookie, false);
-	if (!outer_tagging_rule)
-		return -ENOENT;
+	if (WARN_ON(!outer_tagging_rule))
+		return;
 
 	ocelot_vcap_filter_del(ocelot, outer_tagging_rule);
-
-	return 0;
 }
 
 /* Set up VCAP IS1 rules for stripping the tag_8021q VLAN on TX and VCAP IS2
@@ -195,7 +193,7 @@ static int felix_tag_8021q_vlan_add_tx(struct dsa_switch *ds, int port,
 	return 0;
 }
 
-static int felix_tag_8021q_vlan_del_tx(struct dsa_switch *ds, int port, u16 vid)
+static void felix_tag_8021q_vlan_del_tx(struct dsa_switch *ds, int port, u16 vid)
 {
 	struct ocelot_vcap_filter *untagging_rule, *redirect_rule;
 	struct ocelot_vcap_block *block_vcap_is1;
@@ -209,20 +207,18 @@ static int felix_tag_8021q_vlan_del_tx(struct dsa_switch *ds, int port, u16 vid)
 	cookie = OCELOT_VCAP_IS1_TAG_8021Q_TXVLAN(ocelot, port);
 	untagging_rule = ocelot_vcap_block_find_filter_by_id(block_vcap_is1,
 							     cookie, false);
-	if (!untagging_rule)
-		return -ENOENT;
+	if (WARN_ON(!untagging_rule))
+		return;
 
 	ocelot_vcap_filter_del(ocelot, untagging_rule);
 
 	cookie = OCELOT_VCAP_IS2_TAG_8021Q_TXVLAN(ocelot, port);
 	redirect_rule = ocelot_vcap_block_find_filter_by_id(block_vcap_is2,
 							    cookie, false);
-	if (!redirect_rule)
-		return -ENOENT;
+	if (WARN_ON(!redirect_rule))
+		return;
 
 	ocelot_vcap_filter_del(ocelot, redirect_rule);
-
-	return 0;
 }
 
 static int felix_tag_8021q_vlan_add(struct dsa_switch *ds, int port, u16 vid,
@@ -257,31 +253,17 @@ add_tx_failed:
 	return err;
 }
 
-static int felix_tag_8021q_vlan_del(struct dsa_switch *ds, int port, u16 vid)
+static void felix_tag_8021q_vlan_del(struct dsa_switch *ds, int port, u16 vid)
 {
 	struct dsa_port *cpu_dp;
-	int err;
 
 	if (!dsa_is_user_port(ds, port))
-		return 0;
+		return;
 
-	dsa_switch_for_each_cpu_port(cpu_dp, ds) {
-		err = felix_tag_8021q_vlan_del_rx(ds, port, cpu_dp->index, vid);
-		if (err)
-			return err;
-	}
-
-	err = felix_tag_8021q_vlan_del_tx(ds, port, vid);
-	if (err)
-		goto del_tx_failed;
-
-	return 0;
-
-del_tx_failed:
 	dsa_switch_for_each_cpu_port(cpu_dp, ds)
-		felix_tag_8021q_vlan_add_rx(ds, port, cpu_dp->index, vid);
+		felix_tag_8021q_vlan_del_rx(ds, port, cpu_dp->index, vid);
 
-	return err;
+	felix_tag_8021q_vlan_del_tx(ds, port, vid);
 }
 
 static int felix_trap_get_cpu_port(struct dsa_switch *ds,
@@ -1038,12 +1020,16 @@ static int felix_vlan_add(struct dsa_switch *ds, int port,
 			       flags & BRIDGE_VLAN_INFO_UNTAGGED);
 }
 
-static int felix_vlan_del(struct dsa_switch *ds, int port,
-			  const struct switchdev_obj_port_vlan *vlan)
+static void felix_vlan_del(struct dsa_switch *ds, int port,
+			   const struct switchdev_obj_port_vlan *vlan)
 {
 	struct ocelot *ocelot = ds->priv;
+	int err;
 
-	return ocelot_vlan_del(ocelot, port, vlan->vid);
+	err = ocelot_vlan_del(ocelot, port, vlan->vid);
+	if (err)
+		dev_warn(ds->dev, "Failed to delete VLAN %u on port %d: %pe\n",
+			 vlan->vid, port, ERR_PTR(err));
 }
 
 static void felix_phylink_get_caps(struct dsa_switch *ds, int port,

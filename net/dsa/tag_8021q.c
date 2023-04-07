@@ -182,11 +182,13 @@ static int dsa_port_do_tag_8021q_vlan_del(struct dsa_port *dp, u16 vid)
 	struct dsa_switch *ds = dp->ds;
 	struct dsa_tag_8021q_vlan *v;
 	int port = dp->index;
-	int err;
 
 	/* No need to bother with refcounting for user ports */
-	if (!(dsa_port_is_cpu(dp) || dsa_port_is_dsa(dp)))
-		return ds->ops->tag_8021q_vlan_del(ds, port, vid);
+	if (!(dsa_port_is_cpu(dp) || dsa_port_is_dsa(dp))) {
+		ds->ops->tag_8021q_vlan_del(ds, port, vid);
+
+		return 0;
+	}
 
 	v = dsa_tag_8021q_vlan_find(ctx, port, vid);
 	if (!v)
@@ -195,11 +197,7 @@ static int dsa_port_do_tag_8021q_vlan_del(struct dsa_port *dp, u16 vid)
 	if (!refcount_dec_and_test(&v->refcount))
 		return 0;
 
-	err = ds->ops->tag_8021q_vlan_del(ds, port, vid);
-	if (err) {
-		refcount_inc(&v->refcount);
-		return err;
-	}
+	ds->ops->tag_8021q_vlan_del(ds, port, vid);
 
 	list_del(&v->list);
 	kfree(v);

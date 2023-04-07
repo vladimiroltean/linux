@@ -479,16 +479,14 @@ static int hellcreek_vlan_add(struct dsa_switch *ds, int port,
 	return 0;
 }
 
-static int hellcreek_vlan_del(struct dsa_switch *ds, int port,
-			      const struct switchdev_obj_port_vlan *vlan)
+static void hellcreek_vlan_del(struct dsa_switch *ds, int port,
+			       const struct switchdev_obj_port_vlan *vlan)
 {
 	struct hellcreek *hellcreek = ds->priv;
 
 	dev_dbg(hellcreek->dev, "Remove VLAN %d on port %d\n", vlan->vid, port);
 
 	hellcreek_unapply_vlan(hellcreek, port, vlan->vid);
-
-	return 0;
 }
 
 static void hellcreek_port_stp_state_set(struct dsa_switch *ds, int port,

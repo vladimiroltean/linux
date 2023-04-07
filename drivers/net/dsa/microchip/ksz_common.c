@@ -2617,15 +2617,19 @@ static int ksz_port_vlan_add(struct dsa_switch *ds, int port,
 	return dev->dev_ops->vlan_add(dev, port, vlan, extack);
 }
 
-static int ksz_port_vlan_del(struct dsa_switch *ds, int port,
-			     const struct switchdev_obj_port_vlan *vlan)
+static void ksz_port_vlan_del(struct dsa_switch *ds, int port,
+			      const struct switchdev_obj_port_vlan *vlan)
 {
 	struct ksz_device *dev = ds->priv;
+	int ret;
 
 	if (!dev->dev_ops->vlan_del)
-		return -EOPNOTSUPP;
+		return;
 
-	return dev->dev_ops->vlan_del(dev, port, vlan);
+	ret = dev->dev_ops->vlan_del(dev, port, vlan);
+	if (ret)
+		dev_warn(ds->dev, "Failed to delete VLAN %u from port %d: %pe\n",
+			 vlan->vid, port, ERR_PTR(ret));
 }
 
 static int ksz_port_mirror_add(struct dsa_switch *ds, int port,

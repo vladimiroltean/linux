@@ -137,8 +137,8 @@ int rtl8366_reset_vlan(struct realtek_priv *priv);
 int rtl8366_vlan_add(struct dsa_switch *ds, int port,
 		     const struct switchdev_obj_port_vlan *vlan,
 		     struct netlink_ext_ack *extack);
-int rtl8366_vlan_del(struct dsa_switch *ds, int port,
-		     const struct switchdev_obj_port_vlan *vlan);
+void rtl8366_vlan_del(struct dsa_switch *ds, int port,
+		      const struct switchdev_obj_port_vlan *vlan);
 void rtl8366_get_strings(struct dsa_switch *ds, int port, u32 stringset,
 			 uint8_t *data);
 int rtl8366_get_sset_count(struct dsa_switch *ds, int port, int sset);

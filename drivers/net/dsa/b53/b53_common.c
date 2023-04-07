@@ -1543,8 +1543,8 @@ int b53_vlan_add(struct dsa_switch *ds, int port,
 }
 EXPORT_SYMBOL(b53_vlan_add);
 
-int b53_vlan_del(struct dsa_switch *ds, int port,
-		 const struct switchdev_obj_port_vlan *vlan)
+void b53_vlan_del(struct dsa_switch *ds, int port,
+		  const struct switchdev_obj_port_vlan *vlan)
 {
 	struct b53_device *dev = ds->priv;
 	bool untagged = vlan->flags & BRIDGE_VLAN_INFO_UNTAGGED;
@@ -1570,8 +1570,6 @@ int b53_vlan_del(struct dsa_switch *ds, int port,
 
 	b53_write16(dev, B53_VLAN_PAGE, B53_VLAN_PORT_DEF_TAG(port), pvid);
 	b53_fast_age_vlan(dev, pvid);
-
-	return 0;
 }
 EXPORT_SYMBOL(b53_vlan_del);
 

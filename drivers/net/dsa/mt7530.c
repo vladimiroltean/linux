@@ -1680,7 +1680,7 @@ mt7530_port_vlan_add(struct dsa_switch *ds, int port,
 	return 0;
 }
 
-static int
+static void
 mt7530_port_vlan_del(struct dsa_switch *ds, int port,
 		     const struct switchdev_obj_port_vlan *vlan)
 {
@@ -1708,10 +1708,7 @@ mt7530_port_vlan_del(struct dsa_switch *ds, int port,
 			   G0_PORT_VID_DEF);
 	}
 
-
 	mutex_unlock(&priv->reg_mutex);
-
-	return 0;
 }
 
 static int mt753x_mirror_port_get(unsigned int id, u32 val)

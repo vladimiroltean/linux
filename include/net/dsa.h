@@ -1020,7 +1020,7 @@ struct dsa_switch_ops {
 	int	(*port_vlan_add)(struct dsa_switch *ds, int port,
 				 const struct switchdev_obj_port_vlan *vlan,
 				 struct netlink_ext_ack *extack);
-	int	(*port_vlan_del)(struct dsa_switch *ds, int port,
+	void	(*port_vlan_del)(struct dsa_switch *ds, int port,
 				 const struct switchdev_obj_port_vlan *vlan);
 	int	(*vlan_msti_set)(struct dsa_switch *ds, struct dsa_bridge bridge,
 				 const struct switchdev_vlan_msti *msti);
@@ -1200,7 +1200,7 @@ struct dsa_switch_ops {
 	 */
 	int	(*tag_8021q_vlan_add)(struct dsa_switch *ds, int port, u16 vid,
 				      u16 flags);
-	int	(*tag_8021q_vlan_del)(struct dsa_switch *ds, int port, u16 vid);
+	void	(*tag_8021q_vlan_del)(struct dsa_switch *ds, int port, u16 vid);
 
 	/*
 	 * DSA master tracking operations

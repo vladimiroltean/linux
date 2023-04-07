@@ -575,8 +575,8 @@ int qca8k_port_vlan_filtering(struct dsa_switch *ds, int port, bool vlan_filteri
 int qca8k_port_vlan_add(struct dsa_switch *ds, int port,
 			const struct switchdev_obj_port_vlan *vlan,
 			struct netlink_ext_ack *extack);
-int qca8k_port_vlan_del(struct dsa_switch *ds, int port,
-			const struct switchdev_obj_port_vlan *vlan);
+void qca8k_port_vlan_del(struct dsa_switch *ds, int port,
+			 const struct switchdev_obj_port_vlan *vlan);
 
 /* Common port LAG function */
 int qca8k_port_lag_join(struct dsa_switch *ds, int port, struct dsa_lag lag,

@@ -975,8 +975,8 @@ int qca8k_port_vlan_add(struct dsa_switch *ds, int port,
 	return ret;
 }
 
-int qca8k_port_vlan_del(struct dsa_switch *ds, int port,
-			const struct switchdev_obj_port_vlan *vlan)
+void qca8k_port_vlan_del(struct dsa_switch *ds, int port,
+			 const struct switchdev_obj_port_vlan *vlan)
 {
 	struct qca8k_priv *priv = ds->priv;
 	int ret;
@@ -984,8 +984,6 @@ int qca8k_port_vlan_del(struct dsa_switch *ds, int port,
 	ret = qca8k_vlan_del(priv, port, vlan->vid);
 	if (ret)
 		dev_err(priv->dev, "Failed to delete VLAN from port %d (%d)", port, ret);
-
-	return ret;
 }
 
 static bool qca8k_lag_can_offload(struct dsa_switch *ds,
