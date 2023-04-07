@@ -989,7 +989,7 @@ struct dsa_switch_ops {
 	/*
 	 * Bridge integration
 	 */
-	int	(*set_ageing_time)(struct dsa_switch *ds, unsigned int msecs);
+	void	(*set_ageing_time)(struct dsa_switch *ds, unsigned int msecs);
 	int	(*port_bridge_join)(struct dsa_switch *ds, int port,
 				    struct dsa_bridge bridge,
 				    bool *tx_fwd_offload,

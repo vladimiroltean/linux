@@ -660,7 +660,7 @@ void qca8k_port_fast_age(struct dsa_switch *ds, int port)
 	mutex_unlock(&priv->reg_mutex);
 }
 
-int qca8k_set_ageing_time(struct dsa_switch *ds, unsigned int msecs)
+void qca8k_set_ageing_time(struct dsa_switch *ds, unsigned int msecs)
 {
 	struct qca8k_priv *priv = ds->priv;
 	unsigned int secs = msecs / 1000;
@@ -675,9 +675,9 @@ int qca8k_set_ageing_time(struct dsa_switch *ds, unsigned int msecs)
 	if (!val)
 		val = 1;
 
-	return regmap_update_bits(priv->regmap, QCA8K_REG_ATU_CTRL,
-				  QCA8K_ATU_AGE_TIME_MASK,
-				  QCA8K_ATU_AGE_TIME(val));
+	regmap_update_bits(priv->regmap, QCA8K_REG_ATU_CTRL,
+			   QCA8K_ATU_AGE_TIME_MASK,
+			   QCA8K_ATU_AGE_TIME(val));
 }
 
 int qca8k_port_enable(struct dsa_switch *ds, int port,

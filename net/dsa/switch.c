@@ -47,7 +47,7 @@ static int dsa_switch_ageing_time(struct dsa_switch *ds,
 	ageing_time = dsa_switch_fastest_ageing_time(ds, ageing_time);
 
 	if (ds->ops->set_ageing_time)
-		return ds->ops->set_ageing_time(ds, ageing_time);
+		ds->ops->set_ageing_time(ds, ageing_time);
 
 	return 0;
 }

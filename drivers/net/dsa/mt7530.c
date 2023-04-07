@@ -856,7 +856,7 @@ mt7530_get_sset_count(struct dsa_switch *ds, int port, int sset)
 	return ARRAY_SIZE(mt7530_mib);
 }
 
-static int
+static void
 mt7530_set_ageing_time(struct dsa_switch *ds, unsigned int msecs)
 {
 	unsigned int secs = msecs / MSEC_PER_SEC;
@@ -888,8 +888,6 @@ mt7530_set_ageing_time(struct dsa_switch *ds, unsigned int msecs)
 	}
 
 	mt7530_write(priv, MT7530_AAC, AGE_CNT(age_count) | AGE_UNIT(age_unit));
-
-	return 0;
 }
 
 static const char *p5_intf_modes(unsigned int p5_interface)

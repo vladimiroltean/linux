@@ -3612,17 +3612,14 @@ static void mv88e6xxx_port_disable(struct dsa_switch *ds, int port)
 	mv88e6xxx_reg_unlock(chip);
 }
 
-static int mv88e6xxx_set_ageing_time(struct dsa_switch *ds,
-				     unsigned int ageing_time)
+static void mv88e6xxx_set_ageing_time(struct dsa_switch *ds,
+				      unsigned int ageing_time)
 {
 	struct mv88e6xxx_chip *chip = ds->priv;
-	int err;
 
 	mv88e6xxx_reg_lock(chip);
-	err = mv88e6xxx_g1_atu_set_age_time(chip, ageing_time);
+	mv88e6xxx_g1_atu_set_age_time(chip, ageing_time);
 	mv88e6xxx_reg_unlock(chip);
-
-	return err;
 }
 
 static int mv88e6xxx_stats_setup(struct mv88e6xxx_chip *chip)

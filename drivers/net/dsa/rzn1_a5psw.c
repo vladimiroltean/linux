@@ -271,7 +271,7 @@ static void a5psw_phylink_mac_link_up(struct dsa_switch *ds, int port,
 	a5psw_reg_writel(a5psw, A5PSW_CMD_CFG(port), cmd_cfg);
 }
 
-static int a5psw_set_ageing_time(struct dsa_switch *ds, unsigned int msecs)
+static void a5psw_set_ageing_time(struct dsa_switch *ds, unsigned int msecs)
 {
 	struct a5psw *a5psw = ds->priv;
 	unsigned long rate;
@@ -284,8 +284,6 @@ static int a5psw_set_ageing_time(struct dsa_switch *ds, unsigned int msecs)
 	agetime = div_u64(msecs * tmp, 1024 * A5PSW_TABLE_ENTRIES);
 
 	a5psw_reg_writel(a5psw, A5PSW_LK_AGETIME, agetime);
-
-	return 0;
 }
 
 static void a5psw_flooding_set_resolution(struct a5psw *a5psw, int port,

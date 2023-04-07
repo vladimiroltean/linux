@@ -2385,14 +2385,12 @@ static void ksz_port_fast_age(struct dsa_switch *ds, int port)
 	dev->dev_ops->flush_dyn_mac_table(dev, port);
 }
 
-static int ksz_set_ageing_time(struct dsa_switch *ds, unsigned int msecs)
+static void ksz_set_ageing_time(struct dsa_switch *ds, unsigned int msecs)
 {
 	struct ksz_device *dev = ds->priv;
 
-	if (!dev->dev_ops->set_ageing_time)
-		return -EOPNOTSUPP;
-
-	return dev->dev_ops->set_ageing_time(dev, msecs);
+	if (dev->dev_ops->set_ageing_time)
+		dev->dev_ops->set_ageing_time(dev, msecs);
 }
 
 static int ksz_port_fdb_add(struct dsa_switch *ds, int port,

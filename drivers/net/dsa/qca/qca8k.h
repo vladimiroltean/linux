@@ -540,7 +540,7 @@ int qca8k_port_max_mtu(struct dsa_switch *ds, int port);
 
 /* Common fast age function */
 void qca8k_port_fast_age(struct dsa_switch *ds, int port);
-int qca8k_set_ageing_time(struct dsa_switch *ds, unsigned int msecs);
+void qca8k_set_ageing_time(struct dsa_switch *ds, unsigned int msecs);
 
 /* Common FDB function */
 int qca8k_port_fdb_insert(struct qca8k_priv *priv, const u8 *addr,

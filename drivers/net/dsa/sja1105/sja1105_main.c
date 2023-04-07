@@ -2719,13 +2719,14 @@ static int sja1105_connect_tag_protocol(struct dsa_switch *ds,
 /* The MAXAGE setting belongs to the L2 Forwarding Parameters table,
  * which cannot be reconfigured at runtime. So a switch reset is required.
  */
-static int sja1105_set_ageing_time(struct dsa_switch *ds,
-				   unsigned int ageing_time)
+static void sja1105_set_ageing_time(struct dsa_switch *ds,
+				    unsigned int ageing_time)
 {
 	struct sja1105_l2_lookup_params_entry *l2_lookup_params;
 	struct sja1105_private *priv = ds->priv;
 	struct sja1105_table *table;
 	unsigned int maxage;
+	int rc;
 
 	table = &priv->static_config.tables[BLK_IDX_L2_LOOKUP_PARAMS];
 	l2_lookup_params = table->entries;
@@ -2733,11 +2734,15 @@ static int sja1105_set_ageing_time(struct dsa_switch *ds,
 	maxage = SJA1105_AGEING_TIME_MS(ageing_time);
 
 	if (l2_lookup_params->maxage == maxage)
-		return 0;
+		return;
 
 	l2_lookup_params->maxage = maxage;
 
-	return sja1105_static_config_reload(priv, SJA1105_AGEING_TIME);
+	rc = sja1105_static_config_reload(priv, SJA1105_AGEING_TIME);
+	if (rc)
+		dev_err(ds->dev,
+			"Failed to reload static config while changing ageing time: %pe\n",
+			ERR_PTR(rc));
 }
 
 static int sja1105_change_mtu(struct dsa_switch *ds, int port, int new_mtu)

@@ -749,14 +749,12 @@ static int felix_port_change_master(struct dsa_switch *ds, int port,
 	return felix->tag_proto_ops->change_master(ds, port, master, extack);
 }
 
-static int felix_set_ageing_time(struct dsa_switch *ds,
-				 unsigned int ageing_time)
+static void felix_set_ageing_time(struct dsa_switch *ds,
+				  unsigned int ageing_time)
 {
 	struct ocelot *ocelot = ds->priv;
 
 	ocelot_set_ageing_time(ocelot, ageing_time);
-
-	return 0;
 }
 
 static void felix_port_fast_age(struct dsa_switch *ds, int port)
