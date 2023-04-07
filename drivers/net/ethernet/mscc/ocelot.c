@@ -1438,21 +1438,20 @@ int ocelot_trap_add(struct ocelot *ocelot, int port,
 
 	trap->ingress_port_mask |= BIT(port);
 
-	if (new)
+	if (new) {
 		err = ocelot_vcap_filter_add(ocelot, trap, NULL);
-	else
-		err = ocelot_vcap_filter_replace(ocelot, trap);
-	if (err) {
-		trap->ingress_port_mask &= ~BIT(port);
-		if (!trap->ingress_port_mask)
+		if (err) {
 			kfree(trap);
-		return err;
+			return err;
+		}
+	} else {
+		ocelot_vcap_filter_replace(ocelot, trap);
 	}
 
 	return 0;
 }
 
-int ocelot_trap_del(struct ocelot *ocelot, int port, unsigned long cookie)
+void ocelot_trap_del(struct ocelot *ocelot, int port, unsigned long cookie)
 {
 	struct ocelot_vcap_block *block_vcap_is2;
 	struct ocelot_vcap_filter *trap;
@@ -1461,14 +1460,14 @@ int ocelot_trap_del(struct ocelot *ocelot, int port, unsigned long cookie)
 
 	trap = ocelot_vcap_block_find_filter_by_id(block_vcap_is2, cookie,
 						   false);
-	if (!trap)
-		return 0;
+	if (WARN_ON(!trap))
+		return;
 
 	trap->ingress_port_mask &= ~BIT(port);
 	if (!trap->ingress_port_mask)
-		return ocelot_vcap_filter_del(ocelot, trap);
-
-	return ocelot_vcap_filter_replace(ocelot, trap);
+		ocelot_vcap_filter_del(ocelot, trap);
+	else
+		ocelot_vcap_filter_replace(ocelot, trap);
 }
 
 static u32 ocelot_get_bond_mask(struct ocelot *ocelot, struct net_device *bond)

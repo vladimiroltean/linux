@@ -106,7 +106,7 @@ void ocelot_port_devlink_teardown(struct ocelot *ocelot, int port);
 int ocelot_trap_add(struct ocelot *ocelot, int port,
 		    unsigned long cookie, bool take_ts,
 		    void (*populate)(struct ocelot_vcap_filter *f));
-int ocelot_trap_del(struct ocelot *ocelot, int port, unsigned long cookie);
+void ocelot_trap_del(struct ocelot *ocelot, int port, unsigned long cookie);
 
 struct ocelot_mirror *ocelot_mirror_get(struct ocelot *ocelot, int to,
 					struct netlink_ext_ack *extack);

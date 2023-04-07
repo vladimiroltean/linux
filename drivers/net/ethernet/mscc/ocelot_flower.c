@@ -880,8 +880,9 @@ int ocelot_cls_flower_replace(struct ocelot *ocelot, int port,
 		}
 
 		filter->ingress_port_mask |= BIT(port);
+		ocelot_vcap_filter_replace(ocelot, filter);
 
-		return ocelot_vcap_filter_replace(ocelot, filter);
+		return 0;
 	}
 
 	/* Filter didn't exist, create it now */
@@ -955,11 +956,16 @@ int ocelot_cls_flower_destroy(struct ocelot *ocelot, int port,
 
 	if (ingress) {
 		filter->ingress_port_mask &= ~BIT(port);
-		if (filter->ingress_port_mask)
-			return ocelot_vcap_filter_replace(ocelot, filter);
+		if (filter->ingress_port_mask) {
+			ocelot_vcap_filter_replace(ocelot, filter);
+
+			return 0;
+		}
 	}
 
-	return ocelot_vcap_filter_del(ocelot, filter);
+	ocelot_vcap_filter_del(ocelot, filter);
+
+	return 0;
 }
 EXPORT_SYMBOL_GPL(ocelot_cls_flower_destroy);
 

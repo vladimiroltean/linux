@@ -33,7 +33,7 @@ static int ocelot_mrp_find_partner_port(struct ocelot *ocelot,
 	return -1;
 }
 
-static int ocelot_mrp_del_vcap(struct ocelot *ocelot, int id)
+static void ocelot_mrp_del_vcap(struct ocelot *ocelot, int id)
 {
 	struct ocelot_vcap_block *block_vcap_is2;
 	struct ocelot_vcap_filter *filter;
@@ -42,9 +42,9 @@ static int ocelot_mrp_del_vcap(struct ocelot *ocelot, int id)
 	filter = ocelot_vcap_block_find_filter_by_id(block_vcap_is2, id,
 						     false);
 	if (!filter)
-		return 0;
+		return;
 
-	return ocelot_vcap_filter_del(ocelot, filter);
+	ocelot_vcap_filter_del(ocelot, filter);
 }
 
 static int ocelot_mrp_redirect_add_vcap(struct ocelot *ocelot, int src_port,
@@ -96,11 +96,11 @@ static int ocelot_mrp_trap_add(struct ocelot *ocelot, int port)
 			       ocelot_populate_mrp_trap_key);
 }
 
-static int ocelot_mrp_trap_del(struct ocelot *ocelot, int port)
+static void ocelot_mrp_trap_del(struct ocelot *ocelot, int port)
 {
 	unsigned long cookie = OCELOT_VCAP_IS2_MRP_TRAP(ocelot);
 
-	return ocelot_trap_del(ocelot, port, cookie);
+	ocelot_trap_del(ocelot, port, cookie);
 }
 
 static void ocelot_mrp_save_mac(struct ocelot *ocelot,
@@ -213,9 +213,7 @@ int ocelot_mrp_del_ring_role(struct ocelot *ocelot, int port,
 	if (ocelot_port->mrp_ring_id != mrp->ring_id)
 		return 0;
 
-	err = ocelot_mrp_trap_del(ocelot, port);
-	if (err)
-		return err;
+	ocelot_mrp_trap_del(ocelot, port);
 
 	ocelot_mrp_del_vcap(ocelot, OCELOT_VCAP_IS2_MRP_REDIRECT(ocelot, port));
 

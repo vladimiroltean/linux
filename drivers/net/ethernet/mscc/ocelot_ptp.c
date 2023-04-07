@@ -369,7 +369,7 @@ static int ocelot_l2_ptp_trap_add(struct ocelot *ocelot, int port)
 			       ocelot_populate_l2_ptp_trap_key);
 }
 
-static int ocelot_l2_ptp_trap_del(struct ocelot *ocelot, int port)
+static void ocelot_l2_ptp_trap_del(struct ocelot *ocelot, int port)
 {
 	unsigned long l2_cookie = OCELOT_VCAP_IS2_L2_PTP_TRAP(ocelot);
 
@@ -395,15 +395,13 @@ static int ocelot_ipv4_ptp_trap_add(struct ocelot *ocelot, int port)
 	return err;
 }
 
-static int ocelot_ipv4_ptp_trap_del(struct ocelot *ocelot, int port)
+static void ocelot_ipv4_ptp_trap_del(struct ocelot *ocelot, int port)
 {
 	unsigned long ipv4_gen_cookie = OCELOT_VCAP_IS2_IPV4_GEN_PTP_TRAP(ocelot);
 	unsigned long ipv4_ev_cookie = OCELOT_VCAP_IS2_IPV4_EV_PTP_TRAP(ocelot);
-	int err;
 
-	err = ocelot_trap_del(ocelot, port, ipv4_ev_cookie);
-	err |= ocelot_trap_del(ocelot, port, ipv4_gen_cookie);
-	return err;
+	ocelot_trap_del(ocelot, port, ipv4_ev_cookie);
+	ocelot_trap_del(ocelot, port, ipv4_gen_cookie);
 }
 
 static int ocelot_ipv6_ptp_trap_add(struct ocelot *ocelot, int port)
@@ -425,15 +423,13 @@ static int ocelot_ipv6_ptp_trap_add(struct ocelot *ocelot, int port)
 	return err;
 }
 
-static int ocelot_ipv6_ptp_trap_del(struct ocelot *ocelot, int port)
+static void ocelot_ipv6_ptp_trap_del(struct ocelot *ocelot, int port)
 {
 	unsigned long ipv6_gen_cookie = OCELOT_VCAP_IS2_IPV6_GEN_PTP_TRAP(ocelot);
 	unsigned long ipv6_ev_cookie = OCELOT_VCAP_IS2_IPV6_EV_PTP_TRAP(ocelot);
-	int err;
 
-	err = ocelot_trap_del(ocelot, port, ipv6_ev_cookie);
-	err |= ocelot_trap_del(ocelot, port, ipv6_gen_cookie);
-	return err;
+	ocelot_trap_del(ocelot, port, ipv6_ev_cookie);
+	ocelot_trap_del(ocelot, port, ipv6_gen_cookie);
 }
 
 static int ocelot_setup_ptp_traps(struct ocelot *ocelot, int port,
@@ -441,12 +437,13 @@ static int ocelot_setup_ptp_traps(struct ocelot *ocelot, int port,
 {
 	int err;
 
-	if (l2)
+	if (l2) {
 		err = ocelot_l2_ptp_trap_add(ocelot, port);
-	else
-		err = ocelot_l2_ptp_trap_del(ocelot, port);
-	if (err)
-		return err;
+		if (err)
+			return err;
+	} else {
+		ocelot_l2_ptp_trap_del(ocelot, port);
+	}
 
 	if (l4) {
 		err = ocelot_ipv4_ptp_trap_add(ocelot, port);
@@ -457,12 +454,9 @@ static int ocelot_setup_ptp_traps(struct ocelot *ocelot, int port,
 		if (err)
 			goto err_ipv6;
 	} else {
-		err = ocelot_ipv4_ptp_trap_del(ocelot, port);
-
-		err |= ocelot_ipv6_ptp_trap_del(ocelot, port);
+		ocelot_ipv4_ptp_trap_del(ocelot, port);
+		ocelot_ipv6_ptp_trap_del(ocelot, port);
 	}
-	if (err)
-		return err;
 
 	return 0;
 

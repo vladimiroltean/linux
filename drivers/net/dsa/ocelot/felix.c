@@ -120,7 +120,9 @@ static int felix_tag_8021q_vlan_del_rx(struct dsa_switch *ds, int port,
 	if (!outer_tagging_rule)
 		return -ENOENT;
 
-	return ocelot_vcap_filter_del(ocelot, outer_tagging_rule);
+	ocelot_vcap_filter_del(ocelot, outer_tagging_rule);
+
+	return 0;
 }
 
 /* Set up VCAP IS1 rules for stripping the tag_8021q VLAN on TX and VCAP IS2
@@ -200,7 +202,6 @@ static int felix_tag_8021q_vlan_del_tx(struct dsa_switch *ds, int port, u16 vid)
 	struct ocelot_vcap_block *block_vcap_is2;
 	struct ocelot *ocelot = ds->priv;
 	unsigned long cookie;
-	int err;
 
 	block_vcap_is1 = &ocelot->block[VCAP_IS1];
 	block_vcap_is2 = &ocelot->block[VCAP_IS2];
@@ -211,9 +212,7 @@ static int felix_tag_8021q_vlan_del_tx(struct dsa_switch *ds, int port, u16 vid)
 	if (!untagging_rule)
 		return -ENOENT;
 
-	err = ocelot_vcap_filter_del(ocelot, untagging_rule);
-	if (err)
-		return err;
+	ocelot_vcap_filter_del(ocelot, untagging_rule);
 
 	cookie = OCELOT_VCAP_IS2_TAG_8021Q_TXVLAN(ocelot, port);
 	redirect_rule = ocelot_vcap_block_find_filter_by_id(block_vcap_is2,
@@ -221,7 +220,9 @@ static int felix_tag_8021q_vlan_del_tx(struct dsa_switch *ds, int port, u16 vid)
 	if (!redirect_rule)
 		return -ENOENT;
 
-	return ocelot_vcap_filter_del(ocelot, redirect_rule);
+	ocelot_vcap_filter_del(ocelot, redirect_rule);
+
+	return 0;
 }
 
 static int felix_tag_8021q_vlan_add(struct dsa_switch *ds, int port, u16 vid,
@@ -302,8 +303,8 @@ static int felix_trap_get_cpu_port(struct dsa_switch *ds,
  * replicated over Ethernet as well, otherwise we'd get no notification of
  * their arrival when using the ocelot-8021q tagging protocol.
  */
-static int felix_update_trapping_destinations(struct dsa_switch *ds,
-					      bool using_tag_8021q)
+static void felix_update_trapping_destinations(struct dsa_switch *ds,
+					       bool using_tag_8021q)
 {
 	struct ocelot *ocelot = ds->priv;
 	struct felix *felix = ocelot_to_felix(ocelot);
@@ -312,10 +313,9 @@ static int felix_update_trapping_destinations(struct dsa_switch *ds,
 	enum ocelot_mask_mode mask_mode;
 	unsigned long port_mask;
 	bool cpu_copy_ena;
-	int err;
 
 	if (!felix->info->quirk_no_xtr_irq)
-		return 0;
+		return;
 
 	/* We are sure that "cpu" was found, otherwise
 	 * dsa_tree_setup_default_cpu() would have failed earlier.
@@ -354,12 +354,8 @@ static int felix_update_trapping_destinations(struct dsa_switch *ds,
 		trap->action.port_mask = port_mask;
 		trap->action.cpu_copy_ena = cpu_copy_ena;
 
-		err = ocelot_vcap_filter_replace(ocelot, trap);
-		if (err)
-			return err;
+		ocelot_vcap_filter_replace(ocelot, trap);
 	}
-
-	return 0;
 }
 
 /* The CPU port module is connected to the Node Processor Interface (NPI). This
@@ -571,7 +567,9 @@ static int felix_tag_8021q_change_master(struct dsa_switch *ds, int port,
 	ocelot_port_unassign_dsa_8021q_cpu(ocelot, port);
 	ocelot_port_assign_dsa_8021q_cpu(ocelot, port, cpu);
 
-	return felix_update_trapping_destinations(ds, true);
+	felix_update_trapping_destinations(ds, true);
+
+	return 0;
 }
 
 static const struct felix_tag_proto_ops felix_tag_8021q_proto_ops = {
@@ -1661,8 +1659,9 @@ static int felix_hwtstamp_set(struct dsa_switch *ds, int port,
 		return err;
 
 	using_tag_8021q = felix->tag_proto == DSA_TAG_PROTO_OCELOT_8021Q;
+	felix_update_trapping_destinations(ds, using_tag_8021q);
 
-	return felix_update_trapping_destinations(ds, using_tag_8021q);
+	return 0;
 }
 
 static bool felix_check_xtr_pkt(struct ocelot *ocelot)
@@ -1808,8 +1807,9 @@ static int felix_cls_flower_add(struct dsa_switch *ds, int port,
 		return err;
 
 	using_tag_8021q = felix->tag_proto == DSA_TAG_PROTO_OCELOT_8021Q;
+	felix_update_trapping_destinations(ds, using_tag_8021q);
 
-	return felix_update_trapping_destinations(ds, using_tag_8021q);
+	return 0;
 }
 
 static int felix_cls_flower_del(struct dsa_switch *ds, int port,

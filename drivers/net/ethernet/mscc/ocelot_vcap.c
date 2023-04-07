@@ -1236,8 +1236,8 @@ static void ocelot_vcap_block_remove_filter(struct ocelot *ocelot,
 	block->count--;
 }
 
-int ocelot_vcap_filter_del(struct ocelot *ocelot,
-			   struct ocelot_vcap_filter *filter)
+void ocelot_vcap_filter_del(struct ocelot *ocelot,
+			    struct ocelot_vcap_filter *filter)
 {
 	struct ocelot_vcap_block *block = &ocelot->block[filter->block_id];
 	struct ocelot_vcap_filter del_filter;
@@ -1251,8 +1251,8 @@ int ocelot_vcap_filter_del(struct ocelot *ocelot,
 
 	/* Gets index of the filter */
 	index = ocelot_vcap_block_get_filter_index(block, filter);
-	if (index < 0)
-		return index;
+	if (WARN_ON(index < 0))
+		return;
 
 	/* Delete filter */
 	ocelot_vcap_block_remove_filter(ocelot, block, filter);
@@ -1269,24 +1269,20 @@ int ocelot_vcap_filter_del(struct ocelot *ocelot,
 
 	/* Now delete the last filter, because it is duplicated */
 	vcap_entry_set(ocelot, block->count, &del_filter);
-
-	return 0;
 }
 EXPORT_SYMBOL(ocelot_vcap_filter_del);
 
-int ocelot_vcap_filter_replace(struct ocelot *ocelot,
-			       struct ocelot_vcap_filter *filter)
+void ocelot_vcap_filter_replace(struct ocelot *ocelot,
+				struct ocelot_vcap_filter *filter)
 {
 	struct ocelot_vcap_block *block = &ocelot->block[filter->block_id];
 	int index;
 
 	index = ocelot_vcap_block_get_filter_index(block, filter);
-	if (index < 0)
-		return index;
+	if (WARN_ON(index < 0))
+		return;
 
 	vcap_entry_set(ocelot, index, filter);
-
-	return 0;
 }
 EXPORT_SYMBOL(ocelot_vcap_filter_replace);
 
