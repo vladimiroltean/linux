@@ -859,16 +859,12 @@ mt7530_get_sset_count(struct dsa_switch *ds, int port, int sset)
 static int
 mt7530_set_ageing_time(struct dsa_switch *ds, unsigned int msecs)
 {
+	unsigned int secs = msecs / MSEC_PER_SEC;
 	struct mt7530_priv *priv = ds->priv;
-	unsigned int secs = msecs / 1000;
 	unsigned int tmp_age_count;
 	unsigned int error = -1;
 	unsigned int age_count;
 	unsigned int age_unit;
-
-	/* Applied timer is (AGE_CNT + 1) * (AGE_UNIT + 1) seconds */
-	if (secs < 1 || secs > (AGE_CNT_MAX + 1) * (AGE_UNIT_MAX + 1))
-		return -ERANGE;
 
 	/* iterate through all possible age_count to find the closest pair */
 	for (tmp_age_count = 0; tmp_age_count <= AGE_CNT_MAX; ++tmp_age_count) {
@@ -2191,6 +2187,10 @@ mt7530_setup(struct dsa_switch *ds)
 
 	ds->assisted_learning_on_cpu_port = true;
 	ds->mtu_enforcement_ingress = true;
+	/* Applied timer is (AGE_CNT + 1) * (AGE_UNIT + 1) seconds */
+	ds->ageing_time_min = MSEC_PER_SEC;
+	ds->ageing_time_max = (AGE_CNT_MAX + 1) * (AGE_UNIT_MAX + 1) *
+			      MSEC_PER_SEC;
 
 	if (priv->id == ID_MT7530) {
 		regulator_set_voltage(priv->core_pwr, 1000000, 1000000);
