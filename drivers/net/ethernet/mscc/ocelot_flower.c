@@ -813,21 +813,17 @@ static struct ocelot_vcap_filter
 	return filter;
 }
 
-static int ocelot_vcap_dummy_filter_add(struct ocelot *ocelot,
-					struct ocelot_vcap_filter *filter)
+static void ocelot_vcap_dummy_filter_add(struct ocelot *ocelot,
+					 struct ocelot_vcap_filter *filter)
 {
 	list_add(&filter->list, &ocelot->dummy_rules);
-
-	return 0;
 }
 
-static int ocelot_vcap_dummy_filter_del(struct ocelot *ocelot,
-					struct ocelot_vcap_filter *filter)
+static void ocelot_vcap_dummy_filter_del(struct ocelot *ocelot,
+					 struct ocelot_vcap_filter *filter)
 {
 	list_del(&filter->list);
 	kfree(filter);
-
-	return 0;
 }
 
 /* If we have an egress VLAN modification rule, we need to actually write the
@@ -908,8 +904,11 @@ int ocelot_cls_flower_replace(struct ocelot *ocelot, int port,
 	/* The non-optional GOTOs for the TCAM skeleton don't need
 	 * to be actually offloaded.
 	 */
-	if (filter->type == OCELOT_VCAP_FILTER_DUMMY)
-		return ocelot_vcap_dummy_filter_add(ocelot, filter);
+	if (filter->type == OCELOT_VCAP_FILTER_DUMMY) {
+		ocelot_vcap_dummy_filter_add(ocelot, filter);
+
+		return 0;
+	}
 
 	if (filter->type == OCELOT_PSFP_FILTER_OFFLOAD) {
 		kfree(filter);
@@ -948,8 +947,11 @@ int ocelot_cls_flower_destroy(struct ocelot *ocelot, int port,
 	if (!filter)
 		return 0;
 
-	if (filter->type == OCELOT_VCAP_FILTER_DUMMY)
-		return ocelot_vcap_dummy_filter_del(ocelot, filter);
+	if (filter->type == OCELOT_VCAP_FILTER_DUMMY) {
+		ocelot_vcap_dummy_filter_del(ocelot, filter);
+
+		return 0;
+	}
 
 	if (ingress) {
 		filter->ingress_port_mask &= ~BIT(port);
