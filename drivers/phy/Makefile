@@ -54,4 +54,5 @@ obj-$(CONFIG_GENERIC_PHY)		+= allwinner/	\
 					   sunplus/	\
 					   tegra/	\
 					   ti/		\
-					   xilinx/
+					   xilinx/	\
+					   inphi/
