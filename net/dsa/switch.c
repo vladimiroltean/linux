@@ -36,12 +36,6 @@ static int dsa_switch_ageing_time(struct dsa_switch *ds,
 {
 	unsigned int ageing_time = info->ageing_time;
 
-	if (ds->ageing_time_min && ageing_time < ds->ageing_time_min)
-		return -ERANGE;
-
-	if (ds->ageing_time_max && ageing_time > ds->ageing_time_max)
-		return -ERANGE;
-
 	/* Program the fastest ageing time in case of multiple bridges */
 	ageing_time = dsa_switch_fastest_ageing_time(ds, ageing_time);
 

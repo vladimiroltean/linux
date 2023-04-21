@@ -880,8 +880,18 @@ int dsa_port_ageing_time(struct dsa_port *dp, clock_t ageing_clock)
 {
 	unsigned long ageing_jiffies = clock_t_to_jiffies(ageing_clock);
 	unsigned int ageing_time = jiffies_to_msecs(ageing_jiffies);
+	struct dsa_switch_tree *dst = dp->ds->dst;
 	struct dsa_notifier_ageing_time_info info;
+	struct dsa_switch *ds;
 	int err;
+
+	list_for_each_entry(ds, &dst->switches, list) {
+		if (ds->ageing_time_min && ageing_time < ds->ageing_time_min)
+			return -ERANGE;
+
+		if (ds->ageing_time_max && ageing_time > ds->ageing_time_max)
+			return -ERANGE;
+	}
 
 	info.ageing_time = ageing_time;
 
