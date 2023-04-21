@@ -2039,6 +2039,7 @@ int dsa_slave_change_mtu(struct net_device *dev, int new_mtu)
 	struct dsa_port *dp = dsa_slave_to_port(dev);
 	struct dsa_port *cpu_dp = dp->cpu_dp;
 	struct dsa_switch *ds = dp->ds;
+	struct dsa_switch *other_ds;
 	struct dsa_port *other_dp;
 	int largest_mtu = 0;
 	int new_master_mtu;
@@ -2048,8 +2049,9 @@ int dsa_slave_change_mtu(struct net_device *dev, int new_mtu)
 	int cpu_mtu;
 	int err;
 
-	if (!ds->ops->port_change_mtu)
-		return -EOPNOTSUPP;
+	list_for_each_entry(other_ds, &ds->dst->switches, list)
+		if (!other_ds->ops->port_change_mtu)
+			return -EOPNOTSUPP;
 
 	dsa_tree_for_each_user_port(other_dp, ds->dst) {
 		int slave_mtu;
@@ -2094,9 +2096,7 @@ int dsa_slave_change_mtu(struct net_device *dev, int new_mtu)
 		/* We only need to propagate the MTU of the CPU port to
 		 * upstream switches, so emit a notifier which updates them.
 		 */
-		err = dsa_port_mtu_change(cpu_dp, cpu_mtu);
-		if (err)
-			goto out_cpu_failed;
+		dsa_port_mtu_change(cpu_dp, cpu_mtu);
 	}
 
 	ds->ops->port_change_mtu(ds, dp->index, new_mtu);
@@ -2107,9 +2107,6 @@ int dsa_slave_change_mtu(struct net_device *dev, int new_mtu)
 
 	return 0;
 
-out_cpu_failed:
-	if (new_master_mtu != old_master_mtu)
-		dev_set_mtu(master, old_master_mtu);
 out_master_failed:
 	return err;
 }

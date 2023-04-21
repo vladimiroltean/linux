@@ -992,14 +992,14 @@ int dsa_port_vlan_msti(struct dsa_port *dp,
 	return ds->ops->vlan_msti_set(ds, *dp->bridge, msti);
 }
 
-int dsa_port_mtu_change(struct dsa_port *dp, int new_mtu)
+void dsa_port_mtu_change(struct dsa_port *dp, int new_mtu)
 {
 	struct dsa_notifier_mtu_info info = {
 		.dp = dp,
 		.mtu = new_mtu,
 	};
 
-	return dsa_port_notify(dp, DSA_NOTIFIER_MTU, &info);
+	dsa_port_notify(dp, DSA_NOTIFIER_MTU, &info);
 }
 
 int dsa_port_fdb_add(struct dsa_port *dp, const unsigned char *addr,
