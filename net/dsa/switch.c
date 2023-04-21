@@ -31,8 +31,8 @@ static unsigned int dsa_switch_fastest_ageing_time(struct dsa_switch *ds,
 	return ageing_time;
 }
 
-static int dsa_switch_ageing_time(struct dsa_switch *ds,
-				  struct dsa_notifier_ageing_time_info *info)
+static void dsa_switch_ageing_time(struct dsa_switch *ds,
+				   struct dsa_notifier_ageing_time_info *info)
 {
 	unsigned int ageing_time = info->ageing_time;
 
@@ -41,8 +41,6 @@ static int dsa_switch_ageing_time(struct dsa_switch *ds,
 
 	if (ds->ops->set_ageing_time)
 		ds->ops->set_ageing_time(ds, ageing_time);
-
-	return 0;
 }
 
 static bool dsa_port_mtu_match(struct dsa_port *dp,
@@ -97,8 +95,8 @@ static int dsa_switch_bridge_join(struct dsa_switch *ds,
 	return 0;
 }
 
-static int dsa_switch_bridge_leave(struct dsa_switch *ds,
-				   struct dsa_notifier_bridge_info *info)
+static void dsa_switch_bridge_leave(struct dsa_switch *ds,
+				    struct dsa_notifier_bridge_info *info)
 {
 	if (info->dp->ds == ds && ds->ops->port_bridge_leave)
 		ds->ops->port_bridge_leave(ds, info->dp->index, info->bridge);
@@ -108,8 +106,6 @@ static int dsa_switch_bridge_leave(struct dsa_switch *ds,
 						info->dp->ds->index,
 						info->dp->index,
 						info->bridge);
-
-	return 0;
 }
 
 /* Matches for all upstream-facing ports (the CPU port and all upstream-facing
@@ -474,16 +470,14 @@ static int dsa_switch_fdb_add(struct dsa_switch *ds,
 	return dsa_port_do_fdb_add(dp, info->addr, info->vid, info->db);
 }
 
-static int dsa_switch_fdb_del(struct dsa_switch *ds,
-			      struct dsa_notifier_fdb_info *info)
+static void dsa_switch_fdb_del(struct dsa_switch *ds,
+			       struct dsa_notifier_fdb_info *info)
 {
 	int port = dsa_towards_port(ds, info->dp->ds->index, info->dp->index);
 	struct dsa_port *dp = dsa_to_port(ds, port);
 
-	if (!ds->ops->port_fdb_del)
-		return -EOPNOTSUPP;
-
-	return dsa_port_do_fdb_del(dp, info->addr, info->vid, info->db);
+	if (ds->ops->port_fdb_del)
+		dsa_port_do_fdb_del(dp, info->addr, info->vid, info->db);
 }
 
 static int dsa_switch_lag_fdb_add(struct dsa_switch *ds,
@@ -915,7 +909,7 @@ dsa_switch_connect_tag_proto(struct dsa_switch *ds,
 	return 0;
 }
 
-static int
+static void
 dsa_switch_disconnect_tag_proto(struct dsa_switch *ds,
 				struct dsa_notifier_tag_proto_info *info)
 {
@@ -928,118 +922,121 @@ dsa_switch_disconnect_tag_proto(struct dsa_switch *ds,
 	/* No need to notify the switch, since it shouldn't have any
 	 * resources to tear down
 	 */
-	return 0;
 }
 
-static int
+static void
 dsa_switch_master_state_change(struct dsa_switch *ds,
 			       struct dsa_notifier_master_state_info *info)
 {
 	if (!ds->ops->master_state_change)
-		return 0;
+		return;
 
 	ds->ops->master_state_change(ds, info->master, info->operational);
-
-	return 0;
 }
 
-static int dsa_switch_event(struct dsa_switch *ds, unsigned long event,
-			    void *info)
+static int dsa_switch_fallible_event(struct dsa_switch *ds,
+				     enum dsa_fallible_event event, void *info)
 {
 	int err;
 
 	switch (event) {
-	case DSA_NOTIFIER_AGEING_TIME:
-		err = dsa_switch_ageing_time(ds, info);
-		break;
 	case DSA_NOTIFIER_BRIDGE_JOIN:
 		err = dsa_switch_bridge_join(ds, info);
-		break;
-	case DSA_NOTIFIER_BRIDGE_LEAVE:
-		err = dsa_switch_bridge_leave(ds, info);
 		break;
 	case DSA_NOTIFIER_FDB_ADD:
 		err = dsa_switch_fdb_add(ds, info);
 		break;
-	case DSA_NOTIFIER_FDB_DEL:
-		err = dsa_switch_fdb_del(ds, info);
-		break;
 	case DSA_NOTIFIER_HOST_FDB_ADD:
 		err = dsa_switch_host_fdb_add(ds, info);
-		break;
-	case DSA_NOTIFIER_HOST_FDB_DEL:
-		err = dsa_switch_host_fdb_del(ds, info);
 		break;
 	case DSA_NOTIFIER_LAG_FDB_ADD:
 		err = dsa_switch_lag_fdb_add(ds, info);
 		break;
-	case DSA_NOTIFIER_LAG_FDB_DEL:
-		err = dsa_switch_lag_fdb_del(ds, info);
-		break;
-	case DSA_NOTIFIER_LAG_CHANGE:
-		err = dsa_switch_lag_change(ds, info);
-		break;
 	case DSA_NOTIFIER_LAG_JOIN:
 		err = dsa_switch_lag_join(ds, info);
-		break;
-	case DSA_NOTIFIER_LAG_LEAVE:
-		err = dsa_switch_lag_leave(ds, info);
 		break;
 	case DSA_NOTIFIER_MDB_ADD:
 		err = dsa_switch_mdb_add(ds, info);
 		break;
-	case DSA_NOTIFIER_MDB_DEL:
-		err = dsa_switch_mdb_del(ds, info);
-		break;
 	case DSA_NOTIFIER_HOST_MDB_ADD:
 		err = dsa_switch_host_mdb_add(ds, info);
-		break;
-	case DSA_NOTIFIER_HOST_MDB_DEL:
-		err = dsa_switch_host_mdb_del(ds, info);
 		break;
 	case DSA_NOTIFIER_VLAN_ADD:
 		err = dsa_switch_vlan_add(ds, info);
 		break;
-	case DSA_NOTIFIER_VLAN_DEL:
-		err = dsa_switch_vlan_del(ds, info);
-		break;
 	case DSA_NOTIFIER_HOST_VLAN_ADD:
 		err = dsa_switch_host_vlan_add(ds, info);
-		break;
-	case DSA_NOTIFIER_HOST_VLAN_DEL:
-		err = dsa_switch_host_vlan_del(ds, info);
-		break;
-	case DSA_NOTIFIER_MTU:
-		err = dsa_switch_mtu(ds, info);
-		break;
-	case DSA_NOTIFIER_TAG_PROTO:
-		err = dsa_switch_change_tag_proto(ds, info);
 		break;
 	case DSA_NOTIFIER_TAG_PROTO_CONNECT:
 		err = dsa_switch_connect_tag_proto(ds, info);
 		break;
-	case DSA_NOTIFIER_TAG_PROTO_DISCONNECT:
-		err = dsa_switch_disconnect_tag_proto(ds, info);
-		break;
 	case DSA_NOTIFIER_TAG_8021Q_VLAN_ADD:
 		err = dsa_switch_tag_8021q_vlan_add(ds, info);
-		break;
-	case DSA_NOTIFIER_TAG_8021Q_VLAN_DEL:
-		err = dsa_switch_tag_8021q_vlan_del(ds, info);
-		break;
-	case DSA_NOTIFIER_MASTER_STATE_CHANGE:
-		err = dsa_switch_master_state_change(ds, info);
 		break;
 	default:
 		err = -EOPNOTSUPP;
 		break;
 	}
 
-	if (err)
-		dev_dbg(ds->dev, "breaking chain for DSA event %lu (%d)\n",
-			event, err);
-
 	return err;
+}
+
+static void dsa_switch_infallible_event(struct dsa_switch *ds,
+					enum dsa_infallible_event event,
+					void *info)
+{
+	switch (event) {
+	case DSA_NOTIFIER_AGEING_TIME:
+		dsa_switch_ageing_time(ds, info);
+		break;
+	case DSA_NOTIFIER_BRIDGE_LEAVE:
+		dsa_switch_bridge_leave(ds, info);
+		break;
+	case DSA_NOTIFIER_FDB_DEL:
+		dsa_switch_fdb_del(ds, info);
+		break;
+	case DSA_NOTIFIER_HOST_FDB_DEL:
+		dsa_switch_host_fdb_del(ds, info);
+		break;
+	case DSA_NOTIFIER_LAG_FDB_DEL:
+		dsa_switch_lag_fdb_del(ds, info);
+		break;
+	case DSA_NOTIFIER_LAG_CHANGE:
+		dsa_switch_lag_change(ds, info);
+		break;
+	case DSA_NOTIFIER_LAG_LEAVE:
+		dsa_switch_lag_leave(ds, info);
+		break;
+	case DSA_NOTIFIER_MDB_DEL:
+		dsa_switch_mdb_del(ds, info);
+		break;
+	case DSA_NOTIFIER_HOST_MDB_DEL:
+		dsa_switch_host_mdb_del(ds, info);
+		break;
+	case DSA_NOTIFIER_VLAN_DEL:
+		dsa_switch_vlan_del(ds, info);
+		break;
+	case DSA_NOTIFIER_HOST_VLAN_DEL:
+		dsa_switch_host_vlan_del(ds, info);
+		break;
+	case DSA_NOTIFIER_MTU:
+		dsa_switch_mtu(ds, info);
+		break;
+	case DSA_NOTIFIER_TAG_PROTO:
+		dsa_switch_change_tag_proto(ds, info);
+		break;
+	case DSA_NOTIFIER_TAG_PROTO_DISCONNECT:
+		dsa_switch_disconnect_tag_proto(ds, info);
+		break;
+	case DSA_NOTIFIER_TAG_8021Q_VLAN_DEL:
+		dsa_switch_tag_8021q_vlan_del(ds, info);
+		break;
+	case DSA_NOTIFIER_MASTER_STATE_CHANGE:
+		dsa_switch_master_state_change(ds, info);
+		break;
+	default:
+		break;
+	}
 }
 
 /**
@@ -1109,7 +1106,7 @@ rollback:
  * WARNING: this function is not reliable during probe time, because probing
  * between trees is asynchronous and not all DSA trees might have probed.
  */
-int dsa_broadcast(unsigned long e, void *v)
+void dsa_broadcast(unsigned long e, void *v)
 {
 	struct dsa_switch_tree *dst;
 	int err = 0;
