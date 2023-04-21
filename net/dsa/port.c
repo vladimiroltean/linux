@@ -35,6 +35,24 @@ static int dsa_port_notify(const struct dsa_port *dp, unsigned long e, void *v)
 	return dsa_tree_notify(dp->ds->dst, e, v);
 }
 
+/**
+ * dsa_port_notify_robust - Notify fabric of changes to port, with rollback
+ * @dp: port on which change occurred
+ * @e: event, must be of type DSA_NOTIFIER_*
+ * @v: event-specific value.
+ * @e_rollback: event, must be of type DSA_NOTIFIER_*
+ * @v_rollback: event-specific value.
+ *
+ * Like dsa_port_notify(), except makes sure that switches are restored to the
+ * previous state in case the notifier call chain fails mid way.
+ */
+static int dsa_port_notify_robust(const struct dsa_port *dp, unsigned long e,
+				  void *v, unsigned long e_rollback,
+				  void *v_rollback)
+{
+	return dsa_tree_notify_robust(dp->ds->dst, e, v, e_rollback, v_rollback);
+}
+
 static void dsa_port_notify_bridge_fdb_flush(const struct dsa_port *dp, u16 vid)
 {
 	struct net_device *brport_dev = dsa_port_to_bridge_port(dp);
@@ -668,7 +686,8 @@ int dsa_port_lag_join(struct dsa_port *dp, struct net_device *lag_dev,
 		goto err_lag_create;
 
 	info.lag = *dp->lag;
-	err = dsa_port_notify(dp, DSA_NOTIFIER_LAG_JOIN, &info);
+	err = dsa_port_notify_robust(dp, DSA_NOTIFIER_LAG_JOIN, &info,
+				     DSA_NOTIFIER_LAG_LEAVE, &info);
 	if (err)
 		goto err_lag_join;
 
@@ -884,7 +903,6 @@ int dsa_port_ageing_time(struct dsa_port *dp, clock_t ageing_clock)
 	struct dsa_switch_tree *dst = dp->ds->dst;
 	struct dsa_notifier_ageing_time_info info;
 	struct dsa_switch *ds;
-	int err;
 
 	list_for_each_entry(ds, &dst->switches, list) {
 		if (ds->ageing_time_min && ageing_time < ds->ageing_time_min)
@@ -894,11 +912,7 @@ int dsa_port_ageing_time(struct dsa_port *dp, clock_t ageing_clock)
 			return -ERANGE;
 	}
 
-	info.ageing_time = ageing_time;
-
-	err = dsa_port_notify(dp, DSA_NOTIFIER_AGEING_TIME, &info);
-	if (err)
-		return err;
+	dsa_port_notify(dp, DSA_NOTIFIER_AGEING_TIME, &info);
 
 	dp->ageing_time = ageing_time;
 
@@ -1008,7 +1022,8 @@ int dsa_port_fdb_add(struct dsa_port *dp, const unsigned char *addr,
 	if (!dp->ds->fdb_isolation)
 		info.db.bridge.num = 0;
 
-	return dsa_port_notify(dp, DSA_NOTIFIER_FDB_ADD, &info);
+	return dsa_port_notify_robust(dp, DSA_NOTIFIER_FDB_ADD, &info,
+				      DSA_NOTIFIER_FDB_DEL, &info);
 }
 
 int dsa_port_fdb_del(struct dsa_port *dp, const unsigned char *addr,
@@ -1041,7 +1056,8 @@ static int dsa_port_host_fdb_add(struct dsa_port *dp,
 		.db = db,
 	};
 
-	return dsa_port_notify(dp, DSA_NOTIFIER_HOST_FDB_ADD, &info);
+	return dsa_port_notify_robust(dp, DSA_NOTIFIER_HOST_FDB_ADD, &info,
+				      DSA_NOTIFIER_HOST_FDB_DEL, &info);
 }
 
 int dsa_port_standalone_host_fdb_add(struct dsa_port *dp,
@@ -1144,7 +1160,8 @@ int dsa_port_lag_fdb_add(struct dsa_port *dp, const unsigned char *addr,
 	if (!dp->ds->fdb_isolation)
 		info.db.bridge.num = 0;
 
-	return dsa_port_notify(dp, DSA_NOTIFIER_LAG_FDB_ADD, &info);
+	return dsa_port_notify_robust(dp, DSA_NOTIFIER_LAG_FDB_ADD, &info,
+				      DSA_NOTIFIER_LAG_FDB_DEL, &info);
 }
 
 int dsa_port_lag_fdb_del(struct dsa_port *dp, const unsigned char *addr,
@@ -1192,7 +1209,8 @@ int dsa_port_mdb_add(const struct dsa_port *dp,
 	if (!dp->ds->fdb_isolation)
 		info.db.bridge.num = 0;
 
-	return dsa_port_notify(dp, DSA_NOTIFIER_MDB_ADD, &info);
+	return dsa_port_notify_robust(dp, DSA_NOTIFIER_MDB_ADD, &info,
+				      DSA_NOTIFIER_MDB_DEL, &info);
 }
 
 int dsa_port_mdb_del(const struct dsa_port *dp,
@@ -1223,7 +1241,8 @@ static int dsa_port_host_mdb_add(const struct dsa_port *dp,
 		.db = db,
 	};
 
-	return dsa_port_notify(dp, DSA_NOTIFIER_HOST_MDB_ADD, &info);
+	return dsa_port_notify_robust(dp, DSA_NOTIFIER_HOST_MDB_ADD, &info,
+				      DSA_NOTIFIER_HOST_MDB_DEL, &info);
 }
 
 int dsa_port_standalone_host_mdb_add(const struct dsa_port *dp,
@@ -1311,7 +1330,8 @@ int dsa_port_vlan_add(struct dsa_port *dp,
 		.extack = extack,
 	};
 
-	return dsa_port_notify(dp, DSA_NOTIFIER_VLAN_ADD, &info);
+	return dsa_port_notify_robust(dp, DSA_NOTIFIER_VLAN_ADD, &info,
+				      DSA_NOTIFIER_VLAN_DEL, &info);
 }
 
 int dsa_port_vlan_del(struct dsa_port *dp,
@@ -1337,7 +1357,8 @@ int dsa_port_host_vlan_add(struct dsa_port *dp,
 	};
 	int err;
 
-	err = dsa_port_notify(dp, DSA_NOTIFIER_HOST_VLAN_ADD, &info);
+	err = dsa_port_notify_robust(dp, DSA_NOTIFIER_HOST_VLAN_ADD, &info,
+				     DSA_NOTIFIER_HOST_VLAN_DEL, &info);
 	if (err && err != -EOPNOTSUPP)
 		return err;
 
@@ -2077,7 +2098,8 @@ int dsa_port_tag_8021q_vlan_add(struct dsa_port *dp, u16 vid, bool broadcast)
 		return dsa_broadcast_robust(DSA_NOTIFIER_TAG_8021Q_VLAN_ADD, &info,
 					    DSA_NOTIFIER_TAG_8021Q_VLAN_DEL, &info);
 
-	return dsa_port_notify(dp, DSA_NOTIFIER_TAG_8021Q_VLAN_ADD, &info);
+	return dsa_port_notify_robust(dp, DSA_NOTIFIER_TAG_8021Q_VLAN_ADD, &info,
+				      DSA_NOTIFIER_TAG_8021Q_VLAN_DEL, &info);
 }
 
 void dsa_port_tag_8021q_vlan_del(struct dsa_port *dp, u16 vid, bool broadcast)
