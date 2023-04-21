@@ -1042,45 +1042,43 @@ static void dsa_switch_infallible_event(struct dsa_switch *ds,
 /**
  * dsa_tree_notify - Execute code for all switches in a DSA switch tree.
  * @dst: collection of struct dsa_switch devices to notify.
- * @e: event, must be of type DSA_NOTIFIER_*
+ * @e: event which cannot fail
  * @v: event-specific value.
  *
  * Given a struct dsa_switch_tree, this can be used to run a function once for
  * each member DSA switch.
  */
-int dsa_tree_notify(struct dsa_switch_tree *dst, unsigned long e, void *v)
+void dsa_tree_notify(struct dsa_switch_tree *dst,
+		     enum dsa_infallible_event e, void *v)
 {
 	struct dsa_switch *ds;
-	int err;
 
-	list_for_each_entry(ds, &dst->switches, list) {
-		err = dsa_switch_event(ds, e, v);
-		if (err)
-			return err;
-	}
+	list_for_each_entry(ds, &dst->switches, list)
+		dsa_switch_infallible_event(ds, e, v);
 
-	return 0;
+	return;
 }
 
 /**
  * dsa_tree_notify_robust - Run code for all switches in a tree, with rollback.
  * @dst: collection of struct dsa_switch devices to notify.
- * @e: event, must be of type DSA_NOTIFIER_*
+ * @e: event which may fail
  * @v: event-specific value.
- * @e_rollback: event, must be of type DSA_NOTIFIER_*
+ * @e_rollback: event which cannot fail
  * @v_rollback: event-specific value.
  *
  * Like dsa_tree_notify(), except makes sure that switches are restored to the
  * previous state in case the notifier call chain fails mid way.
  */
-int dsa_tree_notify_robust(struct dsa_switch_tree *dst, unsigned long e,
-			   void *v, unsigned long e_rollback, void *v_rollback)
+int dsa_tree_notify_robust(struct dsa_switch_tree *dst,
+			   enum dsa_fallible_event e, void *v,
+			   enum dsa_infallible_event e_rollback, void *v_rollback)
 {
 	struct dsa_switch *ds;
 	int err;
 
 	list_for_each_entry(ds, &dst->switches, list) {
-		err = dsa_switch_event(ds, e, v);
+		err = dsa_switch_fallible_event(ds, e, v);
 		if (err)
 			goto rollback;
 	}
@@ -1089,14 +1087,14 @@ int dsa_tree_notify_robust(struct dsa_switch_tree *dst, unsigned long e,
 
 rollback:
 	list_for_each_entry_continue_reverse(ds, &dst->switches, list)
-		dsa_switch_event(ds, e_rollback, v_rollback);
+		dsa_switch_infallible_event(ds, e_rollback, v_rollback);
 
 	return err;
 }
 
 /**
  * dsa_broadcast - Notify all DSA trees in the system.
- * @e: event, must be of type DSA_NOTIFIER_*
+ * @e: event which cannot fail
  * @v: event-specific value.
  *
  * Can be used to notify the switching fabric of events such as cross-chip
@@ -1106,35 +1104,29 @@ rollback:
  * WARNING: this function is not reliable during probe time, because probing
  * between trees is asynchronous and not all DSA trees might have probed.
  */
-void dsa_broadcast(unsigned long e, void *v)
+void dsa_broadcast(enum dsa_infallible_event e, void *v)
 {
 	struct dsa_switch_tree *dst;
-	int err = 0;
 
-	list_for_each_entry(dst, &dsa_tree_list, list) {
-		err = dsa_tree_notify(dst, e, v);
-		if (err)
-			break;
-	}
-
-	return err;
+	list_for_each_entry(dst, &dsa_tree_list, list)
+		dsa_tree_notify(dst, e, v);
 }
 
 /**
  * dsa_broadcast_robust - Notify all DSA trees in the system, with rollback.
- * @e: event, must be of type DSA_NOTIFIER_*
+ * @e: event which may fail
  * @v: event-specific value.
- * @e_rollback: event, must be of type DSA_NOTIFIER_*
+ * @e_rollback: event which cannot fail
  * @v_rollback: event-specific value.
  *
  * Like dsa_broadcast(), except makes sure that switches are restored to the
  * previous state in case the notifier call chain fails mid way.
  */
-int dsa_broadcast_robust(unsigned long e, void *v, unsigned long e_rollback,
-			 void *v_rollback)
+int dsa_broadcast_robust(enum dsa_fallible_event e, void *v,
+			 enum dsa_infallible_event e_rollback, void *v_rollback)
 {
 	struct dsa_switch_tree *dst;
-	int err = 0;
+	int err;
 
 	list_for_each_entry(dst, &dsa_tree_list, list) {
 		err = dsa_tree_notify_robust(dst, e, v, e_rollback, v_rollback);

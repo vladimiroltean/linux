@@ -21,7 +21,7 @@
 /**
  * dsa_port_notify - Notify the switching fabric of changes to a port
  * @dp: port on which change occurred
- * @e: event, must be of type DSA_NOTIFIER_*
+ * @e: event which cannot fail
  * @v: event-specific value.
  *
  * Notify all switches in the DSA tree that this port's switch belongs to,
@@ -30,7 +30,8 @@
  * reconfigure ports without net_devices (CPU ports, DSA links) whenever
  * a user port's state changes.
  */
-static int dsa_port_notify(const struct dsa_port *dp, unsigned long e, void *v)
+static void dsa_port_notify(const struct dsa_port *dp,
+			    enum dsa_infallible_event e, void *v)
 {
 	return dsa_tree_notify(dp->ds->dst, e, v);
 }
@@ -38,16 +39,17 @@ static int dsa_port_notify(const struct dsa_port *dp, unsigned long e, void *v)
 /**
  * dsa_port_notify_robust - Notify fabric of changes to port, with rollback
  * @dp: port on which change occurred
- * @e: event, must be of type DSA_NOTIFIER_*
+ * @e: event which may fail
  * @v: event-specific value.
- * @e_rollback: event, must be of type DSA_NOTIFIER_*
+ * @e_rollback: event which cannot fail
  * @v_rollback: event-specific value.
  *
  * Like dsa_port_notify(), except makes sure that switches are restored to the
  * previous state in case the notifier call chain fails mid way.
  */
-static int dsa_port_notify_robust(const struct dsa_port *dp, unsigned long e,
-				  void *v, unsigned long e_rollback,
+static int dsa_port_notify_robust(const struct dsa_port *dp,
+				  enum dsa_fallible_event e, void *v,
+				  enum dsa_infallible_event e_rollback,
 				  void *v_rollback)
 {
 	return dsa_tree_notify_robust(dp->ds->dst, e, v, e_rollback, v_rollback);

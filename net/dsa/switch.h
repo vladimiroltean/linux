@@ -114,11 +114,13 @@ struct dsa_notifier_master_state_info {
 	bool operational;
 };
 
-int dsa_tree_notify(struct dsa_switch_tree *dst, unsigned long e, void *v);
-int dsa_tree_notify_robust(struct dsa_switch_tree *dst, unsigned long e,
-			   void *v, unsigned long e_rollback, void *v_rollback);
-int dsa_broadcast(unsigned long e, void *v);
-int dsa_broadcast_robust(unsigned long e, void *v, unsigned long e_rollback,
-			 void *v_rollback);
+void dsa_tree_notify(struct dsa_switch_tree *dst,
+		     enum dsa_infallible_event e, void *v);
+int dsa_tree_notify_robust(struct dsa_switch_tree *dst,
+			   enum dsa_fallible_event e, void *v,
+			   enum dsa_infallible_event e_rollback, void *v_rollback);
+void dsa_broadcast(enum dsa_infallible_event e, void *v);
+int dsa_broadcast_robust(enum dsa_fallible_event e, void *v,
+			 enum dsa_infallible_event e_rollback, void *v_rollback);
 
 #endif
