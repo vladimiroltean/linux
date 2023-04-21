@@ -1374,13 +1374,13 @@ rtl8366rb_port_fast_age(struct dsa_switch *ds, int port)
 			   BIT(port), 0);
 }
 
-static int rtl8366rb_change_mtu(struct dsa_switch *ds, int port, int new_mtu)
+static void rtl8366rb_change_mtu(struct dsa_switch *ds, int port, int new_mtu)
 {
 	struct realtek_priv *priv = ds->priv;
 	struct rtl8366rb *rb;
 	unsigned int max_mtu;
+	int ret, i;
 	u32 len;
-	int i;
 
 	/* Cache the per-port MTU setting */
 	rb = priv->chip_data;
@@ -1411,9 +1411,11 @@ static int rtl8366rb_change_mtu(struct dsa_switch *ds, int port, int new_mtu)
 	else
 		len = RTL8366RB_SGCR_MAX_LENGTH_16000;
 
-	return regmap_update_bits(priv->map, RTL8366RB_SGCR,
-				  RTL8366RB_SGCR_MAX_LENGTH_MASK,
-				  len);
+	ret = regmap_update_bits(priv->map, RTL8366RB_SGCR,
+				 RTL8366RB_SGCR_MAX_LENGTH_MASK,
+				 len);
+	if (ret)
+		dev_err(ds->dev, "Failed to change MTU: %pe\n", ERR_PTR(ret));
 }
 
 static int rtl8366rb_max_mtu(struct dsa_switch *ds, int port)

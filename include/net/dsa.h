@@ -1160,7 +1160,7 @@ struct dsa_switch_ops {
 	 * If the switch needs to account for the DSA tag on the CPU port, this
 	 * method needs to do so privately.
 	 */
-	int	(*port_change_mtu)(struct dsa_switch *ds, int port,
+	void	(*port_change_mtu)(struct dsa_switch *ds, int port,
 				   int new_mtu);
 	int	(*port_max_mtu)(struct dsa_switch *ds, int port);
 

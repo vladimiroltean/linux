@@ -2746,10 +2746,11 @@ static void sja1105_set_ageing_time(struct dsa_switch *ds,
 			ERR_PTR(rc));
 }
 
-static int sja1105_change_mtu(struct dsa_switch *ds, int port, int new_mtu)
+static void sja1105_change_mtu(struct dsa_switch *ds, int port, int new_mtu)
 {
 	struct sja1105_l2_policing_entry *policing;
 	struct sja1105_private *priv = ds->priv;
+	int rc;
 
 	new_mtu += VLAN_ETH_HLEN + ETH_FCS_LEN;
 
@@ -2759,11 +2760,15 @@ static int sja1105_change_mtu(struct dsa_switch *ds, int port, int new_mtu)
 	policing = priv->static_config.tables[BLK_IDX_L2_POLICING].entries;
 
 	if (policing[port].maxlen == new_mtu)
-		return 0;
+		return;
 
 	policing[port].maxlen = new_mtu;
 
-	return sja1105_static_config_reload(priv, SJA1105_BEST_EFFORT_POLICING);
+	rc = sja1105_static_config_reload(priv, SJA1105_BEST_EFFORT_POLICING);
+	if (rc)
+		dev_err(ds->dev,
+			"Failed to reload static config while changing MTU: %pe\n",
+			ERR_PTR(rc));
 }
 
 static int sja1105_get_max_mtu(struct dsa_switch *ds, int port)

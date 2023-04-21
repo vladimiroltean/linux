@@ -441,9 +441,6 @@ static int b53_set_jumbo(struct b53_device *dev, bool enable, bool allow_10_100)
 	u32 port_mask = 0;
 	u16 max_size = JMS_MIN_SIZE;
 
-	if (is5325(dev) || is5365(dev))
-		return -EINVAL;
-
 	if (enable) {
 		port_mask = dev->enabled_ports;
 		max_size = JMS_MAX_SIZE;
@@ -2262,19 +2259,22 @@ int b53_set_mac_eee(struct dsa_switch *ds, int port, struct ethtool_eee *e)
 }
 EXPORT_SYMBOL(b53_set_mac_eee);
 
-static int b53_change_mtu(struct dsa_switch *ds, int port, int mtu)
+static void b53_change_mtu(struct dsa_switch *ds, int port, int mtu)
 {
 	struct b53_device *dev = ds->priv;
 	bool enable_jumbo;
 	bool allow_10_100;
+	int ret;
 
 	if (is5325(dev) || is5365(dev))
-		return -EOPNOTSUPP;
+		return;
 
 	enable_jumbo = (mtu >= JMS_MIN_SIZE);
 	allow_10_100 = (dev->chip_id == BCM583XX_DEVICE_ID);
 
-	return b53_set_jumbo(dev, enable_jumbo, allow_10_100);
+	ret = b53_set_jumbo(dev, enable_jumbo, allow_10_100);
+	if (ret)
+		dev_err(ds->dev, "Failed to change MTU: %pe\n", ERR_PTR(ret));
 }
 
 static int b53_get_max_mtu(struct dsa_switch *ds, int port)

@@ -1468,7 +1468,7 @@ static int gswip_port_max_mtu(struct dsa_switch *ds, int port)
 	return GSWIP_MAX_PACKET_LENGTH - VLAN_ETH_HLEN - ETH_FCS_LEN;
 }
 
-static int gswip_port_change_mtu(struct dsa_switch *ds, int port, int new_mtu)
+static void gswip_port_change_mtu(struct dsa_switch *ds, int port, int new_mtu)
 {
 	struct gswip_priv *priv = ds->priv;
 	int cpu_port = priv->hw_info->cpu_port;
@@ -1491,8 +1491,6 @@ static int gswip_port_change_mtu(struct dsa_switch *ds, int port, int new_mtu)
 	else
 		gswip_switch_mask(priv, GSWIP_MAC_CTRL_2_MLEN, 0,
 				  GSWIP_MAC_CTRL_2p(port));
-
-	return 0;
 }
 
 static void gswip_xrx200_phylink_get_caps(struct dsa_switch *ds, int port,

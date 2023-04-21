@@ -2653,14 +2653,14 @@ static void ksz_port_mirror_del(struct dsa_switch *ds, int port,
 		dev->dev_ops->mirror_del(dev, port, mirror);
 }
 
-static int ksz_change_mtu(struct dsa_switch *ds, int port, int mtu)
+static void ksz_change_mtu(struct dsa_switch *ds, int port, int mtu)
 {
 	struct ksz_device *dev = ds->priv;
 
 	if (!dev->dev_ops->change_mtu)
-		return -EOPNOTSUPP;
+		return;
 
-	return dev->dev_ops->change_mtu(dev, port, mtu);
+	dev->dev_ops->change_mtu(dev, port, mtu);
 }
 
 static int ksz_max_mtu(struct dsa_switch *ds, int port)

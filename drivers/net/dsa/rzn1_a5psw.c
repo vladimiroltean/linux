@@ -187,14 +187,12 @@ static int a5psw_port_enable(struct dsa_switch *ds, int port,
 	return 0;
 }
 
-static int a5psw_port_change_mtu(struct dsa_switch *ds, int port, int new_mtu)
+static void a5psw_port_change_mtu(struct dsa_switch *ds, int port, int new_mtu)
 {
 	struct a5psw *a5psw = ds->priv;
 
 	new_mtu += ETH_HLEN + A5PSW_EXTRA_MTU_LEN + ETH_FCS_LEN;
 	a5psw_reg_writel(a5psw, A5PSW_FRM_LENGTH(port), new_mtu);
-
-	return 0;
 }
 
 static int a5psw_port_max_mtu(struct dsa_switch *ds, int port)

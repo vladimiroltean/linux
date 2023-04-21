@@ -76,20 +76,24 @@ int ksz8_reset_switch(struct ksz_device *dev)
 	return 0;
 }
 
-static int ksz8863_change_mtu(struct ksz_device *dev, int frame_size)
+static void ksz8863_change_mtu(struct ksz_device *dev, int frame_size)
 {
 	u8 ctrl2 = 0;
+	int ret;
 
 	if (frame_size <= KSZ8_LEGAL_PACKET_SIZE)
 		ctrl2 |= KSZ8863_LEGAL_PACKET_ENABLE;
 	else if (frame_size > KSZ8863_NORMAL_PACKET_SIZE)
 		ctrl2 |= KSZ8863_HUGE_PACKET_ENABLE;
 
-	return ksz_rmw8(dev, REG_SW_CTRL_2, KSZ8863_LEGAL_PACKET_ENABLE |
-			KSZ8863_HUGE_PACKET_ENABLE, ctrl2);
+	ret = ksz_rmw8(dev, REG_SW_CTRL_2, KSZ8863_LEGAL_PACKET_ENABLE |
+		       KSZ8863_HUGE_PACKET_ENABLE, ctrl2);
+	if (ret)
+		dev_err(dev->dev, "Failed to change frame size: %pe\n",
+			ERR_PTR(ret));
 }
 
-static int ksz8795_change_mtu(struct ksz_device *dev, int frame_size)
+static void ksz8795_change_mtu(struct ksz_device *dev, int frame_size)
 {
 	u8 ctrl1 = 0, ctrl2 = 0;
 	int ret;
@@ -100,18 +104,21 @@ static int ksz8795_change_mtu(struct ksz_device *dev, int frame_size)
 		ctrl1 |= SW_HUGE_PACKET;
 
 	ret = ksz_rmw8(dev, REG_SW_CTRL_1, SW_HUGE_PACKET, ctrl1);
-	if (ret)
-		return ret;
+	if (!ret)
+		ret = ksz_rmw8(dev, REG_SW_CTRL_2, SW_LEGAL_PACKET_DISABLE,
+			       ctrl2);
 
-	return ksz_rmw8(dev, REG_SW_CTRL_2, SW_LEGAL_PACKET_DISABLE, ctrl2);
+	if (ret)
+		dev_err(dev->dev, "Failed to change frame size: %pe\n",
+			ERR_PTR(ret));
 }
 
-int ksz8_change_mtu(struct ksz_device *dev, int port, int mtu)
+void ksz8_change_mtu(struct ksz_device *dev, int port, int mtu)
 {
 	u16 frame_size;
 
 	if (!dsa_is_cpu_port(dev->ds, port))
-		return 0;
+		return;
 
 	frame_size = mtu + VLAN_ETH_HLEN + ETH_FCS_LEN;
 
@@ -119,12 +126,12 @@ int ksz8_change_mtu(struct ksz_device *dev, int port, int mtu)
 	case KSZ8795_CHIP_ID:
 	case KSZ8794_CHIP_ID:
 	case KSZ8765_CHIP_ID:
-		return ksz8795_change_mtu(dev, frame_size);
+		ksz8795_change_mtu(dev, frame_size);
+		break;
 	case KSZ8830_CHIP_ID:
-		return ksz8863_change_mtu(dev, frame_size);
+		ksz8863_change_mtu(dev, frame_size);
+		break;
 	}
-
-	return -EOPNOTSUPP;
 }
 
 static void ksz8795_set_prio_queue(struct ksz_device *dev, int port, int queue)

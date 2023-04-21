@@ -1063,7 +1063,7 @@ mt7530_port_disable(struct dsa_switch *ds, int port)
 	mutex_unlock(&priv->reg_mutex);
 }
 
-static int
+static void
 mt7530_port_change_mtu(struct dsa_switch *ds, int port, int new_mtu)
 {
 	struct mt7530_priv *priv = ds->priv;
@@ -1075,7 +1075,7 @@ mt7530_port_change_mtu(struct dsa_switch *ds, int port, int new_mtu)
 	 * RX length register, only allowing CPU port here is enough.
 	 */
 	if (!dsa_is_cpu_port(ds, port))
-		return 0;
+		return;
 
 	mt7530_mutex_lock(priv);
 
@@ -1099,8 +1099,6 @@ mt7530_port_change_mtu(struct dsa_switch *ds, int port, int new_mtu)
 	mt7530_mii_write(priv, MT7530_GMACCR, val);
 
 	mt7530_mutex_unlock(priv);
-
-	return 0;
 }
 
 static int

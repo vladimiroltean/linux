@@ -260,14 +260,12 @@ static void dsa_loop_port_vlan_del(struct dsa_switch *ds, int port,
 	ps->ports[port].pvid = pvid;
 }
 
-static int dsa_loop_port_change_mtu(struct dsa_switch *ds, int port,
-				    int new_mtu)
+static void dsa_loop_port_change_mtu(struct dsa_switch *ds, int port,
+				     int new_mtu)
 {
 	struct dsa_loop_priv *priv = ds->priv;
 
 	priv->ports[port].mtu = new_mtu;
-
-	return 0;
 }
 
 static int dsa_loop_port_max_mtu(struct dsa_switch *ds, int port)

@@ -62,19 +62,13 @@ static int dsa_switch_mtu(struct dsa_switch *ds,
 			  struct dsa_notifier_mtu_info *info)
 {
 	struct dsa_port *dp;
-	int ret;
 
 	if (!ds->ops->port_change_mtu)
 		return -EOPNOTSUPP;
 
-	dsa_switch_for_each_port(dp, ds) {
-		if (dsa_port_mtu_match(dp, info)) {
-			ret = ds->ops->port_change_mtu(ds, dp->index,
-						       info->mtu);
-			if (ret)
-				return ret;
-		}
-	}
+	dsa_switch_for_each_port(dp, ds)
+		if (dsa_port_mtu_match(dp, info))
+			ds->ops->port_change_mtu(ds, dp->index, info->mtu);
 
 	return 0;
 }

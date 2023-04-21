@@ -702,7 +702,7 @@ void qca8k_port_disable(struct dsa_switch *ds, int port)
 	priv->port_enabled_map &= ~BIT(port);
 }
 
-int qca8k_port_change_mtu(struct dsa_switch *ds, int port, int new_mtu)
+void qca8k_port_change_mtu(struct dsa_switch *ds, int port, int new_mtu)
 {
 	struct qca8k_priv *priv = ds->priv;
 	int ret;
@@ -714,7 +714,7 @@ int qca8k_port_change_mtu(struct dsa_switch *ds, int port, int new_mtu)
 	 * value for every port.
 	 */
 	if (!dsa_is_cpu_port(ds, port))
-		return 0;
+		return;
 
 	/* To change the MAX_FRAME_SIZE the cpu ports must be off or
 	 * the switch panics.
@@ -730,14 +730,15 @@ int qca8k_port_change_mtu(struct dsa_switch *ds, int port, int new_mtu)
 	/* Include L2 header / FCS length */
 	ret = qca8k_write(priv, QCA8K_MAX_FRAME_SIZE, new_mtu +
 			  ETH_HLEN + ETH_FCS_LEN);
+	if (ret)
+		dev_err(ds->dev, "Failed to change MTU on port %d: %pe\n",
+			port, ERR_PTR(ret));
 
 	if (priv->port_enabled_map & BIT(0))
 		qca8k_port_set_status(priv, 0, 1);
 
 	if (priv->port_enabled_map & BIT(6))
 		qca8k_port_set_status(priv, 6, 1);
-
-	return ret;
 }
 
 int qca8k_port_max_mtu(struct dsa_switch *ds, int port)

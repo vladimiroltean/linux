@@ -43,17 +43,20 @@ static void ksz9477_port_cfg32(struct ksz_device *dev, int port, int offset,
 			   bits, set ? bits : 0);
 }
 
-int ksz9477_change_mtu(struct ksz_device *dev, int port, int mtu)
+void ksz9477_change_mtu(struct ksz_device *dev, int port, int mtu)
 {
 	u16 frame_size;
+	int ret;
 
 	if (!dsa_is_cpu_port(dev->ds, port))
-		return 0;
+		return;
 
 	frame_size = mtu + VLAN_ETH_HLEN + ETH_FCS_LEN;
 
-	return regmap_update_bits(dev->regmap[1], REG_SW_MTU__2,
-				  REG_SW_MTU_MASK, frame_size);
+	ret = regmap_update_bits(dev->regmap[1], REG_SW_MTU__2,
+				 REG_SW_MTU_MASK, frame_size);
+	if (ret)
+		dev_err(dev->dev, "Failed to change MTU: %pe\n", ERR_PTR(ret));
 }
 
 static int ksz9477_wait_vlan_ctrl_ready(struct ksz_device *dev)

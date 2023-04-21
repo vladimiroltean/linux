@@ -1020,12 +1020,16 @@ static void vsc73xx_get_ethtool_stats(struct dsa_switch *ds, int port,
 	}
 }
 
-static int vsc73xx_change_mtu(struct dsa_switch *ds, int port, int new_mtu)
+static void vsc73xx_change_mtu(struct dsa_switch *ds, int port, int new_mtu)
 {
 	struct vsc73xx *vsc = ds->priv;
+	int ret;
 
-	return vsc73xx_write(vsc, VSC73XX_BLOCK_MAC, port,
-			     VSC73XX_MAXLEN, new_mtu);
+	ret = vsc73xx_write(vsc, VSC73XX_BLOCK_MAC, port, VSC73XX_MAXLEN,
+			    new_mtu);
+	if (ret)
+		dev_err(ds->dev, "Failed to change MTU on port %d: %pe\n",
+			port, ERR_PTR(ret));
 }
 
 /* According to application not "VSC7398 Jumbo Frames" setting

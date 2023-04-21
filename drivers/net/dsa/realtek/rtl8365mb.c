@@ -1137,8 +1137,8 @@ static void rtl8365mb_phylink_mac_link_up(struct dsa_switch *ds, int port,
 	}
 }
 
-static int rtl8365mb_port_change_mtu(struct dsa_switch *ds, int port,
-				     int new_mtu)
+static void rtl8365mb_port_change_mtu(struct dsa_switch *ds, int port,
+				      int new_mtu)
 {
 	struct realtek_priv *priv = ds->priv;
 	int frame_size;
@@ -2011,9 +2011,7 @@ static int rtl8365mb_setup(struct dsa_switch *ds)
 		p->index = i;
 	}
 
-	ret = rtl8365mb_port_change_mtu(ds, cpu->trap_port, ETH_DATA_LEN);
-	if (ret)
-		goto out_teardown_irq;
+	rtl8365mb_port_change_mtu(ds, cpu->trap_port, ETH_DATA_LEN);
 
 	if (priv->setup_interface) {
 		ret = priv->setup_interface(ds);

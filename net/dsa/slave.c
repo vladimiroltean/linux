@@ -2099,9 +2099,7 @@ int dsa_slave_change_mtu(struct net_device *dev, int new_mtu)
 			goto out_cpu_failed;
 	}
 
-	err = ds->ops->port_change_mtu(ds, dp->index, new_mtu);
-	if (err)
-		goto out_port_failed;
+	ds->ops->port_change_mtu(ds, dp->index, new_mtu);
 
 	dev->mtu = new_mtu;
 
@@ -2109,9 +2107,6 @@ int dsa_slave_change_mtu(struct net_device *dev, int new_mtu)
 
 	return 0;
 
-out_port_failed:
-	if (new_master_mtu != old_master_mtu)
-		dsa_port_mtu_change(cpu_dp, old_master_mtu - overhead);
 out_cpu_failed:
 	if (new_master_mtu != old_master_mtu)
 		dev_set_mtu(master, old_master_mtu);

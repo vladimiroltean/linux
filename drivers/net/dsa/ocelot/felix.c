@@ -1766,7 +1766,7 @@ static void felix_txtstamp(struct dsa_switch *ds, int port,
 		OCELOT_SKB_CB(skb)->clone = clone;
 }
 
-static int felix_change_mtu(struct dsa_switch *ds, int port, int new_mtu)
+static void felix_change_mtu(struct dsa_switch *ds, int port, int new_mtu)
 {
 	struct ocelot *ocelot = ds->priv;
 	struct ocelot_port *ocelot_port = ocelot->ports[port];
@@ -1780,8 +1780,6 @@ static int felix_change_mtu(struct dsa_switch *ds, int port, int new_mtu)
 		felix->info->tas_guard_bands_update(ocelot, port);
 
 	mutex_unlock(&ocelot->tas_lock);
-
-	return 0;
 }
 
 static int felix_get_max_mtu(struct dsa_switch *ds, int port)

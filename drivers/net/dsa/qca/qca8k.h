@@ -535,7 +535,7 @@ int qca8k_port_enable(struct dsa_switch *ds, int port,
 void qca8k_port_disable(struct dsa_switch *ds, int port);
 
 /* Common MTU function */
-int qca8k_port_change_mtu(struct dsa_switch *ds, int port, int new_mtu);
+void qca8k_port_change_mtu(struct dsa_switch *ds, int port, int new_mtu);
 int qca8k_port_max_mtu(struct dsa_switch *ds, int port);
 
 /* Common fast age function */

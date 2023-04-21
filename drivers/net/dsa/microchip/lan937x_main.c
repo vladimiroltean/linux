@@ -224,7 +224,7 @@ void lan937x_config_cpu_port(struct dsa_switch *ds)
 	}
 }
 
-int lan937x_change_mtu(struct ksz_device *dev, int port, int new_mtu)
+void lan937x_change_mtu(struct ksz_device *dev, int port, int new_mtu)
 {
 	struct dsa_switch *ds = dev->ds;
 	int ret;
@@ -240,19 +240,13 @@ int lan937x_change_mtu(struct ksz_device *dev, int port, int new_mtu)
 	else
 		ret = lan937x_port_cfg(dev, port, REG_PORT_MAC_CTRL_0,
 				       PORT_JUMBO_PACKET, false);
-	if (ret < 0) {
+	if (ret < 0)
 		dev_err(ds->dev, "failed to enable jumbo\n");
-		return ret;
-	}
 
 	/* Write the frame size in PORT_MAX_FR_SIZE register */
 	ret = ksz_pwrite16(dev, port, PORT_MAX_FR_SIZE, new_mtu);
-	if (ret) {
+	if (ret)
 		dev_err(ds->dev, "failed to update mtu for port %d\n", port);
-		return ret;
-	}
-
-	return 0;
 }
 
 void lan937x_set_ageing_time(struct ksz_device *dev, unsigned int msecs)
