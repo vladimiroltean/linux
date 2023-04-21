@@ -538,12 +538,13 @@ static int dsa_switch_lag_fdb_del(struct dsa_switch *ds,
 static int dsa_switch_lag_change(struct dsa_switch *ds,
 				 struct dsa_notifier_lag_info *info)
 {
-	if (info->dp->ds == ds && ds->ops->port_lag_change)
-		return ds->ops->port_lag_change(ds, info->dp->index);
+	const struct dsa_port *dp = info->dp;
 
-	if (info->dp->ds != ds && ds->ops->crosschip_lag_change)
-		return ds->ops->crosschip_lag_change(ds, info->dp->ds->index,
-						     info->dp->index);
+	if (dp->ds == ds && ds->ops->port_lag_change)
+		ds->ops->port_lag_change(ds, dp->index);
+
+	if (dp->ds != ds && ds->ops->crosschip_lag_change)
+		ds->ops->crosschip_lag_change(ds, dp->ds->index, dp->index);
 
 	return 0;
 }

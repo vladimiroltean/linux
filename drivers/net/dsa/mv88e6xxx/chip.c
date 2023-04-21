@@ -6891,7 +6891,7 @@ static int mv88e6xxx_lag_sync_masks_map(struct dsa_switch *ds,
 	return err;
 }
 
-static int mv88e6xxx_port_lag_change(struct dsa_switch *ds, int port)
+static void mv88e6xxx_port_lag_change(struct dsa_switch *ds, int port)
 {
 	struct mv88e6xxx_chip *chip = ds->priv;
 	int err;
@@ -6899,7 +6899,9 @@ static int mv88e6xxx_port_lag_change(struct dsa_switch *ds, int port)
 	mv88e6xxx_reg_lock(chip);
 	err = mv88e6xxx_lag_sync_masks(ds);
 	mv88e6xxx_reg_unlock(chip);
-	return err;
+	if (err)
+		dev_err(ds->dev, "Failed to sync LAG masks: %pe\n",
+			ERR_PTR(err));
 }
 
 static int mv88e6xxx_port_lag_join(struct dsa_switch *ds, int port,
@@ -6949,8 +6951,8 @@ static int mv88e6xxx_port_lag_leave(struct dsa_switch *ds, int port,
 	return err_sync ? : err_trunk;
 }
 
-static int mv88e6xxx_crosschip_lag_change(struct dsa_switch *ds, int sw_index,
-					  int port)
+static void mv88e6xxx_crosschip_lag_change(struct dsa_switch *ds, int sw_index,
+					   int port)
 {
 	struct mv88e6xxx_chip *chip = ds->priv;
 	int err;
@@ -6958,7 +6960,9 @@ static int mv88e6xxx_crosschip_lag_change(struct dsa_switch *ds, int sw_index,
 	mv88e6xxx_reg_lock(chip);
 	err = mv88e6xxx_lag_sync_masks(ds);
 	mv88e6xxx_reg_unlock(chip);
-	return err;
+	if (err)
+		dev_err(ds->dev, "Failed to sync LAG masks: %pe\n",
+			ERR_PTR(err));
 }
 
 static int mv88e6xxx_crosschip_lag_join(struct dsa_switch *ds, int sw_index,

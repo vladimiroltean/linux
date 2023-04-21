@@ -983,14 +983,12 @@ static int felix_lag_leave(struct dsa_switch *ds, int port,
 	return felix_port_change_master(ds, port, lag.dev, NULL);
 }
 
-static int felix_lag_change(struct dsa_switch *ds, int port)
+static void felix_lag_change(struct dsa_switch *ds, int port)
 {
 	struct dsa_port *dp = dsa_to_port(ds, port);
 	struct ocelot *ocelot = ds->priv;
 
 	ocelot_port_lag_change(ocelot, port, dp->lag_tx_enabled);
-
-	return 0;
 }
 
 static int felix_vlan_prepare(struct dsa_switch *ds, int port,

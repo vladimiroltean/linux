@@ -1090,7 +1090,7 @@ struct dsa_switch_ops {
 	void	(*crosschip_bridge_leave)(struct dsa_switch *ds, int tree_index,
 					  int sw_index, int port,
 					  struct dsa_bridge bridge);
-	int	(*crosschip_lag_change)(struct dsa_switch *ds, int sw_index,
+	void	(*crosschip_lag_change)(struct dsa_switch *ds, int sw_index,
 					int port);
 	int	(*crosschip_lag_join)(struct dsa_switch *ds, int sw_index,
 				      int port, struct dsa_lag lag,
@@ -1167,7 +1167,7 @@ struct dsa_switch_ops {
 	/*
 	 * LAG integration
 	 */
-	int	(*port_lag_change)(struct dsa_switch *ds, int port);
+	void	(*port_lag_change)(struct dsa_switch *ds, int port);
 	int	(*port_lag_join)(struct dsa_switch *ds, int port,
 				 struct dsa_lag lag,
 				 struct netdev_lag_upper_info *info,
