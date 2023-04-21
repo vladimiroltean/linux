@@ -608,7 +608,7 @@ void dsa_port_lag_change(struct dsa_port *dp,
 	bool tx_enabled;
 
 	if (!dp->lag)
-		return 0;
+		return;
 
 	/* On statically configured aggregates (e.g. loadbalance
 	 * without LACP) ports will always be tx_enabled, even if the
@@ -618,7 +618,7 @@ void dsa_port_lag_change(struct dsa_port *dp,
 	tx_enabled = linfo->link_up && linfo->tx_enabled;
 
 	if (tx_enabled == dp->lag_tx_enabled)
-		return 0;
+		return;
 
 	dp->lag_tx_enabled = tx_enabled;
 
