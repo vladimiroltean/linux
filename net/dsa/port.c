@@ -592,17 +592,13 @@ void dsa_port_bridge_leave(struct dsa_port *dp, struct net_device *br)
 	 */
 	dsa_port_bridge_destroy(dp, br);
 
-	err = dsa_broadcast(DSA_NOTIFIER_BRIDGE_LEAVE, &info);
-	if (err)
-		dev_err(dp->ds->dev,
-			"port %d failed to notify DSA_NOTIFIER_BRIDGE_LEAVE: %pe\n",
-			dp->index, ERR_PTR(err));
+	dsa_broadcast(DSA_NOTIFIER_BRIDGE_LEAVE, &info);
 
 	dsa_port_switchdev_unsync_attrs(dp, info.bridge);
 }
 
-int dsa_port_lag_change(struct dsa_port *dp,
-			struct netdev_lag_lower_state_info *linfo)
+void dsa_port_lag_change(struct dsa_port *dp,
+			 struct netdev_lag_lower_state_info *linfo)
 {
 	struct dsa_notifier_lag_info info = {
 		.dp = dp,
@@ -624,7 +620,7 @@ int dsa_port_lag_change(struct dsa_port *dp,
 
 	dp->lag_tx_enabled = tx_enabled;
 
-	return dsa_port_notify(dp, DSA_NOTIFIER_LAG_CHANGE, &info);
+	dsa_port_notify(dp, DSA_NOTIFIER_LAG_CHANGE, &info);
 }
 
 static int dsa_port_lag_create(struct dsa_port *dp,
@@ -738,11 +734,7 @@ void dsa_port_lag_leave(struct dsa_port *dp, struct net_device *lag_dev)
 
 	dsa_port_lag_destroy(dp);
 
-	err = dsa_port_notify(dp, DSA_NOTIFIER_LAG_LEAVE, &info);
-	if (err)
-		dev_err(dp->ds->dev,
-			"port %d failed to notify DSA_NOTIFIER_LAG_LEAVE: %pe\n",
-			dp->index, ERR_PTR(err));
+	dsa_port_notify(dp, DSA_NOTIFIER_LAG_LEAVE, &info);
 }
 
 /* Must be called under rcu_read_lock() */
@@ -2095,11 +2087,7 @@ void dsa_port_tag_8021q_vlan_del(struct dsa_port *dp, u16 vid, bool broadcast)
 	int err;
 
 	if (broadcast)
-		err = dsa_broadcast(DSA_NOTIFIER_TAG_8021Q_VLAN_DEL, &info);
+		dsa_broadcast(DSA_NOTIFIER_TAG_8021Q_VLAN_DEL, &info);
 	else
-		err = dsa_port_notify(dp, DSA_NOTIFIER_TAG_8021Q_VLAN_DEL, &info);
-	if (err)
-		dev_err(dp->ds->dev,
-			"port %d failed to notify tag_8021q VLAN %d deletion: %pe\n",
-			dp->index, vid, ERR_PTR(err));
+		dsa_port_notify(dp, DSA_NOTIFIER_TAG_8021Q_VLAN_DEL, &info);
 }
