@@ -2701,6 +2701,8 @@ static int felix_pci_probe(struct pci_dev *pdev,
 	ds->priv = ocelot;
 	felix->ds = ds;
 	felix->tag_proto = DSA_TAG_PROTO_OCELOT;
+	__set_bit(DSA_TAG_PROTO_OCELOT, ds->alternate_tag_proto);
+	__set_bit(DSA_TAG_PROTO_OCELOT_8021Q, ds->alternate_tag_proto);
 
 	err = dsa_register_switch(ds);
 	if (err) {

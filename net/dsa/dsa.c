@@ -962,11 +962,16 @@ int dsa_tree_change_tag_proto(struct dsa_switch_tree *dst,
 			      const struct dsa_device_ops *old_tag_ops)
 {
 	struct dsa_notifier_tag_proto_info info;
+	struct dsa_switch *ds;
 	struct dsa_port *dp;
 	int err = -EBUSY;
 
 	if (!rtnl_trylock())
 		return restart_syscall();
+
+	list_for_each_entry(ds, &dst->switches, list)
+		if (!test_bit(tag_ops->proto, ds->alternate_tag_proto))
+			return -EPROTONOSUPPORT;
 
 	/* At the moment we don't allow changing the tag protocol under
 	 * traffic. The rtnl_mutex also happens to serialize concurrent

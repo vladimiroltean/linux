@@ -6499,8 +6499,6 @@ static void mv88e6xxx_change_tag_protocol(struct dsa_switch *ds,
 				cpu_dp->index, ERR_PTR(err));
 	}
 	mv88e6xxx_reg_unlock(chip);
-
-	return 0;
 }
 
 static int mv88e6xxx_port_mdb_add(struct dsa_switch *ds, int port,
@@ -7058,10 +7056,10 @@ static int mv88e6xxx_register_switch(struct mv88e6xxx_chip *chip)
 	ds->ageing_time_min = chip->info->age_time_coeff;
 	ds->ageing_time_max = chip->info->age_time_coeff * U8_MAX;
 
-	__set_bit(DSA_TAG_PROTO_DSA, &ds->alternate_tag_proto);
+	__set_bit(DSA_TAG_PROTO_DSA, ds->alternate_tag_proto);
 	if (chip->info->edsa_support == MV88E6XXX_EDSA_UNDOCUMENTED ||
 	    chip->info->edsa_support == MV88E6XXX_EDSA_SUPPORTED)
-		__set_bit(DSA_TAG_PROTO_EDSA, &ds->alternate_tag_proto);
+		__set_bit(DSA_TAG_PROTO_EDSA, ds->alternate_tag_proto);
 
 	/* Some chips support up to 32, but that requires enabling the
 	 * 5-bit port mode, which we do not support. 640k^W16 ought to

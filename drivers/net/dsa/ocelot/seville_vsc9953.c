@@ -1023,6 +1023,8 @@ static int seville_probe(struct platform_device *pdev)
 	ds->priv = ocelot;
 	felix->ds = ds;
 	felix->tag_proto = DSA_TAG_PROTO_SEVILLE;
+	__set_bit(DSA_TAG_PROTO_SEVILLE, ds->alternate_tag_proto);
+	__set_bit(DSA_TAG_PROTO_OCELOT_8021Q, ds->alternate_tag_proto);
 
 	err = dsa_register_switch(ds);
 	if (err) {

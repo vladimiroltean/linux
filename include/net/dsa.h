@@ -812,13 +812,14 @@ struct dsa_switch_ops {
 	 * Tagging protocol helpers called for the CPU ports and DSA links.
 	 * @get_tag_protocol retrieves the initial tagging protocol and is
 	 * mandatory. Switches which can operate using multiple tagging
-	 * protocols should implement @change_tag_protocol and report in
-	 * @get_tag_protocol the tagger in current use.
+	 * protocols should implement @change_tag_protocol() and report in
+	 * @get_tag_protocol() the tagger in current use, as well as the
+	 * alternate protocols in @alternate_tag_proto.
 	 */
 	enum dsa_tag_protocol (*get_tag_protocol)(struct dsa_switch *ds,
 						  int port,
 						  enum dsa_tag_protocol mprot);
-	int	(*change_tag_protocol)(struct dsa_switch *ds,
+	void	(*change_tag_protocol)(struct dsa_switch *ds,
 				       enum dsa_tag_protocol proto);
 	/*
 	 * Method for switch drivers to connect to the tagging protocol driver

@@ -383,7 +383,7 @@ static void felix_npi_port_deinit(struct ocelot *ocelot, int port)
 	ocelot_fields_write(ocelot, port, SYS_PAUSE_CFG_PAUSE_ENA, 1);
 }
 
-static int felix_tag_npi_setup(struct dsa_switch *ds)
+static void felix_tag_npi_setup(struct dsa_switch *ds)
 {
 	struct dsa_port *dp, *first_cpu_dp = NULL;
 	struct ocelot *ocelot = ds->priv;
@@ -467,7 +467,7 @@ static const struct felix_tag_proto_ops felix_tag_npi_proto_ops = {
 	.change_master		= felix_tag_npi_change_master,
 };
 
-static int felix_tag_8021q_setup(struct dsa_switch *ds)
+static void felix_tag_8021q_setup(struct dsa_switch *ds)
 {
 	struct ocelot *ocelot = ds->priv;
 	struct dsa_port *dp;
@@ -475,7 +475,8 @@ static int felix_tag_8021q_setup(struct dsa_switch *ds)
 
 	err = dsa_tag_8021q_register(ds, htons(ETH_P_8021AD));
 	if (err)
-		return err;
+		dev_err(ds->dev, "Failed to register tag_8021q: %pe\n",
+			ERR_PTR(err));
 
 	dsa_switch_for_each_cpu_port(dp, ds)
 		ocelot_port_setup_dsa_8021q_cpu(ocelot, dp->index);
@@ -507,8 +508,6 @@ static int felix_tag_8021q_setup(struct dsa_switch *ds)
 	 * dequeued over MMIO, since we would never know to discard them.
 	 */
 	ocelot_drain_cpu_queue(ocelot, 0);
-
-	return 0;
 }
 
 static void felix_tag_8021q_teardown(struct dsa_switch *ds)
@@ -619,7 +618,7 @@ static int felix_migrate_mdbs(struct dsa_switch *ds,
  * Manual migration is needed because as far as DSA is concerned, no change of
  * the CPU port is taking place here, just of the tagging protocol.
  */
-static int
+static void
 felix_tag_proto_setup_shared(struct dsa_switch *ds,
 			     const struct felix_tag_proto_ops *proto_ops,
 			     const struct felix_tag_proto_ops *old_proto_ops)
@@ -629,64 +628,43 @@ felix_tag_proto_setup_shared(struct dsa_switch *ds,
 
 	err = felix_migrate_mdbs(ds, proto_ops, old_proto_ops);
 	if (err)
-		return err;
+		dev_err(ds->dev, "Failed to migrate MDBs: %pe\n", ERR_PTR(err));
 
 	felix_update_trapping_destinations(ds, using_tag_8021q);
 
 	felix_migrate_host_flood(ds, proto_ops, old_proto_ops);
-
-	return 0;
 }
 
 /* This always leaves the switch in a consistent state, because although the
  * tag_8021q setup can fail, the NPI setup can't. So either the change is made,
  * or the restoration is guaranteed to work.
  */
-static int felix_change_tag_protocol(struct dsa_switch *ds,
-				     enum dsa_tag_protocol proto)
+static void felix_change_tag_protocol(struct dsa_switch *ds,
+				      enum dsa_tag_protocol proto)
 {
 	const struct felix_tag_proto_ops *old_proto_ops, *proto_ops;
 	struct ocelot *ocelot = ds->priv;
 	struct felix *felix = ocelot_to_felix(ocelot);
-	int err;
 
-	switch (proto) {
-	case DSA_TAG_PROTO_SEVILLE:
-	case DSA_TAG_PROTO_OCELOT:
-		proto_ops = &felix_tag_npi_proto_ops;
-		break;
-	case DSA_TAG_PROTO_OCELOT_8021Q:
+	if (proto == DSA_TAG_PROTO_OCELOT_8021Q)
 		proto_ops = &felix_tag_8021q_proto_ops;
-		break;
-	default:
-		return -EPROTONOSUPPORT;
-	}
+	else
+		proto_ops = &felix_tag_npi_proto_ops;
 
 	old_proto_ops = felix->tag_proto_ops;
 
 	if (proto_ops == old_proto_ops)
-		return 0;
+		return;
 
-	err = proto_ops->setup(ds);
-	if (err)
-		goto setup_failed;
+	proto_ops->setup(ds);
 
-	err = felix_tag_proto_setup_shared(ds, proto_ops, old_proto_ops);
-	if (err)
-		goto setup_shared_failed;
+	felix_tag_proto_setup_shared(ds, proto_ops, old_proto_ops);
 
 	if (old_proto_ops)
 		old_proto_ops->teardown(ds);
 
 	felix->tag_proto_ops = proto_ops;
 	felix->tag_proto = proto;
-
-	return 0;
-
-setup_shared_failed:
-	proto_ops->teardown(ds);
-setup_failed:
-	return err;
 }
 
 static enum dsa_tag_protocol felix_get_tag_protocol(struct dsa_switch *ds,

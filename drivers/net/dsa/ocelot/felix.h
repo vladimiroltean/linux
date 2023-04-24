@@ -75,7 +75,7 @@ struct felix_info {
  * needs to go to felix_tag_proto_setup_shared().
  */
 struct felix_tag_proto_ops {
-	int (*setup)(struct dsa_switch *ds);
+	void (*setup)(struct dsa_switch *ds);
 	void (*teardown)(struct dsa_switch *ds);
 	unsigned long (*get_host_fwd_mask)(struct dsa_switch *ds);
 	int (*change_master)(struct dsa_switch *ds, int port,
