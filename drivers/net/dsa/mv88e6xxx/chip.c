@@ -6476,31 +6476,17 @@ static enum dsa_tag_protocol mv88e6xxx_get_tag_protocol(struct dsa_switch *ds,
 	return chip->tag_protocol;
 }
 
-static int mv88e6xxx_change_tag_protocol(struct dsa_switch *ds,
-					 enum dsa_tag_protocol proto)
+static void mv88e6xxx_change_tag_protocol(struct dsa_switch *ds,
+					  enum dsa_tag_protocol proto)
 {
 	struct mv88e6xxx_chip *chip = ds->priv;
 	enum dsa_tag_protocol old_protocol;
 	struct dsa_port *cpu_dp;
 	int err;
 
-	switch (proto) {
-	case DSA_TAG_PROTO_EDSA:
-		switch (chip->info->edsa_support) {
-		case MV88E6XXX_EDSA_UNSUPPORTED:
-			return -EPROTONOSUPPORT;
-		case MV88E6XXX_EDSA_UNDOCUMENTED:
-			dev_warn(chip->dev, "Relying on undocumented EDSA tagging behavior\n");
-			fallthrough;
-		case MV88E6XXX_EDSA_SUPPORTED:
-			break;
-		}
-		break;
-	case DSA_TAG_PROTO_DSA:
-		break;
-	default:
-		return -EPROTONOSUPPORT;
-	}
+	if (proto == DSA_TAG_PROTO_EDSA &&
+	    chip->info->edsa_support == MV88E6XXX_EDSA_UNDOCUMENTED)
+		dev_warn(chip->dev, "Relying on undocumented EDSA tagging behavior\n");
 
 	old_protocol = chip->tag_protocol;
 	chip->tag_protocol = proto;
@@ -6508,24 +6494,13 @@ static int mv88e6xxx_change_tag_protocol(struct dsa_switch *ds,
 	mv88e6xxx_reg_lock(chip);
 	dsa_switch_for_each_cpu_port(cpu_dp, ds) {
 		err = mv88e6xxx_setup_port_mode(chip, cpu_dp->index);
-		if (err) {
-			mv88e6xxx_reg_unlock(chip);
-			goto unwind;
-		}
+		if (err)
+			dev_err(ds->dev, "Failed to change tagging protocol of CPU port %d: %pe\n",
+				cpu_dp->index, ERR_PTR(err));
 	}
 	mv88e6xxx_reg_unlock(chip);
 
 	return 0;
-
-unwind:
-	chip->tag_protocol = old_protocol;
-
-	mv88e6xxx_reg_lock(chip);
-	dsa_switch_for_each_cpu_port_continue_reverse(cpu_dp, ds)
-		mv88e6xxx_setup_port_mode(chip, cpu_dp->index);
-	mv88e6xxx_reg_unlock(chip);
-
-	return err;
 }
 
 static int mv88e6xxx_port_mdb_add(struct dsa_switch *ds, int port,
@@ -7082,6 +7057,11 @@ static int mv88e6xxx_register_switch(struct mv88e6xxx_chip *chip)
 	ds->ops = &mv88e6xxx_switch_ops;
 	ds->ageing_time_min = chip->info->age_time_coeff;
 	ds->ageing_time_max = chip->info->age_time_coeff * U8_MAX;
+
+	__set_bit(DSA_TAG_PROTO_DSA, &ds->alternate_tag_proto);
+	if (chip->info->edsa_support == MV88E6XXX_EDSA_UNDOCUMENTED ||
+	    chip->info->edsa_support == MV88E6XXX_EDSA_SUPPORTED)
+		__set_bit(DSA_TAG_PROTO_EDSA, &ds->alternate_tag_proto);
 
 	/* Some chips support up to 32, but that requires enabling the
 	 * 5-bit port mode, which we do not support. 640k^W16 ought to

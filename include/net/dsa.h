@@ -86,6 +86,7 @@ enum dsa_tag_protocol {
 	DSA_TAG_PROTO_RTL8_4T		= DSA_TAG_PROTO_RTL8_4T_VALUE,
 	DSA_TAG_PROTO_RZN1_A5PSW	= DSA_TAG_PROTO_RZN1_A5PSW_VALUE,
 	DSA_TAG_PROTO_LAN937X		= DSA_TAG_PROTO_LAN937X_VALUE,
+	__DSA_TAG_PROTO_MAX,
 };
 
 struct dsa_switch;
@@ -478,6 +479,8 @@ struct dsa_switch {
 	unsigned int		max_num_bridges;
 
 	unsigned int		num_ports;
+
+	DECLARE_BITMAP(alternate_tag_proto, __DSA_TAG_PROTO_MAX);
 };
 
 static inline struct dsa_port *dsa_to_port(struct dsa_switch *ds, int p)
