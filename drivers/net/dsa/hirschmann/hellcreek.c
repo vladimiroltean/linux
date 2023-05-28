@@ -1888,10 +1888,14 @@ static int hellcreek_port_setup_tc(struct dsa_switch *ds, int port,
 		if (!hellcreek_validate_schedule(hellcreek, taprio))
 			return -EOPNOTSUPP;
 
-		if (taprio->enable)
+		switch (taprio->cmd) {
+		case TAPRIO_CMD_REPLACE:
 			return hellcreek_port_set_schedule(ds, port, taprio);
-
-		return hellcreek_port_del_schedule(ds, port);
+		case TAPRIO_CMD_DESTROY:
+			return hellcreek_port_del_schedule(ds, port);
+		default:
+			return -EOPNOTSUPP;
+		}
 	}
 	default:
 		return -EOPNOTSUPP;
