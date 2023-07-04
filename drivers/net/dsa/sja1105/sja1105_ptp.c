@@ -58,15 +58,13 @@ enum sja1105_ptp_clk_mode {
 #define ptp_data_to_sja1105(d) \
 		container_of((d), struct sja1105_private, ptp_data)
 
-int sja1105_hwtstamp_set(struct dsa_switch *ds, int port, struct ifreq *ifr)
+int sja1105_hwtstamp_set(struct dsa_switch *ds, int port,
+			 struct kernel_hwtstamp_config *config,
+			 struct netlink_ext_ack *extack)
 {
 	struct sja1105_private *priv = ds->priv;
-	struct hwtstamp_config config;
 
-	if (copy_from_user(&config, ifr->ifr_data, sizeof(config)))
-		return -EFAULT;
-
-	switch (config.tx_type) {
+	switch (config->tx_type) {
 	case HWTSTAMP_TX_OFF:
 		priv->hwts_tx_en &= ~BIT(port);
 		break;
@@ -77,7 +75,7 @@ int sja1105_hwtstamp_set(struct dsa_switch *ds, int port, struct ifreq *ifr)
 		return -ERANGE;
 	}
 
-	switch (config.rx_filter) {
+	switch (config->rx_filter) {
 	case HWTSTAMP_FILTER_NONE:
 		priv->hwts_rx_en &= ~BIT(port);
 		break;
@@ -86,28 +84,25 @@ int sja1105_hwtstamp_set(struct dsa_switch *ds, int port, struct ifreq *ifr)
 		break;
 	}
 
-	if (copy_to_user(ifr->ifr_data, &config, sizeof(config)))
-		return -EFAULT;
 	return 0;
 }
 
-int sja1105_hwtstamp_get(struct dsa_switch *ds, int port, struct ifreq *ifr)
+int sja1105_hwtstamp_get(struct dsa_switch *ds, int port,
+			 struct kernel_hwtstamp_config *config)
 {
 	struct sja1105_private *priv = ds->priv;
-	struct hwtstamp_config config;
 
-	config.flags = 0;
+	config->flags = 0;
 	if (priv->hwts_tx_en & BIT(port))
-		config.tx_type = HWTSTAMP_TX_ON;
+		config->tx_type = HWTSTAMP_TX_ON;
 	else
-		config.tx_type = HWTSTAMP_TX_OFF;
+		config->tx_type = HWTSTAMP_TX_OFF;
 	if (priv->hwts_rx_en & BIT(port))
-		config.rx_filter = HWTSTAMP_FILTER_PTP_V2_L2_EVENT;
+		config->rx_filter = HWTSTAMP_FILTER_PTP_V2_L2_EVENT;
 	else
-		config.rx_filter = HWTSTAMP_FILTER_NONE;
+		config->rx_filter = HWTSTAMP_FILTER_NONE;
 
-	return copy_to_user(ifr->ifr_data, &config, sizeof(config)) ?
-		-EFAULT : 0;
+	return 0;
 }
 
 int sja1105_get_ts_info(struct dsa_switch *ds, int port,

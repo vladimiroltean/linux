@@ -495,41 +495,37 @@ static int ocelot_traps_to_ptp_rx_filter(unsigned int proto)
 	return HWTSTAMP_FILTER_NONE;
 }
 
-int ocelot_hwstamp_get(struct ocelot *ocelot, int port, struct ifreq *ifr)
+void ocelot_hwstamp_get(struct ocelot *ocelot, int port,
+			struct kernel_hwtstamp_config *cfg)
 {
 	struct ocelot_port *ocelot_port = ocelot->ports[port];
-	struct hwtstamp_config cfg = {};
 
 	switch (ocelot_port->ptp_cmd) {
 	case IFH_REW_OP_TWO_STEP_PTP:
-		cfg.tx_type = HWTSTAMP_TX_ON;
+		cfg->tx_type = HWTSTAMP_TX_ON;
 		break;
 	case IFH_REW_OP_ORIGIN_PTP:
-		cfg.tx_type = HWTSTAMP_TX_ONESTEP_SYNC;
+		cfg->tx_type = HWTSTAMP_TX_ONESTEP_SYNC;
 		break;
 	default:
-		cfg.tx_type = HWTSTAMP_TX_OFF;
+		cfg->tx_type = HWTSTAMP_TX_OFF;
 		break;
 	}
 
-	cfg.rx_filter = ocelot_traps_to_ptp_rx_filter(ocelot_port->trap_proto);
-
-	return copy_to_user(ifr->ifr_data, &cfg, sizeof(cfg)) ? -EFAULT : 0;
+	cfg->rx_filter = ocelot_traps_to_ptp_rx_filter(ocelot_port->trap_proto);
 }
 EXPORT_SYMBOL(ocelot_hwstamp_get);
 
-int ocelot_hwstamp_set(struct ocelot *ocelot, int port, struct ifreq *ifr)
+int ocelot_hwstamp_set(struct ocelot *ocelot, int port,
+		       struct kernel_hwtstamp_config *cfg,
+		       struct netlink_ext_ack *extack)
 {
 	struct ocelot_port *ocelot_port = ocelot->ports[port];
 	bool l2 = false, l4 = false;
-	struct hwtstamp_config cfg;
 	int err;
 
-	if (copy_from_user(&cfg, ifr->ifr_data, sizeof(cfg)))
-		return -EFAULT;
-
 	/* Tx type sanity check */
-	switch (cfg.tx_type) {
+	switch (cfg->tx_type) {
 	case HWTSTAMP_TX_ON:
 		ocelot_port->ptp_cmd = IFH_REW_OP_TWO_STEP_PTP;
 		break;
@@ -546,7 +542,7 @@ int ocelot_hwstamp_set(struct ocelot *ocelot, int port, struct ifreq *ifr)
 		return -ERANGE;
 	}
 
-	switch (cfg.rx_filter) {
+	switch (cfg->rx_filter) {
 	case HWTSTAMP_FILTER_NONE:
 		break;
 	case HWTSTAMP_FILTER_PTP_V2_L4_EVENT:
@@ -573,9 +569,9 @@ int ocelot_hwstamp_set(struct ocelot *ocelot, int port, struct ifreq *ifr)
 	if (err)
 		return err;
 
-	cfg.rx_filter = ocelot_traps_to_ptp_rx_filter(ocelot_port->trap_proto);
+	cfg->rx_filter = ocelot_traps_to_ptp_rx_filter(ocelot_port->trap_proto);
 
-	return copy_to_user(ifr->ifr_data, &cfg, sizeof(cfg)) ? -EFAULT : 0;
+	return 0;
 }
 EXPORT_SYMBOL(ocelot_hwstamp_set);
 
