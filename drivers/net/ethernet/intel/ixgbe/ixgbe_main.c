@@ -8967,10 +8967,6 @@ static int ixgbe_ioctl(struct net_device *netdev, struct ifreq *req, int cmd)
 	struct ixgbe_adapter *adapter = netdev_priv(netdev);
 
 	switch (cmd) {
-	case SIOCSHWTSTAMP:
-		return ixgbe_ptp_set_ts_config(adapter, req);
-	case SIOCGHWTSTAMP:
-		return ixgbe_ptp_get_ts_config(adapter, req);
 	case SIOCGMIIPHY:
 		if (!adapter->hw.phy.ops.read_reg)
 			return -EOPNOTSUPP;
@@ -10442,6 +10438,8 @@ static const struct net_device_ops ixgbe_netdev_ops = {
 	.ndo_bpf		= ixgbe_xdp,
 	.ndo_xdp_xmit		= ixgbe_xdp_xmit,
 	.ndo_xsk_wakeup         = ixgbe_xsk_wakeup,
+	.ndo_hwtstamp_get	= ixgbe_ptp_hwtstamp_get,
+	.ndo_hwtstamp_set	= ixgbe_ptp_hwtstamp_set,
 };
 
 static void ixgbe_disable_txr_hw(struct ixgbe_adapter *adapter,
