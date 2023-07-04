@@ -1082,14 +1082,14 @@ void mlxsw_sp1_ptp_fini(struct mlxsw_sp_ptp_state *ptp_state_common)
 }
 
 int mlxsw_sp1_ptp_hwtstamp_get(struct mlxsw_sp_port *mlxsw_sp_port,
-			       struct hwtstamp_config *config)
+			       struct kernel_hwtstamp_config *config)
 {
 	*config = mlxsw_sp_port->ptp.hwtstamp_config;
 	return 0;
 }
 
 static int
-mlxsw_sp1_ptp_get_message_types(const struct hwtstamp_config *config,
+mlxsw_sp1_ptp_get_message_types(const struct kernel_hwtstamp_config *config,
 				u16 *p_ing_types, u16 *p_egr_types,
 				enum hwtstamp_rx_filters *p_rx_filter)
 {
@@ -1245,7 +1245,8 @@ void mlxsw_sp1_ptp_shaper_work(struct work_struct *work)
 }
 
 int mlxsw_sp1_ptp_hwtstamp_set(struct mlxsw_sp_port *mlxsw_sp_port,
-			       struct hwtstamp_config *config)
+			       struct kernel_hwtstamp_config *config,
+			       struct netlink_ext_ack *extack)
 {
 	enum hwtstamp_rx_filters rx_filter;
 	u16 ing_types;
@@ -1446,7 +1447,7 @@ void mlxsw_sp2_ptp_transmitted(struct mlxsw_sp *mlxsw_sp,
 }
 
 int mlxsw_sp2_ptp_hwtstamp_get(struct mlxsw_sp_port *mlxsw_sp_port,
-			       struct hwtstamp_config *config)
+			       struct kernel_hwtstamp_config *config)
 {
 	struct mlxsw_sp2_ptp_state *ptp_state;
 
@@ -1460,7 +1461,7 @@ int mlxsw_sp2_ptp_hwtstamp_get(struct mlxsw_sp_port *mlxsw_sp_port,
 }
 
 static int
-mlxsw_sp2_ptp_get_message_types(const struct hwtstamp_config *config,
+mlxsw_sp2_ptp_get_message_types(const struct kernel_hwtstamp_config *config,
 				u16 *p_ing_types, u16 *p_egr_types,
 				enum hwtstamp_rx_filters *p_rx_filter)
 {
@@ -1537,7 +1538,7 @@ static int mlxsw_sp2_ptp_mtpcpc_set(struct mlxsw_sp *mlxsw_sp, bool ptp_trap_en,
 
 static int mlxsw_sp2_ptp_enable(struct mlxsw_sp *mlxsw_sp, u16 ing_types,
 				u16 egr_types,
-				struct hwtstamp_config new_config)
+				struct kernel_hwtstamp_config new_config)
 {
 	struct mlxsw_sp2_ptp_state *ptp_state = mlxsw_sp2_ptp_state(mlxsw_sp);
 	int err;
@@ -1551,7 +1552,7 @@ static int mlxsw_sp2_ptp_enable(struct mlxsw_sp *mlxsw_sp, u16 ing_types,
 }
 
 static int mlxsw_sp2_ptp_disable(struct mlxsw_sp *mlxsw_sp,
-				 struct hwtstamp_config new_config)
+				 struct kernel_hwtstamp_config new_config)
 {
 	struct mlxsw_sp2_ptp_state *ptp_state = mlxsw_sp2_ptp_state(mlxsw_sp);
 	int err;
@@ -1566,7 +1567,7 @@ static int mlxsw_sp2_ptp_disable(struct mlxsw_sp *mlxsw_sp,
 
 static int mlxsw_sp2_ptp_configure_port(struct mlxsw_sp_port *mlxsw_sp_port,
 					u16 ing_types, u16 egr_types,
-					struct hwtstamp_config new_config)
+					struct kernel_hwtstamp_config new_config)
 {
 	struct mlxsw_sp2_ptp_state *ptp_state;
 	int err;
@@ -1587,7 +1588,7 @@ static int mlxsw_sp2_ptp_configure_port(struct mlxsw_sp_port *mlxsw_sp_port,
 }
 
 static int mlxsw_sp2_ptp_deconfigure_port(struct mlxsw_sp_port *mlxsw_sp_port,
-					  struct hwtstamp_config new_config)
+					  struct kernel_hwtstamp_config new_config)
 {
 	struct mlxsw_sp2_ptp_state *ptp_state;
 	int err;
@@ -1609,11 +1610,11 @@ err_ptp_disable:
 }
 
 int mlxsw_sp2_ptp_hwtstamp_set(struct mlxsw_sp_port *mlxsw_sp_port,
-			       struct hwtstamp_config *config)
+			       struct kernel_hwtstamp_config *config)
 {
+	struct kernel_hwtstamp_config new_config;
 	struct mlxsw_sp2_ptp_state *ptp_state;
 	enum hwtstamp_rx_filters rx_filter;
-	struct hwtstamp_config new_config;
 	u16 new_ing_types, new_egr_types;
 	bool ptp_enabled;
 	int err;
