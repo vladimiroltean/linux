@@ -2064,8 +2064,7 @@ static int tsnep_netdev_ioctl(struct net_device *netdev, struct ifreq *ifr,
 {
 	if (!netif_running(netdev))
 		return -EINVAL;
-	if (cmd == SIOCSHWTSTAMP || cmd == SIOCGHWTSTAMP)
-		return tsnep_ptp_ioctl(netdev, ifr, cmd);
+
 	return phy_mii_ioctl(netdev->phydev, ifr, cmd);
 }
 
@@ -2285,6 +2284,8 @@ static const struct net_device_ops tsnep_netdev_ops = {
 	.ndo_bpf = tsnep_netdev_bpf,
 	.ndo_xdp_xmit = tsnep_netdev_xdp_xmit,
 	.ndo_xsk_wakeup = tsnep_netdev_xsk_wakeup,
+	.ndo_hwtstamp_get = tsnep_hwtstamp_get,
+	.ndo_hwtstamp_set = tsnep_hwtstamp_set,
 };
 
 static int tsnep_mac_init(struct tsnep_adapter *adapter)
