@@ -434,6 +434,21 @@ int enetc_setup_bpf(struct net_device *ndev, struct netdev_bpf *bpf);
 int enetc_xdp_xmit(struct net_device *ndev, int num_frames,
 		   struct xdp_frame **frames, u32 flags);
 
+#if IS_ENABLED(CONFIG_FSL_ENETC_PTP_CLOCK)
+
+int enetc_hwtstamp_get(struct net_device *ndev,
+		       struct kernel_hwtstamp_config *config);
+int enetc_hwtstamp_set(struct net_device *ndev,
+		       struct kernel_hwtstamp_config *config,
+		       struct netlink_ext_ack *extack);
+
+#else
+
+#define enetc_hwtstamp_get(ndev, config)		(NULL)
+#define enetc_hwtstamp_set(ndev, config, extack)	(NULL)
+
+#endif
+
 /* ethtool */
 void enetc_set_ethtool_ops(struct net_device *ndev);
 void enetc_mm_link_state_update(struct enetc_ndev_priv *priv, bool link);
