@@ -3196,7 +3196,6 @@ static const struct ethtool_ops fec_enet_ethtool_ops = {
 
 static int fec_enet_ioctl(struct net_device *ndev, struct ifreq *rq, int cmd)
 {
-	struct fec_enet_private *fep = netdev_priv(ndev);
 	struct phy_device *phydev = ndev->phydev;
 
 	if (!netif_running(ndev))
@@ -3204,19 +3203,6 @@ static int fec_enet_ioctl(struct net_device *ndev, struct ifreq *rq, int cmd)
 
 	if (!phydev)
 		return -ENODEV;
-
-	if (fep->bufdesc_ex) {
-		bool use_fec_hwts = !phy_has_hwtstamp(phydev);
-
-		if (cmd == SIOCSHWTSTAMP) {
-			if (use_fec_hwts)
-				return fec_ptp_set(ndev, rq);
-			fec_ptp_disable_hwts(ndev);
-		} else if (cmd == SIOCGHWTSTAMP) {
-			if (use_fec_hwts)
-				return fec_ptp_get(ndev, rq);
-		}
-	}
 
 	return phy_mii_ioctl(phydev, rq, cmd);
 }
@@ -3868,6 +3854,42 @@ static int fec_enet_xdp_xmit(struct net_device *dev,
 	return sent_frames;
 }
 
+static int fec_hwtstamp_get(struct net_device *ndev,
+			    struct kernel_hwtstamp_config *config)
+{
+	struct fec_enet_private *fep = netdev_priv(ndev);
+	struct phy_device *phydev = ndev->phydev;
+
+	if (phy_has_hwtstamp(phydev))
+		return phy_mii_ioctl(phydev, config->ifr, SIOCGHWTSTAMP);
+
+	if (!fep->bufdesc_ex)
+		return -EOPNOTSUPP;
+
+	fec_ptp_get(ndev, config);
+
+	return 0;
+}
+
+static int fec_hwtstamp_set(struct net_device *ndev,
+			    struct kernel_hwtstamp_config *config,
+			    struct netlink_ext_ack *extack)
+{
+	struct fec_enet_private *fep = netdev_priv(ndev);
+	struct phy_device *phydev = ndev->phydev;
+
+	if (phy_has_hwtstamp(phydev)) {
+		fec_ptp_disable_hwts(ndev);
+
+		return phy_mii_ioctl(phydev, config->ifr, SIOCSHWTSTAMP);
+	}
+
+	if (!fep->bufdesc_ex)
+		return -EOPNOTSUPP;
+
+	return fec_ptp_set(ndev, config, extack);
+}
+
 static const struct net_device_ops fec_netdev_ops = {
 	.ndo_open		= fec_enet_open,
 	.ndo_stop		= fec_enet_close,
@@ -3884,6 +3906,8 @@ static const struct net_device_ops fec_netdev_ops = {
 	.ndo_set_features	= fec_set_features,
 	.ndo_bpf		= fec_enet_bpf,
 	.ndo_xdp_xmit		= fec_enet_xdp_xmit,
+	.ndo_hwtstamp_get	= fec_hwtstamp_get,
+	.ndo_hwtstamp_set	= fec_hwtstamp_set,
 };
 
 static const unsigned short offset_des_active_rxq[] = {
