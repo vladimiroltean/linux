@@ -1,0 +1,20 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Copyright 2024 NXP
+ */
+/dts-v1/;
+/plugin/;
+
+&dpmac13 {
+	phys = <&serdes_2_lane_g>;
+	phy-names = "serdes";
+	managed = "c73";
+};
+
+&pcs_mdio13 {
+	status = "okay";
+};
+
+&serdes_2 {
+	status = "okay";
+};
