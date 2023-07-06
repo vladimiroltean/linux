@@ -72,6 +72,23 @@ DTC_FLAGS_fsl-lx2162a-clearfog := -Wno-interrupt_map
 dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-lx2162a-clearfog.dtb
 DTC_FLAGS_fsl-lx2162a-qds := -Wno-interrupt_map
 dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-lx2162a-qds.dtb
+fsl-lx2160a-qds-backplane-dtbs := \
+	fsl-lx2160a-qds.dtb \
+	fsl-lx2160a-sd1-19-lane-d-c-b-a-backplane.dtbo \
+	fsl-lx2160a-sd1-19-lane-e-backplane.dtbo \
+	fsl-lx2160a-sd1-19-lane-f-backplane.dtbo \
+	fsl-lx2160a-sd1-19-lane-g-backplane.dtbo \
+	fsl-lx2160a-sd1-19-lane-h-backplane.dtbo \
+	fsl-lx2160a-sd2-9-lane-a-backplane.dtbo \
+	fsl-lx2160a-sd2-9-lane-b-backplane.dtbo \
+	fsl-lx2160a-sd2-9-lane-c-backplane.dtbo \
+	fsl-lx2160a-sd2-9-lane-d-backplane.dtbo \
+	fsl-lx2160a-sd2-9-lane-e-backplane.dtbo \
+	fsl-lx2160a-sd2-9-lane-f-backplane.dtbo \
+	fsl-lx2160a-sd2-9-lane-g-backplane.dtbo \
+	fsl-lx2160a-sd2-9-lane-h-backplane.dtbo
+DTC_FLAGS_fsl-lx2160a-qds-backplane := -Wno-interrupt_map
+dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-lx2160a-qds-backplane.dtb
 
 fsl-ls1028a-qds-13bb-dtbs := fsl-ls1028a-qds.dtb fsl-ls1028a-qds-13bb.dtbo
 fsl-ls1028a-qds-65bb-dtbs := fsl-ls1028a-qds.dtb fsl-ls1028a-qds-65bb.dtbo
