@@ -19,7 +19,7 @@ fman@1a00000 {
 		reg = <0xac000 0x1000>;
 	};
 
-	ethernet@e8000 {
+	mac5: ethernet@e8000 {
 		cell-index = <4>;
 		compatible = "fsl,fman-memac";
 		reg = <0xe8000 0x1000>;
