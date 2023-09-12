@@ -33,35 +33,20 @@ static struct sk_buff *vsc73xx_xmit(struct sk_buff *skb, struct net_device *netd
 			      ((pcp << VLAN_PRIO_SHIFT) | tx_vid));
 }
 
-static void vsc73xx_vlan_rcv(struct sk_buff *skb, int *source_port,
-			     int *switch_id, int *vbid, u16 *vid)
-{
-	if (vid_is_dsa_8021q(skb_vlan_tag_get(skb) & VLAN_VID_MASK))
-		return dsa_8021q_rcv(skb, source_port, switch_id, vbid);
-
-	/* Try our best with imprecise RX */
-	*vid = skb_vlan_tag_get(skb) & VLAN_VID_MASK;
-}
-
 static struct sk_buff *vsc73xx_rcv(struct sk_buff *skb, struct net_device *netdev)
 {
-	int src_port = -1, switch_id = -1, vbid = -1;
-	u16 vid;
+	int src_port = -1, switch_id = -1, vbid = -1, vid = -1;
 
 	if (skb_vlan_tag_present(skb)) {
 		/* Normal traffic path. */
-		vsc73xx_vlan_rcv(skb, &src_port, &switch_id, &vbid, &vid);
+		dsa_8021q_rcv(skb, &src_port, &switch_id, &vbid, &vid);
 	} else {
 		netdev_warn(netdev, "Couldn't decode source port\n");
 		return NULL;
 	}
 
-	if (vbid >= 1)
-		skb->dev = dsa_tag_8021q_find_port_by_vbid(netdev, vbid);
-	else if (src_port == -1 || switch_id == -1)
-		skb->dev = dsa_find_designated_bridge_port_by_vid(netdev, vid);
-	else
-		skb->dev = dsa_master_find_slave(netdev, switch_id, src_port);
+	skb->dev = dsa_tag_8021q_find_slave(netdev, src_port, switch_id,
+					    vid, vbid);
 	if (!skb->dev) {
 		netdev_warn(netdev, "Couldn't decode source port\n");
 		return NULL;
