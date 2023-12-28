@@ -323,14 +323,6 @@ enum sja1110_shaper_type {
 };
 
 u8 sja1105et_fdb_hash(struct sja1105_private *priv, const u8 *addr, u16 vid);
-int sja1105et_fdb_add(struct dsa_switch *ds, int port,
-		      const unsigned char *addr, u16 vid);
-int sja1105et_fdb_del(struct dsa_switch *ds, int port,
-		      const unsigned char *addr, u16 vid);
-int sja1105pqrs_fdb_add(struct dsa_switch *ds, int port,
-			const unsigned char *addr, u16 vid);
-int sja1105pqrs_fdb_del(struct dsa_switch *ds, int port,
-			const unsigned char *addr, u16 vid);
 
 /* From sja1105_flower.c */
 int sja1105_cls_flower_del(struct dsa_switch *ds, int port,

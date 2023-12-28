@@ -100,15 +100,8 @@ int sja1105_xfer_u64(const struct sja1105_private *priv,
 		     sja1105_spi_rw_mode_t rw, u64 reg_addr, u64 *value,
 		     struct ptp_system_timestamp *ptp_sts);
 
-extern const struct sja1105_info sja1105e_info;
-extern const struct sja1105_info sja1105t_info;
-extern const struct sja1105_info sja1105p_info;
-extern const struct sja1105_info sja1105q_info;
-extern const struct sja1105_info sja1105r_info;
-extern const struct sja1105_info sja1105s_info;
-extern const struct sja1105_info sja1110a_info;
-extern const struct sja1105_info sja1110b_info;
-extern const struct sja1105_info sja1110c_info;
-extern const struct sja1105_info sja1110d_info;
+extern const struct sja1105_regs sja1105et_regs;
+extern const struct sja1105_regs sja1105pqrs_regs;
+extern const struct sja1105_regs sja1110_regs;
 
 #endif
