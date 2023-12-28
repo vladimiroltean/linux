@@ -60,6 +60,40 @@ static int sja1105_hw_reset(struct device *dev, unsigned int pulse_len,
 	return 0;
 }
 
+static int sja1105et_reset_cmd(struct dsa_switch *ds)
+{
+	struct sja1105_private *priv = ds->priv;
+	const struct sja1105_regs *regs = priv->info->regs;
+	u32 cold_reset = BIT(3);
+
+	/* Cold reset */
+	return sja1105_xfer_u32(priv, SPI_WRITE, regs->rgu, &cold_reset, NULL);
+}
+
+static int sja1105pqrs_reset_cmd(struct dsa_switch *ds)
+{
+	struct sja1105_private *priv = ds->priv;
+	const struct sja1105_regs *regs = priv->info->regs;
+	u32 cold_reset = BIT(2);
+
+	/* Cold reset */
+	return sja1105_xfer_u32(priv, SPI_WRITE, regs->rgu, &cold_reset, NULL);
+}
+
+static int sja1110_reset_cmd(struct dsa_switch *ds)
+{
+	struct sja1105_private *priv = ds->priv;
+	const struct sja1105_regs *regs = priv->info->regs;
+	u32 switch_reset = BIT(20);
+
+	/* Only reset the switch core.
+	 * A full cold reset would re-enable the BASE_MCSS_CLOCK PLL which
+	 * would turn on the microcontroller, potentially letting it execute
+	 * code which could interfere with our configuration.
+	 */
+	return sja1105_xfer_u32(priv, SPI_WRITE, regs->rgu, &switch_reset, NULL);
+}
+
 static void
 sja1105_port_allow_traffic(struct sja1105_l2_forwarding_entry *l2_fwd,
 			   int from, int to, bool allow)
@@ -1748,8 +1782,8 @@ static int sja1105et_is_fdb_entry_in_bin(struct sja1105_private *priv, int bin,
 	return -1;
 }
 
-int sja1105et_fdb_add(struct dsa_switch *ds, int port,
-		      const unsigned char *addr, u16 vid)
+static int sja1105et_fdb_add(struct dsa_switch *ds, int port,
+			     const unsigned char *addr, u16 vid)
 {
 	struct sja1105_l2_lookup_entry l2_lookup = {0}, tmp;
 	struct sja1105_private *priv = ds->priv;
@@ -1833,8 +1867,8 @@ int sja1105et_fdb_add(struct dsa_switch *ds, int port,
 	return sja1105_static_fdb_change(priv, port, &l2_lookup, true);
 }
 
-int sja1105et_fdb_del(struct dsa_switch *ds, int port,
-		      const unsigned char *addr, u16 vid)
+static int sja1105et_fdb_del(struct dsa_switch *ds, int port,
+			     const unsigned char *addr, u16 vid)
 {
 	struct sja1105_l2_lookup_entry l2_lookup = {0};
 	struct sja1105_private *priv = ds->priv;
@@ -1868,8 +1902,8 @@ int sja1105et_fdb_del(struct dsa_switch *ds, int port,
 	return sja1105_static_fdb_change(priv, port, &l2_lookup, keep);
 }
 
-int sja1105pqrs_fdb_add(struct dsa_switch *ds, int port,
-			const unsigned char *addr, u16 vid)
+static int sja1105pqrs_fdb_add(struct dsa_switch *ds, int port,
+			       const unsigned char *addr, u16 vid)
 {
 	struct sja1105_l2_lookup_entry l2_lookup = {0}, tmp;
 	struct sja1105_private *priv = ds->priv;
@@ -1959,8 +1993,8 @@ skip_finding_an_index:
 	return sja1105_static_fdb_change(priv, port, &l2_lookup, true);
 }
 
-int sja1105pqrs_fdb_del(struct dsa_switch *ds, int port,
-			const unsigned char *addr, u16 vid)
+static int sja1105pqrs_fdb_del(struct dsa_switch *ds, int port,
+			       const unsigned char *addr, u16 vid)
 {
 	struct sja1105_l2_lookup_entry l2_lookup = {0};
 	struct sja1105_private *priv = ds->priv;
@@ -3445,6 +3479,412 @@ static const struct dsa_switch_ops sja1105_switch_ops = {
 	.tag_8021q_vlan_add	= sja1105_dsa_8021q_vlan_add,
 	.tag_8021q_vlan_del	= sja1105_dsa_8021q_vlan_del,
 	.port_prechangeupper	= sja1105_prechangeupper,
+};
+
+static const struct sja1105_info sja1105e_info = {
+	.device_id		= SJA1105E_DEVICE_ID,
+	.part_no		= SJA1105ET_PART_NO,
+	.static_ops		= sja1105e_table_ops,
+	.dyn_ops		= sja1105et_dyn_ops,
+	.tag_proto		= DSA_TAG_PROTO_SJA1105,
+	.can_limit_mcast_flood	= false,
+	.ptp_ts_bits		= 24,
+	.ptpegr_ts_bytes	= 4,
+	.max_frame_mem		= SJA1105_MAX_FRAME_MEMORY,
+	.num_ports		= SJA1105_NUM_PORTS,
+	.num_cbs_shapers	= SJA1105ET_MAX_CBS_COUNT,
+	.reset_cmd		= sja1105et_reset_cmd,
+	.fdb_add_cmd		= sja1105et_fdb_add,
+	.fdb_del_cmd		= sja1105et_fdb_del,
+	.ptp_cmd_packing	= sja1105et_ptp_cmd_packing,
+	.rxtstamp		= sja1105_rxtstamp,
+	.clocking_setup		= sja1105_clocking_setup,
+	.regs			= &sja1105et_regs,
+	.port_speed		= {
+		[SJA1105_SPEED_AUTO] = 0,
+		[SJA1105_SPEED_10MBPS] = 3,
+		[SJA1105_SPEED_100MBPS] = 2,
+		[SJA1105_SPEED_1000MBPS] = 1,
+		[SJA1105_SPEED_2500MBPS] = 0, /* Not supported */
+	},
+	.supports_mii		= {true, true, true, true, true},
+	.supports_rmii		= {true, true, true, true, true},
+	.supports_rgmii		= {true, true, true, true, true},
+	.name			= "SJA1105E",
+};
+
+static const struct sja1105_info sja1105t_info = {
+	.device_id		= SJA1105T_DEVICE_ID,
+	.part_no		= SJA1105ET_PART_NO,
+	.static_ops		= sja1105t_table_ops,
+	.dyn_ops		= sja1105et_dyn_ops,
+	.tag_proto		= DSA_TAG_PROTO_SJA1105,
+	.can_limit_mcast_flood	= false,
+	.ptp_ts_bits		= 24,
+	.ptpegr_ts_bytes	= 4,
+	.max_frame_mem		= SJA1105_MAX_FRAME_MEMORY,
+	.num_ports		= SJA1105_NUM_PORTS,
+	.num_cbs_shapers	= SJA1105ET_MAX_CBS_COUNT,
+	.reset_cmd		= sja1105et_reset_cmd,
+	.fdb_add_cmd		= sja1105et_fdb_add,
+	.fdb_del_cmd		= sja1105et_fdb_del,
+	.ptp_cmd_packing	= sja1105et_ptp_cmd_packing,
+	.rxtstamp		= sja1105_rxtstamp,
+	.clocking_setup		= sja1105_clocking_setup,
+	.regs			= &sja1105et_regs,
+	.port_speed		= {
+		[SJA1105_SPEED_AUTO] = 0,
+		[SJA1105_SPEED_10MBPS] = 3,
+		[SJA1105_SPEED_100MBPS] = 2,
+		[SJA1105_SPEED_1000MBPS] = 1,
+		[SJA1105_SPEED_2500MBPS] = 0, /* Not supported */
+	},
+	.supports_mii		= {true, true, true, true, true},
+	.supports_rmii		= {true, true, true, true, true},
+	.supports_rgmii		= {true, true, true, true, true},
+	.name			= "SJA1105T",
+};
+
+static const struct sja1105_info sja1105p_info = {
+	.device_id		= SJA1105PR_DEVICE_ID,
+	.part_no		= SJA1105P_PART_NO,
+	.static_ops		= sja1105p_table_ops,
+	.dyn_ops		= sja1105pqrs_dyn_ops,
+	.tag_proto		= DSA_TAG_PROTO_SJA1105,
+	.can_limit_mcast_flood	= true,
+	.ptp_ts_bits		= 32,
+	.ptpegr_ts_bytes	= 8,
+	.max_frame_mem		= SJA1105_MAX_FRAME_MEMORY,
+	.num_ports		= SJA1105_NUM_PORTS,
+	.num_cbs_shapers	= SJA1105PQRS_MAX_CBS_COUNT,
+	.setup_rgmii_delay	= sja1105pqrs_setup_rgmii_delay,
+	.reset_cmd		= sja1105pqrs_reset_cmd,
+	.fdb_add_cmd		= sja1105pqrs_fdb_add,
+	.fdb_del_cmd		= sja1105pqrs_fdb_del,
+	.ptp_cmd_packing	= sja1105pqrs_ptp_cmd_packing,
+	.rxtstamp		= sja1105_rxtstamp,
+	.clocking_setup		= sja1105_clocking_setup,
+	.regs			= &sja1105pqrs_regs,
+	.port_speed		= {
+		[SJA1105_SPEED_AUTO] = 0,
+		[SJA1105_SPEED_10MBPS] = 3,
+		[SJA1105_SPEED_100MBPS] = 2,
+		[SJA1105_SPEED_1000MBPS] = 1,
+		[SJA1105_SPEED_2500MBPS] = 0, /* Not supported */
+	},
+	.supports_mii		= {true, true, true, true, true},
+	.supports_rmii		= {true, true, true, true, true},
+	.supports_rgmii		= {true, true, true, true, true},
+	.name			= "SJA1105P",
+};
+
+static const struct sja1105_info sja1105q_info = {
+	.device_id		= SJA1105QS_DEVICE_ID,
+	.part_no		= SJA1105Q_PART_NO,
+	.static_ops		= sja1105q_table_ops,
+	.dyn_ops		= sja1105pqrs_dyn_ops,
+	.tag_proto		= DSA_TAG_PROTO_SJA1105,
+	.can_limit_mcast_flood	= true,
+	.ptp_ts_bits		= 32,
+	.ptpegr_ts_bytes	= 8,
+	.max_frame_mem		= SJA1105_MAX_FRAME_MEMORY,
+	.num_ports		= SJA1105_NUM_PORTS,
+	.num_cbs_shapers	= SJA1105PQRS_MAX_CBS_COUNT,
+	.setup_rgmii_delay	= sja1105pqrs_setup_rgmii_delay,
+	.reset_cmd		= sja1105pqrs_reset_cmd,
+	.fdb_add_cmd		= sja1105pqrs_fdb_add,
+	.fdb_del_cmd		= sja1105pqrs_fdb_del,
+	.ptp_cmd_packing	= sja1105pqrs_ptp_cmd_packing,
+	.rxtstamp		= sja1105_rxtstamp,
+	.clocking_setup		= sja1105_clocking_setup,
+	.regs			= &sja1105pqrs_regs,
+	.port_speed		= {
+		[SJA1105_SPEED_AUTO] = 0,
+		[SJA1105_SPEED_10MBPS] = 3,
+		[SJA1105_SPEED_100MBPS] = 2,
+		[SJA1105_SPEED_1000MBPS] = 1,
+		[SJA1105_SPEED_2500MBPS] = 0, /* Not supported */
+	},
+	.supports_mii		= {true, true, true, true, true},
+	.supports_rmii		= {true, true, true, true, true},
+	.supports_rgmii		= {true, true, true, true, true},
+	.name			= "SJA1105Q",
+};
+
+static const struct sja1105_info sja1105r_info = {
+	.device_id		= SJA1105PR_DEVICE_ID,
+	.part_no		= SJA1105R_PART_NO,
+	.static_ops		= sja1105r_table_ops,
+	.dyn_ops		= sja1105pqrs_dyn_ops,
+	.tag_proto		= DSA_TAG_PROTO_SJA1105,
+	.can_limit_mcast_flood	= true,
+	.ptp_ts_bits		= 32,
+	.ptpegr_ts_bytes	= 8,
+	.max_frame_mem		= SJA1105_MAX_FRAME_MEMORY,
+	.num_ports		= SJA1105_NUM_PORTS,
+	.num_cbs_shapers	= SJA1105PQRS_MAX_CBS_COUNT,
+	.setup_rgmii_delay	= sja1105pqrs_setup_rgmii_delay,
+	.reset_cmd		= sja1105pqrs_reset_cmd,
+	.fdb_add_cmd		= sja1105pqrs_fdb_add,
+	.fdb_del_cmd		= sja1105pqrs_fdb_del,
+	.ptp_cmd_packing	= sja1105pqrs_ptp_cmd_packing,
+	.rxtstamp		= sja1105_rxtstamp,
+	.clocking_setup		= sja1105_clocking_setup,
+	.pcs_mdio_read_c45	= sja1105_pcs_mdio_read_c45,
+	.pcs_mdio_write_c45	= sja1105_pcs_mdio_write_c45,
+	.regs			= &sja1105pqrs_regs,
+	.port_speed		= {
+		[SJA1105_SPEED_AUTO] = 0,
+		[SJA1105_SPEED_10MBPS] = 3,
+		[SJA1105_SPEED_100MBPS] = 2,
+		[SJA1105_SPEED_1000MBPS] = 1,
+		[SJA1105_SPEED_2500MBPS] = 0, /* Not supported */
+	},
+	.supports_mii		= {true, true, true, true, true},
+	.supports_rmii		= {true, true, true, true, true},
+	.supports_rgmii		= {true, true, true, true, true},
+	.supports_sgmii		= {false, false, false, false, true},
+	.name			= "SJA1105R",
+};
+
+static const struct sja1105_info sja1105s_info = {
+	.device_id		= SJA1105QS_DEVICE_ID,
+	.part_no		= SJA1105S_PART_NO,
+	.static_ops		= sja1105s_table_ops,
+	.dyn_ops		= sja1105pqrs_dyn_ops,
+	.regs			= &sja1105pqrs_regs,
+	.tag_proto		= DSA_TAG_PROTO_SJA1105,
+	.can_limit_mcast_flood	= true,
+	.ptp_ts_bits		= 32,
+	.ptpegr_ts_bytes	= 8,
+	.max_frame_mem		= SJA1105_MAX_FRAME_MEMORY,
+	.num_ports		= SJA1105_NUM_PORTS,
+	.num_cbs_shapers	= SJA1105PQRS_MAX_CBS_COUNT,
+	.setup_rgmii_delay	= sja1105pqrs_setup_rgmii_delay,
+	.reset_cmd		= sja1105pqrs_reset_cmd,
+	.fdb_add_cmd		= sja1105pqrs_fdb_add,
+	.fdb_del_cmd		= sja1105pqrs_fdb_del,
+	.ptp_cmd_packing	= sja1105pqrs_ptp_cmd_packing,
+	.rxtstamp		= sja1105_rxtstamp,
+	.clocking_setup		= sja1105_clocking_setup,
+	.pcs_mdio_read_c45	= sja1105_pcs_mdio_read_c45,
+	.pcs_mdio_write_c45	= sja1105_pcs_mdio_write_c45,
+	.port_speed		= {
+		[SJA1105_SPEED_AUTO] = 0,
+		[SJA1105_SPEED_10MBPS] = 3,
+		[SJA1105_SPEED_100MBPS] = 2,
+		[SJA1105_SPEED_1000MBPS] = 1,
+		[SJA1105_SPEED_2500MBPS] = 0, /* Not supported */
+	},
+	.supports_mii		= {true, true, true, true, true},
+	.supports_rmii		= {true, true, true, true, true},
+	.supports_rgmii		= {true, true, true, true, true},
+	.supports_sgmii		= {false, false, false, false, true},
+	.name			= "SJA1105S",
+};
+
+static const struct sja1105_info sja1110a_info = {
+	.device_id		= SJA1110_DEVICE_ID,
+	.part_no		= SJA1110A_PART_NO,
+	.static_ops		= sja1110_table_ops,
+	.dyn_ops		= sja1110_dyn_ops,
+	.regs			= &sja1110_regs,
+	.tag_proto		= DSA_TAG_PROTO_SJA1110,
+	.can_limit_mcast_flood	= true,
+	.multiple_cascade_ports	= true,
+	.fixed_cbs_mapping	= true,
+	.ptp_ts_bits		= 32,
+	.ptpegr_ts_bytes	= 8,
+	.max_frame_mem		= SJA1110_MAX_FRAME_MEMORY,
+	.num_ports		= SJA1110_NUM_PORTS,
+	.num_cbs_shapers	= SJA1110_MAX_CBS_COUNT,
+	.setup_rgmii_delay	= sja1110_setup_rgmii_delay,
+	.reset_cmd		= sja1110_reset_cmd,
+	.fdb_add_cmd		= sja1105pqrs_fdb_add,
+	.fdb_del_cmd		= sja1105pqrs_fdb_del,
+	.ptp_cmd_packing	= sja1105pqrs_ptp_cmd_packing,
+	.rxtstamp		= sja1110_rxtstamp,
+	.txtstamp		= sja1110_txtstamp,
+	.disable_microcontroller = sja1110_disable_microcontroller,
+	.pcs_mdio_read_c45	= sja1110_pcs_mdio_read_c45,
+	.pcs_mdio_write_c45	= sja1110_pcs_mdio_write_c45,
+	.port_speed		= {
+		[SJA1105_SPEED_AUTO] = 0,
+		[SJA1105_SPEED_10MBPS] = 4,
+		[SJA1105_SPEED_100MBPS] = 3,
+		[SJA1105_SPEED_1000MBPS] = 2,
+		[SJA1105_SPEED_2500MBPS] = 1,
+	},
+	.supports_mii		= {true, true, true, true, false,
+				   true, true, true, true, true, true},
+	.supports_rmii		= {false, false, true, true, false,
+				   false, false, false, false, false, false},
+	.supports_rgmii		= {false, false, true, true, false,
+				   false, false, false, false, false, false},
+	.supports_sgmii		= {false, true, true, true, true,
+				   false, false, false, false, false, false},
+	.supports_2500basex	= {false, false, false, true, true,
+				   false, false, false, false, false, false},
+	.internal_phy		= {SJA1105_NO_PHY, SJA1105_PHY_BASE_TX,
+				   SJA1105_NO_PHY, SJA1105_NO_PHY,
+				   SJA1105_NO_PHY, SJA1105_PHY_BASE_T1,
+				   SJA1105_PHY_BASE_T1, SJA1105_PHY_BASE_T1,
+				   SJA1105_PHY_BASE_T1, SJA1105_PHY_BASE_T1,
+				   SJA1105_PHY_BASE_T1},
+	.name			= "SJA1110A",
+};
+
+static const struct sja1105_info sja1110b_info = {
+	.device_id		= SJA1110_DEVICE_ID,
+	.part_no		= SJA1110B_PART_NO,
+	.static_ops		= sja1110_table_ops,
+	.dyn_ops		= sja1110_dyn_ops,
+	.regs			= &sja1110_regs,
+	.tag_proto		= DSA_TAG_PROTO_SJA1110,
+	.can_limit_mcast_flood	= true,
+	.multiple_cascade_ports	= true,
+	.fixed_cbs_mapping	= true,
+	.ptp_ts_bits		= 32,
+	.ptpegr_ts_bytes	= 8,
+	.max_frame_mem		= SJA1110_MAX_FRAME_MEMORY,
+	.num_ports		= SJA1110_NUM_PORTS,
+	.num_cbs_shapers	= SJA1110_MAX_CBS_COUNT,
+	.setup_rgmii_delay	= sja1110_setup_rgmii_delay,
+	.reset_cmd		= sja1110_reset_cmd,
+	.fdb_add_cmd		= sja1105pqrs_fdb_add,
+	.fdb_del_cmd		= sja1105pqrs_fdb_del,
+	.ptp_cmd_packing	= sja1105pqrs_ptp_cmd_packing,
+	.rxtstamp		= sja1110_rxtstamp,
+	.txtstamp		= sja1110_txtstamp,
+	.disable_microcontroller = sja1110_disable_microcontroller,
+	.pcs_mdio_read_c45	= sja1110_pcs_mdio_read_c45,
+	.pcs_mdio_write_c45	= sja1110_pcs_mdio_write_c45,
+	.port_speed		= {
+		[SJA1105_SPEED_AUTO] = 0,
+		[SJA1105_SPEED_10MBPS] = 4,
+		[SJA1105_SPEED_100MBPS] = 3,
+		[SJA1105_SPEED_1000MBPS] = 2,
+		[SJA1105_SPEED_2500MBPS] = 1,
+	},
+	.supports_mii		= {true, true, true, true, false,
+				   true, true, true, true, true, false},
+	.supports_rmii		= {false, false, true, true, false,
+				   false, false, false, false, false, false},
+	.supports_rgmii		= {false, false, true, true, false,
+				   false, false, false, false, false, false},
+	.supports_sgmii		= {false, false, false, true, true,
+				   false, false, false, false, false, false},
+	.supports_2500basex	= {false, false, false, true, true,
+				   false, false, false, false, false, false},
+	.internal_phy		= {SJA1105_NO_PHY, SJA1105_PHY_BASE_TX,
+				   SJA1105_NO_PHY, SJA1105_NO_PHY,
+				   SJA1105_NO_PHY, SJA1105_PHY_BASE_T1,
+				   SJA1105_PHY_BASE_T1, SJA1105_PHY_BASE_T1,
+				   SJA1105_PHY_BASE_T1, SJA1105_PHY_BASE_T1,
+				   SJA1105_NO_PHY},
+	.name			= "SJA1110B",
+};
+
+static const struct sja1105_info sja1110c_info = {
+	.device_id		= SJA1110_DEVICE_ID,
+	.part_no		= SJA1110C_PART_NO,
+	.static_ops		= sja1110_table_ops,
+	.dyn_ops		= sja1110_dyn_ops,
+	.regs			= &sja1110_regs,
+	.tag_proto		= DSA_TAG_PROTO_SJA1110,
+	.can_limit_mcast_flood	= true,
+	.multiple_cascade_ports	= true,
+	.fixed_cbs_mapping	= true,
+	.ptp_ts_bits		= 32,
+	.ptpegr_ts_bytes	= 8,
+	.max_frame_mem		= SJA1110_MAX_FRAME_MEMORY,
+	.num_ports		= SJA1110_NUM_PORTS,
+	.num_cbs_shapers	= SJA1110_MAX_CBS_COUNT,
+	.setup_rgmii_delay	= sja1110_setup_rgmii_delay,
+	.reset_cmd		= sja1110_reset_cmd,
+	.fdb_add_cmd		= sja1105pqrs_fdb_add,
+	.fdb_del_cmd		= sja1105pqrs_fdb_del,
+	.ptp_cmd_packing	= sja1105pqrs_ptp_cmd_packing,
+	.rxtstamp		= sja1110_rxtstamp,
+	.txtstamp		= sja1110_txtstamp,
+	.disable_microcontroller = sja1110_disable_microcontroller,
+	.pcs_mdio_read_c45	= sja1110_pcs_mdio_read_c45,
+	.pcs_mdio_write_c45	= sja1110_pcs_mdio_write_c45,
+	.port_speed		= {
+		[SJA1105_SPEED_AUTO] = 0,
+		[SJA1105_SPEED_10MBPS] = 4,
+		[SJA1105_SPEED_100MBPS] = 3,
+		[SJA1105_SPEED_1000MBPS] = 2,
+		[SJA1105_SPEED_2500MBPS] = 1,
+	},
+	.supports_mii		= {true, true, true, true, false,
+				   true, true, true, false, false, false},
+	.supports_rmii		= {false, false, true, true, false,
+				   false, false, false, false, false, false},
+	.supports_rgmii		= {false, false, true, true, false,
+				   false, false, false, false, false, false},
+	.supports_sgmii		= {false, false, false, false, true,
+				   false, false, false, false, false, false},
+	.supports_2500basex	= {false, false, false, false, true,
+				   false, false, false, false, false, false},
+	.internal_phy		= {SJA1105_NO_PHY, SJA1105_PHY_BASE_TX,
+				   SJA1105_NO_PHY, SJA1105_NO_PHY,
+				   SJA1105_NO_PHY, SJA1105_PHY_BASE_T1,
+				   SJA1105_PHY_BASE_T1, SJA1105_PHY_BASE_T1,
+				   SJA1105_NO_PHY, SJA1105_NO_PHY,
+				   SJA1105_NO_PHY},
+	.name			= "SJA1110C",
+};
+
+static const struct sja1105_info sja1110d_info = {
+	.device_id		= SJA1110_DEVICE_ID,
+	.part_no		= SJA1110D_PART_NO,
+	.static_ops		= sja1110_table_ops,
+	.dyn_ops		= sja1110_dyn_ops,
+	.regs			= &sja1110_regs,
+	.tag_proto		= DSA_TAG_PROTO_SJA1110,
+	.can_limit_mcast_flood	= true,
+	.multiple_cascade_ports	= true,
+	.fixed_cbs_mapping	= true,
+	.ptp_ts_bits		= 32,
+	.ptpegr_ts_bytes	= 8,
+	.max_frame_mem		= SJA1110_MAX_FRAME_MEMORY,
+	.num_ports		= SJA1110_NUM_PORTS,
+	.num_cbs_shapers	= SJA1110_MAX_CBS_COUNT,
+	.setup_rgmii_delay	= sja1110_setup_rgmii_delay,
+	.reset_cmd		= sja1110_reset_cmd,
+	.fdb_add_cmd		= sja1105pqrs_fdb_add,
+	.fdb_del_cmd		= sja1105pqrs_fdb_del,
+	.ptp_cmd_packing	= sja1105pqrs_ptp_cmd_packing,
+	.rxtstamp		= sja1110_rxtstamp,
+	.txtstamp		= sja1110_txtstamp,
+	.disable_microcontroller = sja1110_disable_microcontroller,
+	.pcs_mdio_read_c45	= sja1110_pcs_mdio_read_c45,
+	.pcs_mdio_write_c45	= sja1110_pcs_mdio_write_c45,
+	.port_speed		= {
+		[SJA1105_SPEED_AUTO] = 0,
+		[SJA1105_SPEED_10MBPS] = 4,
+		[SJA1105_SPEED_100MBPS] = 3,
+		[SJA1105_SPEED_1000MBPS] = 2,
+		[SJA1105_SPEED_2500MBPS] = 1,
+	},
+	.supports_mii		= {true, false, true, false, false,
+				   true, true, true, false, false, false},
+	.supports_rmii		= {false, false, true, false, false,
+				   false, false, false, false, false, false},
+	.supports_rgmii		= {false, false, true, false, false,
+				   false, false, false, false, false, false},
+	.supports_sgmii		= {false, true, true, true, true,
+				   false, false, false, false, false, false},
+	.supports_2500basex     = {false, false, false, true, true,
+				   false, false, false, false, false, false},
+	.internal_phy		= {SJA1105_NO_PHY, SJA1105_NO_PHY,
+				   SJA1105_NO_PHY, SJA1105_NO_PHY,
+				   SJA1105_NO_PHY, SJA1105_PHY_BASE_T1,
+				   SJA1105_PHY_BASE_T1, SJA1105_PHY_BASE_T1,
+				   SJA1105_NO_PHY, SJA1105_NO_PHY,
+				   SJA1105_NO_PHY},
+	.name			= "SJA1110D",
 };
 
 static const struct of_device_id sja1105_dt_ids[];
