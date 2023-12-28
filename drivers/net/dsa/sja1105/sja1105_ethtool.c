@@ -542,14 +542,15 @@ static int sja1105_port_counter_read(struct sja1105_private *priv, int port,
 				     enum sja1105_counter_index idx, u64 *ctr)
 {
 	const struct sja1105_port_counter *c = &sja1105_port_counters[idx];
+	struct sja1105_soc *soc = priv->soc;
 	size_t size = c->is_64bit ? 8 : 4;
 	u8 buf[8] = {0};
 	u64 regs;
 	int rc;
 
-	regs = priv->regs->stats[c->area][port];
+	regs = soc->regs->stats[c->area][port];
 
-	rc = sja1105_xfer_buf(priv, SPI_READ, regs + c->offset, buf, size);
+	rc = sja1105_xfer_buf(soc, SPI_READ, regs + c->offset, buf, size);
 	if (rc)
 		return rc;
 

@@ -113,12 +113,12 @@ static void sja1105_cgu_idiv_packing(void *buf, struct sja1105_cgu_idiv *idiv,
 static int sja1105_cgu_idiv_config(struct sja1105_private *priv, int port,
 				   bool enabled, int factor)
 {
-	const struct sja1105_regs *regs = priv->regs;
+	struct sja1105_soc *soc = priv->soc;
 	struct device *dev = priv->ds->dev;
 	struct sja1105_cgu_idiv idiv;
 	u8 packed_buf[SJA1105_SIZE_CGU_CMD] = {0};
 
-	if (regs->cgu_idiv[port] == SJA1105_RSV_ADDR)
+	if (soc->regs->cgu_idiv[port] == SJA1105_RSV_ADDR)
 		return 0;
 
 	if (enabled && factor != 1 && factor != 10) {
@@ -133,7 +133,7 @@ static int sja1105_cgu_idiv_config(struct sja1105_private *priv, int port,
 	idiv.pd        = enabled ? 0 : 1; /* Power down? */
 	sja1105_cgu_idiv_packing(packed_buf, &idiv, PACK);
 
-	return sja1105_xfer_buf(priv, SPI_WRITE, regs->cgu_idiv[port],
+	return sja1105_xfer_buf(soc, SPI_WRITE, soc->regs->cgu_idiv[port],
 				packed_buf, SJA1105_SIZE_CGU_CMD);
 }
 
@@ -151,7 +151,6 @@ sja1105_cgu_mii_control_packing(void *buf, struct sja1105_cgu_mii_ctrl *cmd,
 static int sja1105_cgu_mii_tx_clk_config(struct sja1105_private *priv,
 					 int port, sja1105_mii_role_t role)
 {
-	const struct sja1105_regs *regs = priv->regs;
 	struct sja1105_cgu_mii_ctrl mii_tx_clk;
 	static const int mac_clk_sources[] = {
 		CLKSRC_MII0_TX_CLK,
@@ -168,9 +167,10 @@ static int sja1105_cgu_mii_tx_clk_config(struct sja1105_private *priv,
 		CLKSRC_IDIV4,
 	};
 	u8 packed_buf[SJA1105_SIZE_CGU_CMD] = {0};
+	struct sja1105_soc *soc = priv->soc;
 	int clksrc;
 
-	if (regs->mii_tx_clk[port] == SJA1105_RSV_ADDR)
+	if (soc->regs->mii_tx_clk[port] == SJA1105_RSV_ADDR)
 		return 0;
 
 	if (role == XMII_MAC)
@@ -184,16 +184,16 @@ static int sja1105_cgu_mii_tx_clk_config(struct sja1105_private *priv,
 	mii_tx_clk.pd        = 0;  /* Power Down off => enabled */
 	sja1105_cgu_mii_control_packing(packed_buf, &mii_tx_clk, PACK);
 
-	return sja1105_xfer_buf(priv, SPI_WRITE, regs->mii_tx_clk[port],
+	return sja1105_xfer_buf(soc, SPI_WRITE, soc->regs->mii_tx_clk[port],
 				packed_buf, SJA1105_SIZE_CGU_CMD);
 }
 
 static int
 sja1105_cgu_mii_rx_clk_config(struct sja1105_private *priv, int port)
 {
-	const struct sja1105_regs *regs = priv->regs;
 	struct sja1105_cgu_mii_ctrl mii_rx_clk;
 	u8 packed_buf[SJA1105_SIZE_CGU_CMD] = {0};
+	struct sja1105_soc *soc = priv->soc;
 	static const int clk_sources[] = {
 		CLKSRC_MII0_RX_CLK,
 		CLKSRC_MII1_RX_CLK,
@@ -202,7 +202,7 @@ sja1105_cgu_mii_rx_clk_config(struct sja1105_private *priv, int port)
 		CLKSRC_MII4_RX_CLK,
 	};
 
-	if (regs->mii_rx_clk[port] == SJA1105_RSV_ADDR)
+	if (soc->regs->mii_rx_clk[port] == SJA1105_RSV_ADDR)
 		return 0;
 
 	/* Payload for packed_buf */
@@ -211,16 +211,16 @@ sja1105_cgu_mii_rx_clk_config(struct sja1105_private *priv, int port)
 	mii_rx_clk.pd        = 0;  /* Power Down off => enabled */
 	sja1105_cgu_mii_control_packing(packed_buf, &mii_rx_clk, PACK);
 
-	return sja1105_xfer_buf(priv, SPI_WRITE, regs->mii_rx_clk[port],
+	return sja1105_xfer_buf(soc, SPI_WRITE, soc->regs->mii_rx_clk[port],
 				packed_buf, SJA1105_SIZE_CGU_CMD);
 }
 
 static int
 sja1105_cgu_mii_ext_tx_clk_config(struct sja1105_private *priv, int port)
 {
-	const struct sja1105_regs *regs = priv->regs;
 	struct sja1105_cgu_mii_ctrl mii_ext_tx_clk;
 	u8 packed_buf[SJA1105_SIZE_CGU_CMD] = {0};
+	struct sja1105_soc *soc = priv->soc;
 	static const int clk_sources[] = {
 		CLKSRC_IDIV0,
 		CLKSRC_IDIV1,
@@ -229,7 +229,7 @@ sja1105_cgu_mii_ext_tx_clk_config(struct sja1105_private *priv, int port)
 		CLKSRC_IDIV4,
 	};
 
-	if (regs->mii_ext_tx_clk[port] == SJA1105_RSV_ADDR)
+	if (soc->regs->mii_ext_tx_clk[port] == SJA1105_RSV_ADDR)
 		return 0;
 
 	/* Payload for packed_buf */
@@ -238,16 +238,16 @@ sja1105_cgu_mii_ext_tx_clk_config(struct sja1105_private *priv, int port)
 	mii_ext_tx_clk.pd        = 0; /* Power Down off => enabled */
 	sja1105_cgu_mii_control_packing(packed_buf, &mii_ext_tx_clk, PACK);
 
-	return sja1105_xfer_buf(priv, SPI_WRITE, regs->mii_ext_tx_clk[port],
+	return sja1105_xfer_buf(soc, SPI_WRITE, soc->regs->mii_ext_tx_clk[port],
 				packed_buf, SJA1105_SIZE_CGU_CMD);
 }
 
 static int
 sja1105_cgu_mii_ext_rx_clk_config(struct sja1105_private *priv, int port)
 {
-	const struct sja1105_regs *regs = priv->regs;
 	struct sja1105_cgu_mii_ctrl mii_ext_rx_clk;
 	u8 packed_buf[SJA1105_SIZE_CGU_CMD] = {0};
+	struct sja1105_soc *soc = priv->soc;
 	static const int clk_sources[] = {
 		CLKSRC_IDIV0,
 		CLKSRC_IDIV1,
@@ -256,7 +256,7 @@ sja1105_cgu_mii_ext_rx_clk_config(struct sja1105_private *priv, int port)
 		CLKSRC_IDIV4,
 	};
 
-	if (regs->mii_ext_rx_clk[port] == SJA1105_RSV_ADDR)
+	if (soc->regs->mii_ext_rx_clk[port] == SJA1105_RSV_ADDR)
 		return 0;
 
 	/* Payload for packed_buf */
@@ -265,7 +265,7 @@ sja1105_cgu_mii_ext_rx_clk_config(struct sja1105_private *priv, int port)
 	mii_ext_rx_clk.pd        = 0; /* Power Down off => enabled */
 	sja1105_cgu_mii_control_packing(packed_buf, &mii_ext_rx_clk, PACK);
 
-	return sja1105_xfer_buf(priv, SPI_WRITE, regs->mii_ext_rx_clk[port],
+	return sja1105_xfer_buf(soc, SPI_WRITE, soc->regs->mii_ext_rx_clk[port],
 				packed_buf, SJA1105_SIZE_CGU_CMD);
 }
 
@@ -338,12 +338,12 @@ sja1105_cgu_pll_control_packing(void *buf, struct sja1105_cgu_pll_ctrl *cmd,
 static int sja1105_cgu_rgmii_tx_clk_config(struct sja1105_private *priv,
 					   int port, u64 speed)
 {
-	const struct sja1105_regs *regs = priv->regs;
-	struct sja1105_cgu_mii_ctrl txc;
 	u8 packed_buf[SJA1105_SIZE_CGU_CMD] = {0};
+	struct sja1105_soc *soc = priv->soc;
+	struct sja1105_cgu_mii_ctrl txc;
 	int clksrc;
 
-	if (regs->rgmii_tx_clk[port] == SJA1105_RSV_ADDR)
+	if (soc->regs->rgmii_tx_clk[port] == SJA1105_RSV_ADDR)
 		return 0;
 
 	if (speed == priv->info->port_speed[SJA1105_SPEED_1000MBPS]) {
@@ -367,7 +367,7 @@ static int sja1105_cgu_rgmii_tx_clk_config(struct sja1105_private *priv,
 	txc.pd = 0;
 	sja1105_cgu_mii_control_packing(packed_buf, &txc, PACK);
 
-	return sja1105_xfer_buf(priv, SPI_WRITE, regs->rgmii_tx_clk[port],
+	return sja1105_xfer_buf(soc, SPI_WRITE, soc->regs->rgmii_tx_clk[port],
 				packed_buf, SJA1105_SIZE_CGU_CMD);
 }
 
@@ -395,11 +395,11 @@ sja1105_cfg_pad_mii_packing(void *buf, struct sja1105_cfg_pad_mii *cmd,
 static int sja1105_rgmii_cfg_pad_tx_config(struct sja1105_private *priv,
 					   int port)
 {
-	const struct sja1105_regs *regs = priv->regs;
 	struct sja1105_cfg_pad_mii pad_mii_tx = {0};
 	u8 packed_buf[SJA1105_SIZE_CGU_CMD] = {0};
+	struct sja1105_soc *soc = priv->soc;
 
-	if (regs->pad_mii_tx[port] == SJA1105_RSV_ADDR)
+	if (soc->regs->pad_mii_tx[port] == SJA1105_RSV_ADDR)
 		return 0;
 
 	/* Payload */
@@ -418,17 +418,17 @@ static int sja1105_rgmii_cfg_pad_tx_config(struct sja1105_private *priv,
 	pad_mii_tx.clk_ipud  = 2; /* TX_CLK input stage (default) */
 	sja1105_cfg_pad_mii_packing(packed_buf, &pad_mii_tx, PACK);
 
-	return sja1105_xfer_buf(priv, SPI_WRITE, regs->pad_mii_tx[port],
+	return sja1105_xfer_buf(soc, SPI_WRITE, soc->regs->pad_mii_tx[port],
 				packed_buf, SJA1105_SIZE_CGU_CMD);
 }
 
 static int sja1105_cfg_pad_rx_config(struct sja1105_private *priv, int port)
 {
-	const struct sja1105_regs *regs = priv->regs;
 	struct sja1105_cfg_pad_mii pad_mii_rx = {0};
 	u8 packed_buf[SJA1105_SIZE_CGU_CMD] = {0};
+	struct sja1105_soc *soc = priv->soc;
 
-	if (regs->pad_mii_rx[port] == SJA1105_RSV_ADDR)
+	if (soc->regs->pad_mii_rx[port] == SJA1105_RSV_ADDR)
 		return 0;
 
 	/* Payload */
@@ -454,7 +454,7 @@ static int sja1105_cfg_pad_rx_config(struct sja1105_private *priv, int port)
 				  /* plain input (default) */
 	sja1105_cfg_pad_mii_packing(packed_buf, &pad_mii_rx, PACK);
 
-	return sja1105_xfer_buf(priv, SPI_WRITE, regs->pad_mii_rx[port],
+	return sja1105_xfer_buf(soc, SPI_WRITE, soc->regs->pad_mii_rx[port],
 				packed_buf, SJA1105_SIZE_CGU_CMD);
 }
 
@@ -514,10 +514,10 @@ int sja1105pqrs_setup_rgmii_delay(const void *ctx, int port)
 {
 	const struct sja1105_private *priv = ctx;
 	struct sja1105_cfg_pad_mii_id pad_mii_id = {0};
-	const struct sja1105_regs *regs = priv->regs;
 	int rx_delay = priv->rgmii_rx_delay_ps[port];
 	int tx_delay = priv->rgmii_tx_delay_ps[port];
 	u8 packed_buf[SJA1105_SIZE_CGU_CMD] = {0};
+	struct sja1105_soc *soc = priv->soc;
 	int rc;
 
 	if (rx_delay)
@@ -532,7 +532,7 @@ int sja1105pqrs_setup_rgmii_delay(const void *ctx, int port)
 	pad_mii_id.txc_pd = 1;
 	sja1105_cfg_pad_mii_id_packing(packed_buf, &pad_mii_id, PACK);
 
-	rc = sja1105_xfer_buf(priv, SPI_WRITE, regs->pad_mii_id[port],
+	rc = sja1105_xfer_buf(soc, SPI_WRITE, soc->regs->pad_mii_id[port],
 			      packed_buf, SJA1105_SIZE_CGU_CMD);
 	if (rc < 0)
 		return rc;
@@ -548,7 +548,7 @@ int sja1105pqrs_setup_rgmii_delay(const void *ctx, int port)
 	}
 	sja1105_cfg_pad_mii_id_packing(packed_buf, &pad_mii_id, PACK);
 
-	return sja1105_xfer_buf(priv, SPI_WRITE, regs->pad_mii_id[port],
+	return sja1105_xfer_buf(soc, SPI_WRITE, soc->regs->pad_mii_id[port],
 				packed_buf, SJA1105_SIZE_CGU_CMD);
 }
 
@@ -556,10 +556,10 @@ int sja1110_setup_rgmii_delay(const void *ctx, int port)
 {
 	const struct sja1105_private *priv = ctx;
 	struct sja1105_cfg_pad_mii_id pad_mii_id = {0};
-	const struct sja1105_regs *regs = priv->regs;
 	int rx_delay = priv->rgmii_rx_delay_ps[port];
 	int tx_delay = priv->rgmii_tx_delay_ps[port];
 	u8 packed_buf[SJA1105_SIZE_CGU_CMD] = {0};
+	struct sja1105_soc *soc = priv->soc;
 
 	pad_mii_id.rxc_pd = 1;
 	pad_mii_id.txc_pd = 1;
@@ -579,7 +579,7 @@ int sja1110_setup_rgmii_delay(const void *ctx, int port)
 
 	sja1110_cfg_pad_mii_id_packing(packed_buf, &pad_mii_id, PACK);
 
-	return sja1105_xfer_buf(priv, SPI_WRITE, regs->pad_mii_id[port],
+	return sja1105_xfer_buf(soc, SPI_WRITE, soc->regs->pad_mii_id[port],
 				packed_buf, SJA1105_SIZE_CGU_CMD);
 }
 
@@ -640,9 +640,9 @@ static int sja1105_rgmii_clocking_setup(struct sja1105_private *priv, int port,
 static int sja1105_cgu_rmii_ref_clk_config(struct sja1105_private *priv,
 					   int port)
 {
-	const struct sja1105_regs *regs = priv->regs;
-	struct sja1105_cgu_mii_ctrl ref_clk;
 	u8 packed_buf[SJA1105_SIZE_CGU_CMD] = {0};
+	struct sja1105_soc *soc = priv->soc;
+	struct sja1105_cgu_mii_ctrl ref_clk;
 	static const int clk_sources[] = {
 		CLKSRC_MII0_TX_CLK,
 		CLKSRC_MII1_TX_CLK,
@@ -651,7 +651,7 @@ static int sja1105_cgu_rmii_ref_clk_config(struct sja1105_private *priv,
 		CLKSRC_MII4_TX_CLK,
 	};
 
-	if (regs->rmii_ref_clk[port] == SJA1105_RSV_ADDR)
+	if (soc->regs->rmii_ref_clk[port] == SJA1105_RSV_ADDR)
 		return 0;
 
 	/* Payload for packed_buf */
@@ -660,18 +660,18 @@ static int sja1105_cgu_rmii_ref_clk_config(struct sja1105_private *priv,
 	ref_clk.pd        = 0;      /* Power Down off => enabled */
 	sja1105_cgu_mii_control_packing(packed_buf, &ref_clk, PACK);
 
-	return sja1105_xfer_buf(priv, SPI_WRITE, regs->rmii_ref_clk[port],
+	return sja1105_xfer_buf(soc, SPI_WRITE, soc->regs->rmii_ref_clk[port],
 				packed_buf, SJA1105_SIZE_CGU_CMD);
 }
 
 static int
 sja1105_cgu_rmii_ext_tx_clk_config(struct sja1105_private *priv, int port)
 {
-	const struct sja1105_regs *regs = priv->regs;
-	struct sja1105_cgu_mii_ctrl ext_tx_clk;
 	u8 packed_buf[SJA1105_SIZE_CGU_CMD] = {0};
+	struct sja1105_cgu_mii_ctrl ext_tx_clk;
+	struct sja1105_soc *soc = priv->soc;
 
-	if (regs->rmii_ext_tx_clk[port] == SJA1105_RSV_ADDR)
+	if (soc->regs->rmii_ext_tx_clk[port] == SJA1105_RSV_ADDR)
 		return 0;
 
 	/* Payload for packed_buf */
@@ -680,19 +680,19 @@ sja1105_cgu_rmii_ext_tx_clk_config(struct sja1105_private *priv, int port)
 	ext_tx_clk.pd        = 0;   /* Power Down off => enabled */
 	sja1105_cgu_mii_control_packing(packed_buf, &ext_tx_clk, PACK);
 
-	return sja1105_xfer_buf(priv, SPI_WRITE, regs->rmii_ext_tx_clk[port],
+	return sja1105_xfer_buf(soc, SPI_WRITE, soc->regs->rmii_ext_tx_clk[port],
 				packed_buf, SJA1105_SIZE_CGU_CMD);
 }
 
 static int sja1105_cgu_rmii_pll_config(struct sja1105_private *priv)
 {
-	const struct sja1105_regs *regs = priv->regs;
 	u8 packed_buf[SJA1105_SIZE_CGU_CMD] = {0};
 	struct sja1105_cgu_pll_ctrl pll = {0};
+	struct sja1105_soc *soc = priv->soc;
 	struct device *dev = priv->ds->dev;
 	int rc;
 
-	if (regs->rmii_pll1 == SJA1105_RSV_ADDR)
+	if (soc->regs->rmii_pll1 == SJA1105_RSV_ADDR)
 		return 0;
 
 	/* PLL1 must be enabled and output 50 Mhz.
@@ -712,7 +712,7 @@ static int sja1105_cgu_rmii_pll_config(struct sja1105_private *priv)
 	pll.pd        = 0x1;
 
 	sja1105_cgu_pll_control_packing(packed_buf, &pll, PACK);
-	rc = sja1105_xfer_buf(priv, SPI_WRITE, regs->rmii_pll1, packed_buf,
+	rc = sja1105_xfer_buf(soc, SPI_WRITE, soc->regs->rmii_pll1, packed_buf,
 			      SJA1105_SIZE_CGU_CMD);
 	if (rc < 0) {
 		dev_err(dev, "failed to configure PLL1 for 50MHz\n");
@@ -723,7 +723,7 @@ static int sja1105_cgu_rmii_pll_config(struct sja1105_private *priv)
 	pll.pd = 0x0;
 
 	sja1105_cgu_pll_control_packing(packed_buf, &pll, PACK);
-	rc = sja1105_xfer_buf(priv, SPI_WRITE, regs->rmii_pll1, packed_buf,
+	rc = sja1105_xfer_buf(soc, SPI_WRITE, soc->regs->rmii_pll1, packed_buf,
 			      SJA1105_SIZE_CGU_CMD);
 	if (rc < 0) {
 		dev_err(dev, "failed to enable PLL1\n");
@@ -842,12 +842,13 @@ int sja1110_disable_microcontroller(struct sja1105_private *priv)
 		.clksrc = 0x5,
 		.pd = true,
 	};
+	struct sja1105_soc *soc = priv->soc;
 	int rc;
 
 	/* Power down the BASE_TIMER_CLK to disable the watchdog timer */
 	sja1110_cgu_outclk_packing(packed_buf, &outclk_7_c, PACK);
 
-	rc = sja1105_xfer_buf(priv, SPI_WRITE, SJA1110_BASE_TIMER_CLK,
+	rc = sja1105_xfer_buf(soc, SPI_WRITE, SJA1110_BASE_TIMER_CLK,
 			      packed_buf, SJA1105_SIZE_CGU_CMD);
 	if (rc)
 		return rc;
@@ -855,6 +856,6 @@ int sja1110_disable_microcontroller(struct sja1105_private *priv)
 	/* Power down the BASE_MCSS_CLOCK to gate the microcontroller off */
 	sja1110_cgu_outclk_packing(packed_buf, &outclk_6_c, PACK);
 
-	return sja1105_xfer_buf(priv, SPI_WRITE, SJA1110_BASE_MCSS_CLK,
+	return sja1105_xfer_buf(soc, SPI_WRITE, SJA1110_BASE_MCSS_CLK,
 				packed_buf, SJA1105_SIZE_CGU_CMD);
 }

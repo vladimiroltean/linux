@@ -1174,7 +1174,7 @@ const struct sja1105_dynamic_table_ops sja1110_dyn_ops[BLK_IDX_MAX_DYN] = {
 #define SJA1105_DYNAMIC_CONFIG_TIMEOUT_US	100000
 
 static int
-sja1105_dynamic_config_poll_valid(struct sja1105_private *priv,
+sja1105_dynamic_config_poll_valid(struct sja1105_soc *soc,
 				  const struct sja1105_dynamic_table_ops *ops,
 				  void *entry, bool check_valident,
 				  bool check_errors)
@@ -1184,7 +1184,7 @@ sja1105_dynamic_config_poll_valid(struct sja1105_private *priv,
 	int rc;
 
 	/* Read back the whole entry + command structure. */
-	rc = sja1105_xfer_buf(priv, SPI_READ, ops->addr, packed_buf,
+	rc = sja1105_xfer_buf(soc, SPI_READ, ops->addr, packed_buf,
 			      ops->packed_size);
 	if (rc)
 		return rc;
@@ -1218,7 +1218,7 @@ sja1105_dynamic_config_poll_valid(struct sja1105_private *priv,
  * finished processing the command.
  */
 static int
-sja1105_dynamic_config_wait_complete(struct sja1105_private *priv,
+sja1105_dynamic_config_wait_complete(struct sja1105_soc *soc,
 				     const struct sja1105_dynamic_table_ops *ops,
 				     void *entry, bool check_valident,
 				     bool check_errors)
@@ -1229,7 +1229,7 @@ sja1105_dynamic_config_wait_complete(struct sja1105_private *priv,
 				rc, rc != -EAGAIN,
 				SJA1105_DYNAMIC_CONFIG_SLEEP_US,
 				SJA1105_DYNAMIC_CONFIG_TIMEOUT_US,
-				false, priv, ops, entry, check_valident,
+				false, soc, ops, entry, check_valident,
 				check_errors);
 	return err < 0 ? err : rc;
 }
@@ -1257,6 +1257,7 @@ int sja1105_dynamic_config_read(struct sja1105_private *priv,
 				int index, void *entry)
 {
 	const struct sja1105_dynamic_table_ops *ops;
+	struct sja1105_soc *soc = priv->soc;
 	struct sja1105_dyn_cmd cmd = {0};
 	/* SPI payload buffer */
 	u8 packed_buf[SJA1105_MAX_DYN_CMD_SIZE] = {0};
@@ -1298,12 +1299,12 @@ int sja1105_dynamic_config_read(struct sja1105_private *priv,
 
 	/* Send SPI write operation: read config table entry */
 	mutex_lock(&priv->dynamic_config_lock);
-	rc = sja1105_xfer_buf(priv, SPI_WRITE, ops->addr, packed_buf,
+	rc = sja1105_xfer_buf(soc, SPI_WRITE, ops->addr, packed_buf,
 			      ops->packed_size);
 	if (rc < 0)
 		goto out;
 
-	rc = sja1105_dynamic_config_wait_complete(priv, ops, entry, true, false);
+	rc = sja1105_dynamic_config_wait_complete(soc, ops, entry, true, false);
 out:
 	mutex_unlock(&priv->dynamic_config_lock);
 
@@ -1315,6 +1316,7 @@ int sja1105_dynamic_config_write(struct sja1105_private *priv,
 				 int index, void *entry, bool keep)
 {
 	const struct sja1105_dynamic_table_ops *ops;
+	struct sja1105_soc *soc = priv->soc;
 	struct sja1105_dyn_cmd cmd = {0};
 	/* SPI payload buffer */
 	u8 packed_buf[SJA1105_MAX_DYN_CMD_SIZE] = {0};
@@ -1357,12 +1359,12 @@ int sja1105_dynamic_config_write(struct sja1105_private *priv,
 
 	/* Send SPI write operation: read config table entry */
 	mutex_lock(&priv->dynamic_config_lock);
-	rc = sja1105_xfer_buf(priv, SPI_WRITE, ops->addr, packed_buf,
+	rc = sja1105_xfer_buf(soc, SPI_WRITE, ops->addr, packed_buf,
 			      ops->packed_size);
 	if (rc < 0)
 		goto out;
 
-	rc = sja1105_dynamic_config_wait_complete(priv, ops, NULL, false, true);
+	rc = sja1105_dynamic_config_wait_complete(soc, ops, NULL, false, true);
 out:
 	mutex_unlock(&priv->dynamic_config_lock);
 

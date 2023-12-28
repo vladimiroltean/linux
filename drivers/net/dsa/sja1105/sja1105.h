@@ -169,10 +169,8 @@ struct sja1105_private {
 	unsigned long bcast_egress_floods;
 	unsigned long hwts_tx_en;
 	unsigned long hwts_rx_en;
+	struct sja1105_soc *soc;
 	const struct sja1105_info *info;
-	const struct sja1105_regs *regs;
-	size_t max_xfer_len;
-	struct spi_device *spidev;
 	struct dsa_switch *ds;
 	u16 bridge_pvid[SJA1105_MAX_NUM_PORTS];
 	u16 tag_8021q_pvid[SJA1105_MAX_NUM_PORTS];
