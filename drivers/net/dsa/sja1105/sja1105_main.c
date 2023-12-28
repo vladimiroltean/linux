@@ -35,55 +35,32 @@ struct sja1105_status {
 	u64 crcchkg;
 };
 
-/* Configure the optional reset pin and bring up switch */
-static int sja1105_hw_reset(struct device *dev, unsigned int pulse_len,
-			    unsigned int startup_delay)
-{
-	struct gpio_desc *gpio;
-
-	gpio = gpiod_get_optional(dev, "reset", GPIOD_OUT_HIGH);
-	if (IS_ERR(gpio))
-		return PTR_ERR(gpio);
-
-	if (!gpio)
-		return 0;
-
-	gpiod_set_value_cansleep(gpio, 1);
-	/* Wait for minimum reset pulse length */
-	msleep(pulse_len);
-	gpiod_set_value_cansleep(gpio, 0);
-	/* Wait until chip is ready after reset */
-	msleep(startup_delay);
-
-	gpiod_put(gpio);
-
-	return 0;
-}
-
 static int sja1105et_reset_cmd(struct dsa_switch *ds)
 {
 	struct sja1105_private *priv = ds->priv;
-	const struct sja1105_regs *regs = priv->regs;
+	struct sja1105_soc *soc = priv->soc;
 	u32 cold_reset = BIT(3);
 
 	/* Cold reset */
-	return sja1105_xfer_u32(priv, SPI_WRITE, regs->rgu, &cold_reset, NULL);
+	return sja1105_xfer_u32(soc, SPI_WRITE, soc->regs->rgu, &cold_reset,
+				NULL);
 }
 
 static int sja1105pqrs_reset_cmd(struct dsa_switch *ds)
 {
 	struct sja1105_private *priv = ds->priv;
-	const struct sja1105_regs *regs = priv->regs;
+	struct sja1105_soc *soc = priv->soc;
 	u32 cold_reset = BIT(2);
 
 	/* Cold reset */
-	return sja1105_xfer_u32(priv, SPI_WRITE, regs->rgu, &cold_reset, NULL);
+	return sja1105_xfer_u32(soc, SPI_WRITE, soc->regs->rgu, &cold_reset,
+				NULL);
 }
 
 static int sja1110_reset_cmd(struct dsa_switch *ds)
 {
 	struct sja1105_private *priv = ds->priv;
-	const struct sja1105_regs *regs = priv->regs;
+	struct sja1105_soc *soc = priv->soc;
 	u32 switch_reset = BIT(20);
 
 	/* Only reset the switch core.
@@ -91,7 +68,8 @@ static int sja1110_reset_cmd(struct dsa_switch *ds)
 	 * would turn on the microcontroller, potentially letting it execute
 	 * code which could interfere with our configuration.
 	 */
-	return sja1105_xfer_u32(priv, SPI_WRITE, regs->rgu, &switch_reset, NULL);
+	return sja1105_xfer_u32(soc, SPI_WRITE, soc->regs->rgu, &switch_reset,
+				NULL);
 }
 
 static void
@@ -289,8 +267,8 @@ static int sja1105_init_mac_settings(struct sja1105_private *priv)
 
 static int sja1105_init_mii_settings(struct sja1105_private *priv)
 {
-	struct device *dev = &priv->spidev->dev;
 	struct sja1105_xmii_params_entry *mii;
+	struct device *dev = priv->ds->dev;
 	struct dsa_switch *ds = priv->ds;
 	struct sja1105_table *table;
 	int i;
@@ -1103,11 +1081,11 @@ static int sja1105_init_l2_policing(struct sja1105_private *priv)
 static int sja1105_inhibit_tx(const struct sja1105_private *priv,
 			      unsigned long port_bitmap, bool tx_inhibited)
 {
-	const struct sja1105_regs *regs = priv->regs;
+	struct sja1105_soc *soc = priv->soc;
 	u32 inhibit_cmd;
 	int rc;
 
-	rc = sja1105_xfer_u32(priv, SPI_READ, regs->port_control,
+	rc = sja1105_xfer_u32(soc, SPI_READ, soc->regs->port_control,
 			      &inhibit_cmd, NULL);
 	if (rc < 0)
 		return rc;
@@ -1117,7 +1095,7 @@ static int sja1105_inhibit_tx(const struct sja1105_private *priv,
 	else
 		inhibit_cmd &= ~port_bitmap;
 
-	return sja1105_xfer_u32(priv, SPI_WRITE, regs->port_control,
+	return sja1105_xfer_u32(soc, SPI_WRITE, soc->regs->port_control,
 				&inhibit_cmd, NULL);
 }
 
@@ -1145,11 +1123,11 @@ static void sja1105_status_unpack(void *buf, struct sja1105_status *status)
 static int sja1105_status_get(struct sja1105_private *priv,
 			      struct sja1105_status *status)
 {
-	const struct sja1105_regs *regs = priv->regs;
+	struct sja1105_soc *soc = priv->soc;
 	u8 packed_buf[4];
 	int rc;
 
-	rc = sja1105_xfer_buf(priv, SPI_READ, regs->status, packed_buf, 4);
+	rc = sja1105_xfer_buf(soc, SPI_READ, soc->regs->status, packed_buf, 4);
 	if (rc < 0)
 		return rc;
 
@@ -1174,8 +1152,7 @@ int static_config_buf_prepare_for_upload(struct sja1105_private *priv,
 	valid = sja1105_static_config_check_valid(config,
 						  priv->info->max_frame_mem);
 	if (valid != SJA1105_CONFIG_OK) {
-		dev_err(&priv->spidev->dev,
-			sja1105_static_config_error_msg[valid]);
+		dev_err(priv->ds->dev, sja1105_static_config_error_msg[valid]);
 		return -EINVAL;
 	}
 
@@ -1201,8 +1178,8 @@ int static_config_buf_prepare_for_upload(struct sja1105_private *priv,
 static int sja1105_static_config_upload(struct sja1105_private *priv)
 {
 	struct sja1105_static_config *config = &priv->static_config;
-	const struct sja1105_regs *regs = priv->regs;
-	struct device *dev = &priv->spidev->dev;
+	struct sja1105_soc *soc = priv->soc;
+	struct device *dev = priv->ds->dev;
 	struct dsa_switch *ds = priv->ds;
 	struct sja1105_status status;
 	int rc, retries = RETRIES;
@@ -1245,7 +1222,7 @@ static int sja1105_static_config_upload(struct sja1105_private *priv)
 		/* Wait for the switch to come out of reset */
 		usleep_range(1000, 5000);
 		/* Upload the static config to the device */
-		rc = sja1105_xfer_buf(priv, SPI_WRITE, regs->config,
+		rc = sja1105_xfer_buf(soc, SPI_WRITE, soc->regs->config,
 				      config_buf, buf_len);
 		if (rc < 0) {
 			dev_err(dev, "Failed to upload config, retrying...\n");
@@ -1368,7 +1345,7 @@ static int sja1105_parse_rgmii_delays(struct sja1105_private *priv, int port,
 				      struct device_node *port_dn)
 {
 	phy_interface_t phy_mode = priv->phy_mode[port];
-	struct device *dev = &priv->spidev->dev;
+	struct device *dev = priv->ds->dev;
 	int rx_delay = -1, tx_delay = -1;
 
 	if (!phy_interface_mode_is_rgmii(phy_mode))
@@ -1422,7 +1399,7 @@ static int sja1105_parse_rgmii_delays(struct sja1105_private *priv, int port,
 static int sja1105_parse_ports_node(struct sja1105_private *priv,
 				    struct device_node *ports_node)
 {
-	struct device *dev = &priv->spidev->dev;
+	struct device *dev = priv->ds->dev;
 	struct device_node *child;
 
 	for_each_available_child_of_node(ports_node, child) {
@@ -1479,7 +1456,7 @@ static int sja1105_parse_ports_node(struct sja1105_private *priv,
 
 static int sja1105_parse_dt(struct sja1105_private *priv)
 {
-	struct device *dev = &priv->spidev->dev;
+	struct device *dev = priv->ds->dev;
 	struct device_node *switch_node = dev->of_node;
 	struct device_node *ports_node;
 	int rc;
@@ -3861,31 +3838,16 @@ static const struct sja1105_info sja1105_info[] = {
 },
 };
 
-static int sja1105_check_device_id(struct sja1105_private *priv)
+static int sja1105_probe_device_id(struct sja1105_private *priv)
 {
-	const struct sja1105_regs *regs = priv->regs;
-	u8 prod_id[SJA1105_SIZE_DEVICE_ID] = {0};
-	struct device *dev = &priv->spidev->dev;
-	u32 device_id;
-	u64 part_no;
-	int i, rc;
-
-	rc = sja1105_xfer_u32(priv, SPI_READ, regs->device_id, &device_id,
-			      NULL);
-	if (rc < 0)
-		return rc;
-
-	rc = sja1105_xfer_buf(priv, SPI_READ, regs->prod_id, prod_id,
-			      SJA1105_SIZE_DEVICE_ID);
-	if (rc < 0)
-		return rc;
-
-	sja1105_unpack(prod_id, &part_no, 19, 4, SJA1105_SIZE_DEVICE_ID);
+	struct sja1105_soc *soc = priv->soc;
+	int i;
 
 	for (i = 0; i < ARRAY_SIZE(sja1105_info); i++) {
 		const struct sja1105_info *info = &sja1105_info[i];
 
-		if (info->device_id != device_id || info->part_no != part_no)
+		if (info->device_id != soc->device_id ||
+		    info->part_no != soc->part_no)
 			continue;
 
 		priv->info = info;
@@ -3893,80 +3855,28 @@ static int sja1105_check_device_id(struct sja1105_private *priv)
 		return 0;
 	}
 
-	dev_err(dev, "Unexpected {device ID, part number}: 0x%x 0x%llx\n",
-		device_id, part_no);
-
 	return -ENODEV;
 }
 
-static int sja1105_probe(struct spi_device *spi)
+static int sja1105_switch_probe(struct device *dev,
+				struct sja1105_soc *soc)
 {
-	struct device *dev = &spi->dev;
 	struct sja1105_private *priv;
-	size_t max_xfer, max_msg;
 	struct dsa_switch *ds;
 	int rc;
-
-	if (!dev->of_node) {
-		dev_err(dev, "No DTS bindings for SJA1105 driver\n");
-		return -EINVAL;
-	}
-
-	rc = sja1105_hw_reset(dev, 1, 1);
-	if (rc)
-		return rc;
 
 	priv = devm_kzalloc(dev, sizeof(struct sja1105_private), GFP_KERNEL);
 	if (!priv)
 		return -ENOMEM;
 
-	/* Populate our driver private structure (priv) based on
-	 * the device tree node that was probed (spi)
-	 */
-	priv->spidev = spi;
-	spi_set_drvdata(spi, priv);
-
-	/* Configure the SPI bus */
-	spi->bits_per_word = 8;
-	rc = spi_setup(spi);
-	if (rc < 0) {
-		dev_err(dev, "Could not init SPI\n");
-		return rc;
-	}
-
-	/* In sja1105_xfer, we send spi_messages composed of two spi_transfers:
-	 * a small one for the message header and another one for the current
-	 * chunk of the packed buffer.
-	 * Check that the restrictions imposed by the SPI controller are
-	 * respected: the chunk buffer is smaller than the max transfer size,
-	 * and the total length of the chunk plus its message header is smaller
-	 * than the max message size.
-	 * We do that during probe time since the maximum transfer size is a
-	 * runtime invariant.
-	 */
-	max_xfer = spi_max_transfer_size(spi);
-	max_msg = spi_max_message_size(spi);
-
-	/* We need to send at least one 64-bit word of SPI payload per message
-	 * in order to be able to make useful progress.
-	 */
-	if (max_msg < SJA1105_SIZE_SPI_MSG_HEADER + 8) {
-		dev_err(dev, "SPI master cannot send large enough buffers, aborting\n");
-		return -EINVAL;
-	}
-
-	priv->max_xfer_len = SJA1105_SIZE_SPI_MSG_MAXLEN;
-	if (priv->max_xfer_len > max_xfer)
-		priv->max_xfer_len = max_xfer;
-	if (priv->max_xfer_len > max_msg - SJA1105_SIZE_SPI_MSG_HEADER)
-		priv->max_xfer_len = max_msg - SJA1105_SIZE_SPI_MSG_HEADER;
-
-	priv->regs = of_device_get_match_data(dev);
+	dev_set_drvdata(dev, priv);
+	priv->soc = soc;
 
 	/* Detect hardware device */
-	rc = sja1105_check_device_id(priv);
-	if (rc < 0) {
-		dev_err(dev, "Device ID check failed: %d\n", rc);
+	rc = sja1105_probe_device_id(priv);
+	if (rc) {
+		dev_err(dev, "Unexpected {device ID, part number}: 0x%x 0x%x\n",
+			soc->device_id, soc->part_no);
 		return rc;
 	}
 
@@ -4003,6 +3913,25 @@ static int sja1105_probe(struct spi_device *spi)
 	}
 
 	return dsa_register_switch(priv->ds);
+}
+
+static int sja1105_probe(struct spi_device *spi)
+{
+	const struct sja1105_regs *regs = of_device_get_match_data(&spi->dev);
+	struct sja1105_soc *soc;
+	int rc;
+
+	soc = sja1105_soc_create(spi, regs);
+	if (IS_ERR(soc))
+		return PTR_ERR(soc);
+
+	rc = sja1105_switch_probe(&spi->dev, soc);
+	if (rc) {
+		sja1105_soc_destroy(soc);
+		return rc;
+	}
+
+	return 0;
 }
 
 static void sja1105_remove(struct spi_device *spi)

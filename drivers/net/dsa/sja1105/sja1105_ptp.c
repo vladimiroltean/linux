@@ -169,14 +169,14 @@ int sja1105_ptp_commit(struct dsa_switch *ds, struct sja1105_ptp_cmd *cmd,
 		       sja1105_spi_rw_mode_t rw)
 {
 	const struct sja1105_private *priv = ds->priv;
-	const struct sja1105_regs *regs = priv->regs;
+	struct sja1105_soc *soc = priv->soc;
 	u8 buf[SJA1105_SIZE_PTP_CMD] = {0};
 	int rc;
 
 	if (rw == SPI_WRITE)
 		priv->info->ptp_cmd_packing(buf, cmd, PACK);
 
-	rc = sja1105_xfer_buf(priv, rw, regs->ptp_control, buf,
+	rc = sja1105_xfer_buf(soc, rw, soc->regs->ptp_control, buf,
 			      SJA1105_SIZE_PTP_CMD);
 
 	if (rw == SPI_READ)
@@ -247,15 +247,15 @@ static u64 sja1105_tstamp_reconstruct(struct dsa_switch *ds, u64 now,
 static int sja1105_ptpegr_ts_poll(struct dsa_switch *ds, int port, u64 *ts)
 {
 	struct sja1105_private *priv = ds->priv;
-	const struct sja1105_regs *regs = priv->regs;
 	int tstamp_bit_start, tstamp_bit_end;
+	struct sja1105_soc *soc = priv->soc;
 	int timeout = 10;
 	u8 packed_buf[8];
 	u64 update;
 	int rc;
 
 	do {
-		rc = sja1105_xfer_buf(priv, SPI_READ, regs->ptpegr_ts[port],
+		rc = sja1105_xfer_buf(soc, SPI_READ, soc->regs->ptpegr_ts[port],
 				      packed_buf, priv->info->ptpegr_ts_bytes);
 		if (rc < 0)
 			return rc;
@@ -293,9 +293,9 @@ static int sja1105_ptpegr_ts_poll(struct dsa_switch *ds, int port, u64 *ts)
 static int sja1105_ptpclkval_read(struct sja1105_private *priv, u64 *ticks,
 				  struct ptp_system_timestamp *ptp_sts)
 {
-	const struct sja1105_regs *regs = priv->regs;
+	struct sja1105_soc *soc = priv->soc;
 
-	return sja1105_xfer_u64(priv, SPI_READ, regs->ptpclkval, ticks,
+	return sja1105_xfer_u64(soc, SPI_READ, soc->regs->ptpclkval, ticks,
 				ptp_sts);
 }
 
@@ -303,21 +303,21 @@ static int sja1105_ptpclkval_read(struct sja1105_private *priv, u64 *ticks,
 static int sja1105_ptpclkval_write(struct sja1105_private *priv, u64 ticks,
 				   struct ptp_system_timestamp *ptp_sts)
 {
-	const struct sja1105_regs *regs = priv->regs;
+	struct sja1105_soc *soc = priv->soc;
 
-	return sja1105_xfer_u64(priv, SPI_WRITE, regs->ptpclkval, &ticks,
+	return sja1105_xfer_u64(soc, SPI_WRITE, soc->regs->ptpclkval, &ticks,
 				ptp_sts);
 }
 
 static void sja1105_extts_poll(struct sja1105_private *priv)
 {
 	struct sja1105_ptp_data *ptp_data = &priv->ptp_data;
-	const struct sja1105_regs *regs = priv->regs;
+	struct sja1105_soc *soc = priv->soc;
 	struct ptp_clock_event event;
 	u64 ptpsyncts = 0;
 	int rc;
 
-	rc = sja1105_xfer_u64(priv, SPI_READ, regs->ptpsyncts, &ptpsyncts,
+	rc = sja1105_xfer_u64(soc, SPI_READ, soc->regs->ptpsyncts, &ptpsyncts,
 			      NULL);
 	if (rc < 0)
 		dev_err_ratelimited(priv->ds->dev,
@@ -606,7 +606,7 @@ static int sja1105_ptp_adjfine(struct ptp_clock_info *ptp, long scaled_ppm)
 {
 	struct sja1105_ptp_data *ptp_data = ptp_caps_to_data(ptp);
 	struct sja1105_private *priv = ptp_data_to_sja1105(ptp_data);
-	const struct sja1105_regs *regs = priv->regs;
+	struct sja1105_soc *soc = priv->soc;
 	u32 clkrate32;
 	s64 clkrate;
 	int rc;
@@ -621,7 +621,7 @@ static int sja1105_ptp_adjfine(struct ptp_clock_info *ptp, long scaled_ppm)
 
 	mutex_lock(&ptp_data->lock);
 
-	rc = sja1105_xfer_u32(priv, SPI_WRITE, regs->ptpclkrate, &clkrate32,
+	rc = sja1105_xfer_u32(soc, SPI_WRITE, soc->regs->ptpclkrate, &clkrate32,
 			      NULL);
 
 	sja1105_tas_adjfreq(priv->ds);
@@ -719,8 +719,8 @@ static int sja1105_per_out_enable(struct sja1105_private *priv,
 				  bool on)
 {
 	struct sja1105_ptp_data *ptp_data = &priv->ptp_data;
-	const struct sja1105_regs *regs = priv->regs;
 	struct sja1105_ptp_cmd cmd = ptp_data->cmd;
+	struct sja1105_soc *soc = priv->soc;
 	int rc;
 
 	/* We only support one channel */
@@ -776,12 +776,12 @@ static int sja1105_per_out_enable(struct sja1105_private *priv,
 					     now + 1ull * NSEC_PER_SEC);
 		pin_start = ns_to_sja1105_ticks(pin_start);
 
-		rc = sja1105_xfer_u64(priv, SPI_WRITE, regs->ptppinst,
+		rc = sja1105_xfer_u64(soc, SPI_WRITE, soc->regs->ptppinst,
 				      &pin_start, NULL);
 		if (rc < 0)
 			goto out;
 
-		rc = sja1105_xfer_u32(priv, SPI_WRITE, regs->ptppindur,
+		rc = sja1105_xfer_u32(soc, SPI_WRITE, soc->regs->ptppindur,
 				      &pin_duration32, NULL);
 		if (rc < 0)
 			goto out;

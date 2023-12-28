@@ -765,8 +765,8 @@ int sja1105_vl_stats(struct sja1105_private *priv, int port,
 		     struct sja1105_rule *rule, struct flow_stats *stats,
 		     struct netlink_ext_ack *extack)
 {
-	const struct sja1105_regs *regs = priv->regs;
 	u8 buf[SJA1105_SIZE_VL_STATUS] = {0};
+	struct sja1105_soc *soc = priv->soc;
 	u64 unreleased;
 	u64 timingerr;
 	u64 lengtherr;
@@ -780,8 +780,8 @@ int sja1105_vl_stats(struct sja1105_private *priv, int port,
 	if (vlid < 0)
 		return 0;
 
-	rc = sja1105_xfer_buf(priv, SPI_READ, regs->vl_status + 2 * vlid, buf,
-			      SJA1105_SIZE_VL_STATUS);
+	rc = sja1105_xfer_buf(soc, SPI_READ, soc->regs->vl_status + 2 * vlid,
+			      buf, SJA1105_SIZE_VL_STATUS);
 	if (rc) {
 		NL_SET_ERR_MSG_MOD(extack, "SPI access failed");
 		return rc;

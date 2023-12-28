@@ -43,7 +43,6 @@ struct device_node;
 struct platform_device;
 struct ptp_system_timestamp;
 struct resource;
-struct sja1105_private;
 
 typedef enum {
 	SPI_READ = 0,
@@ -92,14 +91,21 @@ struct sja1105_regs {
 	u64 pcs_base[SJA1105_MAX_NUM_PORTS];
 };
 
-int sja1105_xfer_buf(const struct sja1105_private *priv,
-		     sja1105_spi_rw_mode_t rw, u64 reg_addr,
-		     u8 *buf, size_t len);
-int sja1105_xfer_u32(const struct sja1105_private *priv,
-		     sja1105_spi_rw_mode_t rw, u64 reg_addr, u32 *value,
+struct sja1105_soc {
+	struct spi_device *spidev;
+	size_t max_xfer_len;
+	const struct sja1105_regs *regs;
+	u32 device_id;
+	u32 part_no;
+};
+
+int sja1105_xfer_buf(const struct sja1105_soc *soc, sja1105_spi_rw_mode_t rw,
+		     u64 reg_addr, u8 *buf, size_t len);
+int sja1105_xfer_u32(const struct sja1105_soc *soc, sja1105_spi_rw_mode_t rw,
+		     u64 reg_addr, u32 *value,
 		     struct ptp_system_timestamp *ptp_sts);
-int sja1105_xfer_u64(const struct sja1105_private *priv,
-		     sja1105_spi_rw_mode_t rw, u64 reg_addr, u64 *value,
+int sja1105_xfer_u64(const struct sja1105_soc *soc, sja1105_spi_rw_mode_t rw,
+		     u64 reg_addr, u64 *value,
 		     struct ptp_system_timestamp *ptp_sts);
 
 extern const struct sja1105_regs sja1105et_regs;
@@ -113,7 +119,11 @@ sja1110_compat_device_create(struct device *parent, struct device_node *np,
 
 void sja1110_compat_device_destroy(struct platform_device *pdev);
 
-struct regmap *sja1110_create_regmap(struct sja1105_private *priv,
+struct regmap *sja1110_create_regmap(struct sja1105_soc *soc,
 				     const struct resource *res);
+
+struct sja1105_soc *sja1105_soc_create(struct spi_device *spi,
+				       const struct sja1105_regs *regs);
+void sja1105_soc_destroy(struct sja1105_soc *soc);
 
 #endif

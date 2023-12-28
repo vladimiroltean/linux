@@ -17,7 +17,7 @@ static const struct resource sja1110_mdio_cbtx_resource =
 
 int sja1105_pcs_mdio_read_c45(struct mii_bus *bus, int phy, int mmd, int reg)
 {
-	struct sja1105_private *priv = bus->priv;
+	struct sja1105_soc *soc = bus->priv;
 	u64 addr;
 	u32 tmp;
 	int rc;
@@ -32,7 +32,7 @@ int sja1105_pcs_mdio_read_c45(struct mii_bus *bus, int phy, int mmd, int reg)
 	if (mmd == MDIO_MMD_VEND2 && (reg & GENMASK(15, 0)) == MII_PHYSID2)
 		return NXP_SJA1105_XPCS_ID & GENMASK(15, 0);
 
-	rc = sja1105_xfer_u32(priv, SPI_READ, addr, &tmp, NULL);
+	rc = sja1105_xfer_u32(soc, SPI_READ, addr, &tmp, NULL);
 	if (rc < 0)
 		return rc;
 
@@ -42,7 +42,7 @@ int sja1105_pcs_mdio_read_c45(struct mii_bus *bus, int phy, int mmd, int reg)
 int sja1105_pcs_mdio_write_c45(struct mii_bus *bus, int phy, int mmd,
 			       int reg, u16 val)
 {
-	struct sja1105_private *priv = bus->priv;
+	struct sja1105_soc *soc = bus->priv;
 	u64 addr;
 	u32 tmp;
 
@@ -52,19 +52,18 @@ int sja1105_pcs_mdio_write_c45(struct mii_bus *bus, int phy, int mmd,
 	if (mmd != MDIO_MMD_VEND1 && mmd != MDIO_MMD_VEND2)
 		return -EINVAL;
 
-	return sja1105_xfer_u32(priv, SPI_WRITE, addr, &tmp, NULL);
+	return sja1105_xfer_u32(soc, SPI_WRITE, addr, &tmp, NULL);
 }
 
 int sja1110_pcs_mdio_read_c45(struct mii_bus *bus, int phy, int mmd, int reg)
 {
-	struct sja1105_private *priv = bus->priv;
-	const struct sja1105_regs *regs = priv->regs;
+	struct sja1105_soc *soc = bus->priv;
 	int offset, bank;
 	u64 addr;
 	u32 tmp;
 	int rc;
 
-	if (regs->pcs_base[phy] == SJA1105_RSV_ADDR)
+	if (soc->regs->pcs_base[phy] == SJA1105_RSV_ADDR)
 		return -ENODEV;
 
 	addr = (mmd << 16) | reg;
@@ -85,13 +84,13 @@ int sja1110_pcs_mdio_read_c45(struct mii_bus *bus, int phy, int mmd, int reg)
 
 	tmp = bank;
 
-	rc = sja1105_xfer_u32(priv, SPI_WRITE,
-			      regs->pcs_base[phy] + SJA1110_PCS_BANK_REG,
+	rc = sja1105_xfer_u32(soc, SPI_WRITE,
+			      soc->regs->pcs_base[phy] + SJA1110_PCS_BANK_REG,
 			      &tmp, NULL);
 	if (rc < 0)
 		return rc;
 
-	rc = sja1105_xfer_u32(priv, SPI_READ, regs->pcs_base[phy] + offset,
+	rc = sja1105_xfer_u32(soc, SPI_READ, soc->regs->pcs_base[phy] + offset,
 			      &tmp, NULL);
 	if (rc < 0)
 		return rc;
@@ -102,14 +101,13 @@ int sja1110_pcs_mdio_read_c45(struct mii_bus *bus, int phy, int mmd, int reg)
 int sja1110_pcs_mdio_write_c45(struct mii_bus *bus, int phy, int reg, int mmd,
 			       u16 val)
 {
-	struct sja1105_private *priv = bus->priv;
-	const struct sja1105_regs *regs = priv->regs;
+	struct sja1105_soc *soc = bus->priv;
 	int offset, bank;
 	u64 addr;
 	u32 tmp;
 	int rc;
 
-	if (regs->pcs_base[phy] == SJA1105_RSV_ADDR)
+	if (soc->regs->pcs_base[phy] == SJA1105_RSV_ADDR)
 		return -ENODEV;
 
 	addr = (mmd << 16) | reg;
@@ -125,22 +123,22 @@ int sja1110_pcs_mdio_write_c45(struct mii_bus *bus, int phy, int reg, int mmd,
 
 	tmp = bank;
 
-	rc = sja1105_xfer_u32(priv, SPI_WRITE,
-			      regs->pcs_base[phy] + SJA1110_PCS_BANK_REG,
+	rc = sja1105_xfer_u32(soc, SPI_WRITE,
+			      soc->regs->pcs_base[phy] + SJA1110_PCS_BANK_REG,
 			      &tmp, NULL);
 	if (rc < 0)
 		return rc;
 
 	tmp = val;
 
-	return sja1105_xfer_u32(priv, SPI_WRITE, regs->pcs_base[phy] + offset,
-				&tmp, NULL);
+	return sja1105_xfer_u32(soc, SPI_WRITE,
+				soc->regs->pcs_base[phy] + offset, &tmp, NULL);
 }
 
 static int sja1105_mdiobus_base_tx_register(struct sja1105_private *priv,
 					    struct device_node *mdio_node)
 {
-	struct device *dev = &priv->spidev->dev;
+	struct device *dev = priv->ds->dev;
 	struct platform_device *pdev;
 	struct device_node *np;
 	struct regmap *regmap;
@@ -154,7 +152,7 @@ static int sja1105_mdiobus_base_tx_register(struct sja1105_private *priv,
 	if (!of_device_is_available(np))
 		goto out_put_np;
 
-	regmap = sja1110_create_regmap(priv, &sja1110_mdio_cbtx_resource);
+	regmap = sja1110_create_regmap(priv->soc, &sja1110_mdio_cbtx_resource);
 	if (IS_ERR(regmap)) {
 		rc = PTR_ERR(regmap);
 		goto out_put_np;
@@ -188,7 +186,7 @@ static void sja1105_mdiobus_base_tx_unregister(struct sja1105_private *priv)
 static int sja1105_mdiobus_base_t1_register(struct sja1105_private *priv,
 					    struct device_node *mdio_node)
 {
-	struct device *dev = &priv->spidev->dev;
+	struct device *dev = priv->ds->dev;
 	struct platform_device *pdev;
 	struct device_node *np;
 	struct regmap *regmap;
@@ -202,7 +200,7 @@ static int sja1105_mdiobus_base_t1_register(struct sja1105_private *priv,
 	if (!of_device_is_available(np))
 		goto out_put_np;
 
-	regmap = sja1110_create_regmap(priv, &sja1110_mdio_cbt1_resource);
+	regmap = sja1110_create_regmap(priv->soc, &sja1110_mdio_cbt1_resource);
 	if (IS_ERR(regmap)) {
 		rc = PTR_ERR(regmap);
 		goto out_put_np;

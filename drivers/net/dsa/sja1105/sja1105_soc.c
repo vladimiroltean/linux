@@ -15,9 +15,11 @@
 #include "sja1105.h"
 #include "sja1105_soc.h"
 
+#define SJA1105_PROD_ID_PART_NO_X(val)		(((val) & GENMASK(19, 4)) >> 4)
+
 struct sja1110_regmap_bus_context {
 	unsigned long reg_base;
-	struct sja1105_private *priv;
+	struct sja1105_soc *soc;
 };
 
 struct sja1105_chunk {
@@ -50,12 +52,12 @@ sja1105_spi_message_pack(void *buf, const struct sja1105_spi_message *msg)
  * - SPI_READ:  creates and sends an SPI read message from absolute
  *		address reg_addr, writing @len bytes into *buf
  */
-static int sja1105_xfer(const struct sja1105_private *priv,
-			sja1105_spi_rw_mode_t rw, u64 reg_addr, u8 *buf,
-			size_t len, struct ptp_system_timestamp *ptp_sts)
+static int sja1105_xfer(const struct sja1105_soc *soc, sja1105_spi_rw_mode_t rw,
+			u64 reg_addr, u8 *buf, size_t len,
+			struct ptp_system_timestamp *ptp_sts)
 {
 	u8 hdr_buf[SJA1105_SIZE_SPI_MSG_HEADER] = {0};
-	struct spi_device *spi = priv->spidev;
+	struct spi_device *spi = soc->spidev;
 	struct spi_transfer xfers[2] = {0};
 	struct spi_transfer *chunk_xfer;
 	struct spi_transfer *hdr_xfer;
@@ -63,11 +65,11 @@ static int sja1105_xfer(const struct sja1105_private *priv,
 	int num_chunks;
 	int rc, i = 0;
 
-	num_chunks = DIV_ROUND_UP(len, priv->max_xfer_len);
+	num_chunks = DIV_ROUND_UP(len, soc->max_xfer_len);
 
 	chunk.reg_addr = reg_addr;
 	chunk.buf = buf;
-	chunk.len = min_t(size_t, len, priv->max_xfer_len);
+	chunk.len = min_t(size_t, len, soc->max_xfer_len);
 
 	hdr_xfer = &xfers[0];
 	chunk_xfer = &xfers[1];
@@ -119,7 +121,7 @@ static int sja1105_xfer(const struct sja1105_private *priv,
 		chunk.buf += chunk.len;
 		chunk.reg_addr += chunk.len / 4;
 		chunk.len = min_t(size_t, (ptrdiff_t)(buf + len - chunk.buf),
-				  priv->max_xfer_len);
+				  soc->max_xfer_len);
 
 		rc = spi_sync_transfer(spi, xfers, 2);
 		if (rc < 0) {
@@ -131,11 +133,10 @@ static int sja1105_xfer(const struct sja1105_private *priv,
 	return 0;
 }
 
-int sja1105_xfer_buf(const struct sja1105_private *priv,
-		     sja1105_spi_rw_mode_t rw, u64 reg_addr,
-		     u8 *buf, size_t len)
+int sja1105_xfer_buf(const struct sja1105_soc *soc, sja1105_spi_rw_mode_t rw,
+		     u64 reg_addr, u8 *buf, size_t len)
 {
-	return sja1105_xfer(priv, rw, reg_addr, buf, len, NULL);
+	return sja1105_xfer(soc, rw, reg_addr, buf, len, NULL);
 }
 
 /* If @rw is:
@@ -147,8 +148,8 @@ int sja1105_xfer_buf(const struct sja1105_private *priv,
  * The u64 *value is unpacked, meaning that it's stored in the native
  * CPU endianness and directly usable by software running on the core.
  */
-int sja1105_xfer_u64(const struct sja1105_private *priv,
-		     sja1105_spi_rw_mode_t rw, u64 reg_addr, u64 *value,
+int sja1105_xfer_u64(const struct sja1105_soc *soc, sja1105_spi_rw_mode_t rw,
+		     u64 reg_addr, u64 *value,
 		     struct ptp_system_timestamp *ptp_sts)
 {
 	u8 packed_buf[8];
@@ -157,7 +158,7 @@ int sja1105_xfer_u64(const struct sja1105_private *priv,
 	if (rw == SPI_WRITE)
 		sja1105_pack(packed_buf, value, 63, 0, 8);
 
-	rc = sja1105_xfer(priv, rw, reg_addr, packed_buf, 8, ptp_sts);
+	rc = sja1105_xfer(soc, rw, reg_addr, packed_buf, 8, ptp_sts);
 
 	if (rw == SPI_READ)
 		sja1105_unpack(packed_buf, value, 63, 0, 8);
@@ -166,8 +167,8 @@ int sja1105_xfer_u64(const struct sja1105_private *priv,
 }
 
 /* Same as above, but transfers only a 4 byte word */
-int sja1105_xfer_u32(const struct sja1105_private *priv,
-		     sja1105_spi_rw_mode_t rw, u64 reg_addr, u32 *value,
+int sja1105_xfer_u32(const struct sja1105_soc *soc, sja1105_spi_rw_mode_t rw,
+		     u64 reg_addr, u32 *value,
 		     struct ptp_system_timestamp *ptp_sts)
 {
 	u8 packed_buf[4];
@@ -182,7 +183,7 @@ int sja1105_xfer_u32(const struct sja1105_private *priv,
 		sja1105_pack(packed_buf, &tmp, 31, 0, 4);
 	}
 
-	rc = sja1105_xfer(priv, rw, reg_addr, packed_buf, 4, ptp_sts);
+	rc = sja1105_xfer(soc, rw, reg_addr, packed_buf, 4, ptp_sts);
 
 	if (rw == SPI_READ) {
 		sja1105_unpack(packed_buf, &tmp, 31, 0, 4);
@@ -196,13 +197,13 @@ static int sja1110_regmap_bus_reg_read(void *context, unsigned int reg,
 				       unsigned int *val)
 {
 	struct sja1110_regmap_bus_context *ctx = context;
-	struct sja1105_private *priv = ctx->priv;
+	struct sja1105_soc *soc = ctx->soc;
 	u32 tmp;
 	int rc;
 
 	reg += ctx->reg_base;
 
-	rc = sja1105_xfer_u32(priv, SPI_READ, SJA1110_SPI_ADDR(reg), &tmp,
+	rc = sja1105_xfer_u32(soc, SPI_READ, SJA1110_SPI_ADDR(reg), &tmp,
 			      NULL);
 	if (rc)
 		return rc;
@@ -216,12 +217,12 @@ static int sja1110_regmap_bus_reg_write(void *context, unsigned int reg,
 					unsigned int val)
 {
 	struct sja1110_regmap_bus_context *ctx = context;
-	struct sja1105_private *priv = ctx->priv;
+	struct sja1105_soc *soc = ctx->soc;
 	u32 tmp = val;
 
 	reg += ctx->reg_base;
 
-	return sja1105_xfer_u32(priv, SPI_WRITE, SJA1110_SPI_ADDR(reg), &tmp,
+	return sja1105_xfer_u32(soc, SPI_WRITE, SJA1110_SPI_ADDR(reg), &tmp,
 				NULL);
 }
 
@@ -238,10 +239,10 @@ static const struct regmap_config sja1110_regmap_config = {
 	.reg_stride = 4,
 };
 
-struct regmap *sja1110_create_regmap(struct sja1105_private *priv,
+struct regmap *sja1110_create_regmap(struct sja1105_soc *soc,
 				     const struct resource *res)
 {
-	struct device *dev = &priv->spidev->dev;
+	struct device *dev = &soc->spidev->dev;
 	struct sja1110_regmap_bus_context *ctx;
 	struct regmap_config regmap_config;
 
@@ -250,7 +251,7 @@ struct regmap *sja1110_create_regmap(struct sja1105_private *priv,
 		return ERR_PTR(-ENOMEM);
 
 	ctx->reg_base = res->start;
-	ctx->priv = priv;
+	ctx->soc = soc;
 
 	memcpy(&regmap_config, &sja1110_regmap_config, sizeof(regmap_config));
 
@@ -452,3 +453,130 @@ const struct sja1105_regs sja1110_regs = {
 		     SJA1105_RSV_ADDR, SJA1105_RSV_ADDR, SJA1105_RSV_ADDR,
 		     SJA1105_RSV_ADDR, SJA1105_RSV_ADDR, SJA1105_RSV_ADDR},
 };
+
+static int sja1105_soc_read_device_id(struct sja1105_soc *soc)
+{
+	const struct sja1105_regs *regs = soc->regs;
+	u32 val;
+	int rc;
+
+	rc = sja1105_xfer_u32(soc, SPI_READ, regs->device_id, &soc->device_id,
+			      NULL);
+	if (rc < 0)
+		return rc;
+
+	rc = sja1105_xfer_u32(soc, SPI_READ, regs->prod_id, &val, NULL);
+	if (rc < 0)
+		return rc;
+
+	soc->part_no = SJA1105_PROD_ID_PART_NO_X(val);
+
+	return 0;
+}
+
+/* Configure the optional reset pin and bring up switch */
+static int sja1105_soc_hw_reset(struct device *dev, unsigned int pulse_len,
+				unsigned int startup_delay)
+{
+	struct gpio_desc *gpio;
+
+	gpio = gpiod_get_optional(dev, "reset", GPIOD_OUT_HIGH);
+	if (IS_ERR(gpio))
+		return PTR_ERR(gpio);
+
+	if (!gpio)
+		return 0;
+
+	gpiod_set_value_cansleep(gpio, 1);
+	/* Wait for minimum reset pulse length */
+	msleep(pulse_len);
+	gpiod_set_value_cansleep(gpio, 0);
+	/* Wait until chip is ready after reset */
+	msleep(startup_delay);
+
+	gpiod_put(gpio);
+
+	return 0;
+}
+
+struct sja1105_soc *sja1105_soc_create(struct spi_device *spi,
+				       const struct sja1105_regs *regs)
+{
+	struct device *dev = &spi->dev;
+	size_t max_xfer, max_msg;
+	struct sja1105_soc *soc;
+	int rc;
+
+	if (!dev->of_node) {
+		rc = -ENODEV;
+		goto out;
+	}
+
+	rc = sja1105_soc_hw_reset(dev, 1, 1);
+	if (rc)
+		goto out;
+
+	soc = kzalloc(sizeof(*soc), GFP_KERNEL);
+	if (!soc) {
+		rc = -ENOMEM;
+		goto out;
+	}
+
+	soc->spidev = spi;
+	soc->regs = regs;
+
+	/* Configure the SPI bus */
+	spi->bits_per_word = 8;
+	rc = spi_setup(spi);
+	if (rc < 0) {
+		dev_err(dev, "Could not init SPI\n");
+		goto out_free_soc;
+	}
+
+	/* In sja1105_xfer, we send spi_messages composed of two spi_transfers:
+	 * a small one for the message header and another one for the current
+	 * chunk of the packed buffer.
+	 * Check that the restrictions imposed by the SPI controller are
+	 * respected: the chunk buffer is smaller than the max transfer size,
+	 * and the total length of the chunk plus its message header is smaller
+	 * than the max message size.
+	 * We do that during probe time since the maximum transfer size is a
+	 * runtime invariant.
+	 */
+	max_xfer = spi_max_transfer_size(spi);
+	max_msg = spi_max_message_size(spi);
+
+	/* We need to send at least one 64-bit word of SPI payload per message
+	 * in order to be able to make useful progress.
+	 */
+	if (max_msg < SJA1105_SIZE_SPI_MSG_HEADER + 8) {
+		dev_err(dev, "SPI master cannot send large enough buffers, aborting\n");
+		rc = -EINVAL;
+		goto out_free_soc;
+	}
+
+	soc->max_xfer_len = SJA1105_SIZE_SPI_MSG_MAXLEN;
+	if (soc->max_xfer_len > max_xfer)
+		soc->max_xfer_len = max_xfer;
+	if (soc->max_xfer_len > max_msg - SJA1105_SIZE_SPI_MSG_HEADER)
+		soc->max_xfer_len = max_msg - SJA1105_SIZE_SPI_MSG_HEADER;
+
+	/* Detect hardware device */
+	rc = sja1105_soc_read_device_id(soc);
+	if (rc < 0) {
+		dev_err(dev, "Device ID check failed: %d\n", rc);
+		goto out_free_soc;
+	}
+
+	return soc;
+
+out_free_soc:
+	kfree(soc);
+out:
+	return ERR_PTR(rc);
+}
+
+void sja1105_soc_destroy(struct sja1105_soc *soc)
+{
+	kfree(soc);
+}
