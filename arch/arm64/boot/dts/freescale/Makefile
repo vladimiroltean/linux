@@ -48,6 +48,10 @@ DTC_FLAGS_fsl-ls2080a-simu := -Wno-interrupt_map
 dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-ls2080a-simu.dtb
 DTC_FLAGS_fsl-ls2088a-qds := -Wno-interrupt_map
 dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-ls2088a-qds.dtb
+fsl-ls2088a-qds-sfp-dtbs := \
+	fsl-ls2088a-qds.dtb \
+	fsl-ls208xa-qds-sd1-2a-sfp+.dtbo
+dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-ls2088a-qds-sfp.dtb
 DTC_FLAGS_fsl-ls2088a-rdb := -Wno-interrupt_map
 dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-ls2088a-rdb.dtb
 DTC_FLAGS_fsl-lx2160a-bluebox3 := -Wno-interrupt_map
