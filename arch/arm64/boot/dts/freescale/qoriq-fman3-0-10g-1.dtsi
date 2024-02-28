@@ -21,7 +21,7 @@ fman@1a00000 {
 		fsl,fman-10g-port;
 	};
 
-	ethernet@f2000 {
+	mac10: ethernet@f2000 {
 		cell-index = <0x9>;
 		compatible = "fsl,fman-memac";
 		reg = <0xf2000 0x1000>;
