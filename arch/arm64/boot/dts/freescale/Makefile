@@ -25,6 +25,11 @@ dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-ls1046a-frwy.dtb
 dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-ls1046a-qds.dtb
 dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-ls1046a-rdb.dtb
 dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-ls1046a-tqmls1046a-mbls10xxa.dtb
+fsl-ls1046a-qds-sfp-dtbs := \
+	fsl-ls1046a-qds.dtb \
+	fsl-ls1046a-qds-sd1-lane-c-sfp+.dtbo \
+	fsl-ls1046a-qds-sd1-lane-d-sfp+.dtbo
+dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-ls1046a-qds-sfp.dtb
 DTC_FLAGS_fsl-ls1088a-qds := -Wno-interrupt_map
 dtb-$(CONFIG_ARCH_LAYERSCAPE) += fsl-ls1088a-qds.dtb
 DTC_FLAGS_fsl-ls1088a-rdb := -Wno-interrupt_map
