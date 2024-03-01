@@ -316,6 +316,87 @@ void dsa_user_unsync_ha(struct net_device *dev)
 		dsa_flush_workqueue();
 }
 
+static int dsa_user_phy_connect(struct net_device *user_dev, int addr,
+				u32 flags)
+{
+	struct dsa_port *dp = dsa_user_to_port(user_dev);
+	struct dsa_switch *ds = dp->ds;
+
+	user_dev->phydev = mdiobus_get_phy(ds->user_mii_bus, addr);
+	if (!user_dev->phydev) {
+		netdev_err(user_dev, "no phy at %d\n", addr);
+		return -ENODEV;
+	}
+
+	user_dev->phydev->dev_flags |= flags;
+
+	return phylink_connect_phy(dp->pl, user_dev->phydev);
+}
+
+void dsa_port_phylink_mac_change(struct dsa_switch *ds, int port, bool up)
+{
+	const struct dsa_port *dp = dsa_to_port(ds, port);
+
+	if (dp->pl)
+		phylink_mac_change(dp->pl, up);
+}
+EXPORT_SYMBOL_GPL(dsa_port_phylink_mac_change);
+
+static void dsa_user_phylink_fixed_state(struct phylink_config *config,
+					 struct phylink_link_state *state)
+{
+	struct dsa_port *dp = dsa_phylink_to_port(config);
+	struct dsa_switch *ds = dp->ds;
+
+	/* No need to check that this operation is valid, the callback would
+	 * not be called if it was not.
+	 */
+	ds->ops->phylink_fixed_state(ds, dp->index, state);
+}
+
+static int dsa_user_phy_setup(struct net_device *user_dev)
+{
+	struct dsa_port *dp = dsa_user_to_port(user_dev);
+	struct device_node *port_dn = dp->dn;
+	struct dsa_switch *ds = dp->ds;
+	u32 phy_flags = 0;
+	int ret;
+
+	dp->pl_config.dev = &user_dev->dev;
+	dp->pl_config.type = PHYLINK_NETDEV;
+
+	/* The get_fixed_state callback takes precedence over polling the
+	 * link GPIO in PHYLINK (see phylink_get_fixed_state).  Only set
+	 * this if the switch provides such a callback.
+	 */
+	if (ds->ops->phylink_fixed_state) {
+		dp->pl_config.get_fixed_state = dsa_user_phylink_fixed_state;
+		dp->pl_config.poll_fixed_state = true;
+	}
+
+	ret = dsa_port_phylink_create(dp);
+	if (ret)
+		return ret;
+
+	if (ds->ops->get_phy_flags)
+		phy_flags = ds->ops->get_phy_flags(ds, dp->index);
+
+	ret = phylink_of_phy_connect(dp->pl, port_dn, phy_flags);
+	if (ret == -ENODEV && ds->user_mii_bus) {
+		/* We could not connect to a designated PHY or SFP, so try to
+		 * use the switch internal MDIO bus instead
+		 */
+		ret = dsa_user_phy_connect(user_dev, dp->index, phy_flags);
+	}
+	if (ret) {
+		netdev_err(user_dev, "failed to connect to PHY: %pe\n",
+			   ERR_PTR(ret));
+		dsa_port_phylink_destroy(dp);
+	}
+
+	return ret;
+}
+
 /* user mii_bus handling ***************************************************/
 static int dsa_user_phy_read(struct mii_bus *bus, int addr, int reg)
 {
@@ -2614,88 +2695,7 @@ static const struct device_type dsa_type = {
 	.name	= "dsa",
 };
 
-void dsa_port_phylink_mac_change(struct dsa_switch *ds, int port, bool up)
-{
-	const struct dsa_port *dp = dsa_to_port(ds, port);
-
-	if (dp->pl)
-		phylink_mac_change(dp->pl, up);
-}
-EXPORT_SYMBOL_GPL(dsa_port_phylink_mac_change);
-
-static void dsa_user_phylink_fixed_state(struct phylink_config *config,
-					 struct phylink_link_state *state)
-{
-	struct dsa_port *dp = dsa_phylink_to_port(config);
-	struct dsa_switch *ds = dp->ds;
-
-	/* No need to check that this operation is valid, the callback would
-	 * not be called if it was not.
-	 */
-	ds->ops->phylink_fixed_state(ds, dp->index, state);
-}
-
 /* user device setup *******************************************************/
-static int dsa_user_phy_connect(struct net_device *user_dev, int addr,
-				u32 flags)
-{
-	struct dsa_port *dp = dsa_user_to_port(user_dev);
-	struct dsa_switch *ds = dp->ds;
-
-	user_dev->phydev = mdiobus_get_phy(ds->user_mii_bus, addr);
-	if (!user_dev->phydev) {
-		netdev_err(user_dev, "no phy at %d\n", addr);
-		return -ENODEV;
-	}
-
-	user_dev->phydev->dev_flags |= flags;
-
-	return phylink_connect_phy(dp->pl, user_dev->phydev);
-}
-
-static int dsa_user_phy_setup(struct net_device *user_dev)
-{
-	struct dsa_port *dp = dsa_user_to_port(user_dev);
-	struct device_node *port_dn = dp->dn;
-	struct dsa_switch *ds = dp->ds;
-	u32 phy_flags = 0;
-	int ret;
-
-	dp->pl_config.dev = &user_dev->dev;
-	dp->pl_config.type = PHYLINK_NETDEV;
-
-	/* The get_fixed_state callback takes precedence over polling the
-	 * link GPIO in PHYLINK (see phylink_get_fixed_state).  Only set
-	 * this if the switch provides such a callback.
-	 */
-	if (ds->ops->phylink_fixed_state) {
-		dp->pl_config.get_fixed_state = dsa_user_phylink_fixed_state;
-		dp->pl_config.poll_fixed_state = true;
-	}
-
-	ret = dsa_port_phylink_create(dp);
-	if (ret)
-		return ret;
-
-	if (ds->ops->get_phy_flags)
-		phy_flags = ds->ops->get_phy_flags(ds, dp->index);
-
-	ret = phylink_of_phy_connect(dp->pl, port_dn, phy_flags);
-	if (ret == -ENODEV && ds->user_mii_bus) {
-		/* We could not connect to a designated PHY or SFP, so try to
-		 * use the switch internal MDIO bus instead
-		 */
-		ret = dsa_user_phy_connect(user_dev, dp->index, phy_flags);
-	}
-	if (ret) {
-		netdev_err(user_dev, "failed to connect to PHY: %pe\n",
-			   ERR_PTR(ret));
-		dsa_port_phylink_destroy(dp);
-	}
-
-	return ret;
-}
-
 void dsa_user_setup_tagger(struct net_device *user)
 {
 	struct dsa_port *dp = dsa_user_to_port(user);
