@@ -316,8 +316,8 @@ void dsa_user_unsync_ha(struct net_device *dev)
 		dsa_flush_workqueue();
 }
 
-static int dsa_user_phy_connect(struct net_device *user_dev, int addr,
-				u32 flags)
+static int dsa_user_mii_bus_phy_connect(struct net_device *user_dev, int addr,
+					u32 flags)
 {
 	struct dsa_port *dp = dsa_user_to_port(user_dev);
 	struct dsa_switch *ds = dp->ds;
@@ -386,7 +386,8 @@ static int dsa_user_phy_setup(struct net_device *user_dev)
 		/* We could not connect to a designated PHY or SFP, so try to
 		 * use the switch internal MDIO bus instead
 		 */
-		ret = dsa_user_phy_connect(user_dev, dp->index, phy_flags);
+		ret = dsa_user_mii_bus_phy_connect(user_dev, dp->index,
+						   phy_flags);
 	}
 	if (ret) {
 		netdev_err(user_dev, "failed to connect to PHY: %pe\n",
