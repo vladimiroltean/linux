@@ -1418,6 +1418,12 @@ enum ethtool_link_medium ethtool_str_to_medium(const char *str)
 }
 EXPORT_SYMBOL_GPL(ethtool_str_to_medium);
 
+const char *ethtool_link_mode_str(enum ethtool_link_mode_bit_indices link_mode)
+{
+	return link_mode_names[link_mode];
+}
+EXPORT_SYMBOL(ethtool_link_mode_str);
+
 u8 netdev_rss_key[NETDEV_RSS_KEY_LEN] __read_mostly;
 bool netdev_rss_key_initialized __read_mostly;
 
