@@ -24,6 +24,7 @@ enum lynx_lane_mode {
 static inline bool lynx_lane_mode_uses_gmii_mac(enum lynx_lane_mode mode)
 {
 	switch (mode) {
+	case LANE_MODE_1000BASEKX:
 	case LANE_MODE_1000BASEX_SGMII:
 	case LANE_MODE_2500BASEX:
 	case LANE_MODE_QSGMII:
@@ -37,6 +38,7 @@ static inline bool lynx_lane_mode_uses_gmii_mac(enum lynx_lane_mode mode)
 static inline bool lynx_lane_mode_uses_xgmii_mac(enum lynx_lane_mode mode)
 {
 	switch (mode) {
+	case LANE_MODE_10GBASEKR:
 	case LANE_MODE_10GBASER:
 	case LANE_MODE_USXGMII:
 		return true;
