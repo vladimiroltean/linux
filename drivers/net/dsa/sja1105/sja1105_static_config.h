@@ -436,7 +436,8 @@ struct sja1105_table_header {
 };
 
 struct sja1105_table_ops {
-	size_t (*packing)(void *buf, void *entry_ptr, enum packing_op op);
+	void (*pack)(void *buf, const void *entry_ptr);
+	void (*unpack)(const void *buf, void *entry_ptr);
 	size_t unpacked_entry_size;
 	size_t packed_entry_size;
 	size_t max_entry_count;
@@ -461,8 +462,8 @@ extern const struct sja1105_table_ops sja1105r_table_ops[BLK_IDX_MAX];
 extern const struct sja1105_table_ops sja1105s_table_ops[BLK_IDX_MAX];
 extern const struct sja1105_table_ops sja1110_table_ops[BLK_IDX_MAX];
 
-size_t sja1105_table_header_pack(void *buf, const void *hdr);
-size_t sja1105_table_header_unpack(const void *buf, void *hdr);
+void sja1105_table_header_pack(void *buf, const void *hdr);
+void sja1105_table_header_unpack(const void *buf, void *hdr);
 void
 sja1105_table_header_pack_with_crc(void *buf, struct sja1105_table_header *hdr);
 size_t
@@ -513,49 +514,49 @@ void sja1105_packing(void *buf, u64 *val, int start, int end,
 		      QUIRK_LSW32_IS_FIRST)
 
 /* Common implementations for the static and dynamic configs */
-size_t sja1105pqrs_general_params_entry_packing(void *buf, void *entry_ptr,
-						enum packing_op op);
-size_t sja1110_general_params_entry_packing(void *buf, void *entry_ptr,
-					    enum packing_op op);
-size_t sja1105pqrs_l2_lookup_params_entry_packing(void *buf, void *entry_ptr,
-						  enum packing_op op);
-size_t sja1110_l2_lookup_params_entry_packing(void *buf, void *entry_ptr,
-					      enum packing_op op);
-size_t sja1105_l2_forwarding_entry_packing(void *buf, void *entry_ptr,
-					   enum packing_op op);
-size_t sja1110_l2_forwarding_entry_packing(void *buf, void *entry_ptr,
-					   enum packing_op op);
-size_t sja1105pqrs_l2_lookup_entry_packing(void *buf, void *entry_ptr,
-					   enum packing_op op);
-size_t sja1105et_l2_lookup_entry_packing(void *buf, void *entry_ptr,
-					 enum packing_op op);
-size_t sja1110_l2_lookup_entry_packing(void *buf, void *entry_ptr,
-				       enum packing_op op);
-size_t sja1105_vlan_lookup_entry_packing(void *buf, void *entry_ptr,
-					 enum packing_op op);
-size_t sja1110_vlan_lookup_entry_packing(void *buf, void *entry_ptr,
-					 enum packing_op op);
-size_t sja1105_retagging_entry_packing(void *buf, void *entry_ptr,
-				       enum packing_op op);
-size_t sja1110_retagging_entry_packing(void *buf, void *entry_ptr,
-				       enum packing_op op);
-size_t sja1105pqrs_mac_config_entry_packing(void *buf, void *entry_ptr,
-					    enum packing_op op);
-size_t sja1110_mac_config_entry_packing(void *buf, void *entry_ptr,
-					enum packing_op op);
-size_t sja1105pqrs_avb_params_entry_packing(void *buf, void *entry_ptr,
-					    enum packing_op op);
-size_t sja1105_vl_lookup_entry_packing(void *buf, void *entry_ptr,
-				       enum packing_op op);
-size_t sja1110_vl_lookup_entry_packing(void *buf, void *entry_ptr,
-				       enum packing_op op);
-size_t sja1110_vl_policing_entry_packing(void *buf, void *entry_ptr,
-					 enum packing_op op);
-size_t sja1110_xmii_params_entry_packing(void *buf, void *entry_ptr,
-					 enum packing_op op);
-size_t sja1110_l2_policing_entry_packing(void *buf, void *entry_ptr,
-					 enum packing_op op);
-size_t sja1110_l2_forwarding_params_entry_packing(void *buf, void *entry_ptr,
-						  enum packing_op op);
+void sja1105pqrs_general_params_entry_pack(void *buf, const void *entry_ptr);
+void sja1105pqrs_general_params_entry_unpack(const void *buf, void *entry_ptr);
+void sja1110_general_params_entry_pack(void *buf, const void *entry_ptr);
+void sja1110_general_params_entry_unpack(const void *buf, void *entry_ptr);
+void sja1105pqrs_l2_lookup_params_entry_pack(void *buf, const void *entry_ptr);
+void sja1105pqrs_l2_lookup_params_entry_unpack(const void *buf, void *entry_ptr);
+void sja1110_l2_lookup_params_entry_pack(void *buf, const void *entry_ptr);
+void sja1110_l2_lookup_params_entry_unpack(const void *buf, void *entry_ptr);
+void sja1105_l2_forwarding_entry_pack(void *buf, const void *entry_ptr);
+void sja1105_l2_forwarding_entry_unpack(const void *buf, void *entry_ptr);
+void sja1110_l2_forwarding_entry_pack(void *buf, const void *entry_ptr);
+void sja1110_l2_forwarding_entry_unpack(const void *buf, void *entry_ptr);
+void sja1105pqrs_l2_lookup_entry_pack(void *buf, const void *entry_ptr);
+void sja1105pqrs_l2_lookup_entry_unpack(const void *buf, void *entry_ptr);
+void sja1105et_l2_lookup_entry_pack(void *buf, const void *entry_ptr);
+void sja1105et_l2_lookup_entry_unpack(const void *buf, void *entry_ptr);
+void sja1110_l2_lookup_entry_pack(void *buf, const void *entry_ptr);
+void sja1110_l2_lookup_entry_unpack(const void *buf, void *entry_ptr);
+void sja1105_vlan_lookup_entry_pack(void *buf, const void *entry_ptr);
+void sja1105_vlan_lookup_entry_unpack(const void *buf, void *entry_ptr);
+void sja1110_vlan_lookup_entry_pack(void *buf, const void *entry_ptr);
+void sja1110_vlan_lookup_entry_unpack(const void *buf, void *entry_ptr);
+void sja1105_retagging_entry_pack(void *buf, const void *entry_ptr);
+void sja1105_retagging_entry_unpack(const void *buf, void *entry_ptr);
+void sja1110_retagging_entry_pack(void *buf, const void *entry_ptr);
+void sja1110_retagging_entry_unpack(const void *buf, void *entry_ptr);
+void sja1105pqrs_mac_config_entry_pack(void *buf, const void *entry_ptr);
+void sja1105pqrs_mac_config_entry_unpack(const void *buf, void *entry_ptr);
+void sja1110_mac_config_entry_pack(void *buf, const void *entry_ptr);
+void sja1110_mac_config_entry_unpack(const void *buf, void *entry_ptr);
+void sja1105pqrs_avb_params_entry_pack(void *buf, const void *entry_ptr);
+void sja1105pqrs_avb_params_entry_unpack(const void *buf, void *entry_ptr);
+void sja1105_vl_lookup_entry_pack(void *buf, const void *entry_ptr);
+void sja1105_vl_lookup_entry_unpack(const void *buf, void *entry_ptr);
+void sja1110_vl_lookup_entry_pack(void *buf, const void *entry_ptr);
+void sja1110_vl_lookup_entry_unpack(const void *buf, void *entry_ptr);
+void sja1110_vl_policing_entry_pack(void *buf, const void *entry_ptr);
+void sja1110_vl_policing_entry_unpack(const void *buf, void *entry_ptr);
+void sja1110_xmii_params_entry_pack(void *buf, const void *entry_ptr);
+void sja1110_xmii_params_entry_unpack(const void *buf, void *entry_ptr);
+void sja1110_l2_policing_entry_pack(void *buf, const void *entry_ptr);
+void sja1110_l2_policing_entry_unpack(const void *buf, void *entry_ptr);
+void sja1110_l2_forwarding_params_entry_pack(void *buf, const void *entry_ptr);
+void sja1110_l2_forwarding_params_entry_unpack(const void *buf, void *entry_ptr);
 
 #endif
