@@ -19,10 +19,10 @@ int unpack(const void *pbuf, u64 *uval, size_t startbit, size_t endbit,
 	   size_t pbuflen, u8 quirks);
 
 struct packed_field {
-	size_t startbit;
-	size_t endbit;
-	size_t offset;
-	size_t size;
+	u16 startbit;
+	u16 endbit;
+	u16 offset;
+	u16 size;
 };
 
 #define PACKED_FIELD(start, end, struct_name, struct_field) \
