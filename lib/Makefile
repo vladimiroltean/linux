@@ -324,6 +324,19 @@ quiet_cmd_crc64 = GEN     $@
 $(obj)/crc64table.h: $(obj)/gen_crc64table
 	$(call cmd,crc64)
 
+# Generate packing-checks.h
+
+hostprogs += gen_packing_checks
+
+packing-checks := ../include/generated/packing-checks.h
+
+filechk_gen_packing_checks = $(obj)/gen_packing_checks
+
+$(obj)/$(packing-checks): $(obj)/gen_packing_checks FORCE
+	$(call filechk,gen_packing_checks)
+
+always-y += $(packing-checks)
+
 #
 # Build a fast OID lookip registry from include/linux/oid_registry.h
 #
