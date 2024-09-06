@@ -1379,7 +1379,7 @@ static void ice_copy_rxq_ctx_to_hw(struct ice_hw *hw, u8 *rxq_ctx,
 	PACKED_FIELD((lsb) + (width) - 1, (lsb), struct struct_name, struct_field)
 
 /* LAN Rx Queue Context */
-static const struct packed_field ice_rlan_ctx_fields[] = {
+static const struct packed_field_8 ice_rlan_ctx_fields[] = {
 				 /* Field		Width	LSB */
 	ICE_CTX_FIELD(ice_rlan_ctx, head,		13,	0),
 	ICE_CTX_FIELD(ice_rlan_ctx, cpuid,		8,	13),
@@ -1417,9 +1417,8 @@ void __ice_pack_rxq_ctx(const struct ice_rlan_ctx *ctx, void *buf, size_t len)
 	CHECK_PACKED_FIELDS_20(ice_rlan_ctx_fields, ICE_RXQ_CTX_SZ);
 	WARN_ON_ONCE(len < ICE_RXQ_CTX_SZ);
 
-	pack_fields(buf, len, ctx,
-		    ice_rlan_ctx_fields, ARRAY_SIZE(ice_rlan_ctx_fields),
-		    QUIRK_LITTLE_ENDIAN | QUIRK_LSW32_IS_FIRST);
+	pack_fields_m(buf, len, ctx, ice_rlan_ctx_fields,
+		      QUIRK_LITTLE_ENDIAN | QUIRK_LSW32_IS_FIRST);
 }
 
 /**
@@ -1449,7 +1448,7 @@ int ice_write_rxq_ctx(struct ice_hw *hw, struct ice_rlan_ctx *rlan_ctx,
 }
 
 /* LAN Tx Queue Context */
-static const struct packed_field ice_tlan_ctx_fields[] = {
+static const struct packed_field_8 ice_tlan_ctx_fields[] = {
 				    /* Field			Width	LSB */
 	ICE_CTX_FIELD(ice_tlan_ctx, base,			57,	0),
 	ICE_CTX_FIELD(ice_tlan_ctx, port_num,			3,	57),
@@ -1494,9 +1493,8 @@ void __ice_pack_txq_ctx(const struct ice_tlan_ctx *ctx, void *buf, size_t len)
 	CHECK_PACKED_FIELDS_27(ice_tlan_ctx_fields, ICE_TXQ_CTX_SZ);
 	WARN_ON_ONCE(len < ICE_TXQ_CTX_SZ);
 
-	pack_fields(buf, len, ctx,
-		    ice_tlan_ctx_fields, ARRAY_SIZE(ice_tlan_ctx_fields),
-		    QUIRK_LITTLE_ENDIAN | QUIRK_LSW32_IS_FIRST);
+	pack_fields_m(buf, len, ctx, ice_tlan_ctx_fields,
+		      QUIRK_LITTLE_ENDIAN | QUIRK_LSW32_IS_FIRST);
 }
 
 /* Sideband Queue command wrappers */
