@@ -83,16 +83,16 @@ void unpack_fields(const void *pbuf, size_t pbuflen, void *ustruct,
 										\
 			switch (field->size) {					\
 			case 1:							\
-				uval = *((u8 *)(ustruct + field->offset));	\
+				uval = *((u8 *)((u8 *)ustruct + field->offset)); \
 				break;						\
 			case 2:							\
-				uval = *((u16 *)(ustruct + field->offset));	\
+				uval = *((u16 *)((u8 *)ustruct + field->offset)); \
 				break;						\
 			case 4:							\
-				uval = *((u32 *)(ustruct + field->offset));	\
+				uval = *((u32 *)((u8 *)ustruct + field->offset)); \
 				break;						\
 			default:						\
-				uval = *((u64 *)(ustruct + field->offset));	\
+				uval = *((u64 *)((u8 *)ustruct + field->offset)); \
 				break;						\
 			}							\
 										\
@@ -114,16 +114,16 @@ void unpack_fields(const void *pbuf, size_t pbuflen, void *ustruct,
 										\
 			switch (field->size) {					\
 			case 1:							\
-				*((u8 *)(ustruct + field->offset)) = uval;	\
+				*((u8 *)((u8 *)ustruct + field->offset)) = uval; \
 				break;						\
 			case 2:							\
-				*((u16 *)(ustruct + field->offset)) = uval;	\
+				*((u16 *)((u8 *)ustruct + field->offset)) = uval; \
 				break;						\
 			case 4:							\
-				*((u32 *)(ustruct + field->offset)) = uval;	\
+				*((u32 *)((u8 *)ustruct + field->offset)) = uval; \
 				break;						\
 			default:						\
-				*((u64 *)(ustruct + field->offset)) = uval;	\
+				*((u64 *)((u8 *)ustruct + field->offset)) = uval; \
 				break;						\
 			}							\
 		}								\
