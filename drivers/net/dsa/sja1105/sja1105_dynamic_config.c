@@ -291,19 +291,21 @@ sja1105pqrs_common_l2_lookup_cmd_packing(void *buf, struct sja1105_dyn_cmd *cmd,
 	 * at the same time achieve compatibility with the management route
 	 * command structure.
 	 */
-	if (cmd->rdwrset == SPI_READ) {
-		if (cmd->search)
-			hostcmd = SJA1105_HOSTCMD_SEARCH;
-		else
-			hostcmd = SJA1105_HOSTCMD_READ;
-	} else {
-		/* SPI_WRITE */
-		if (cmd->valident)
-			hostcmd = SJA1105_HOSTCMD_WRITE;
-		else
-			hostcmd = SJA1105_HOSTCMD_INVALIDATE;
+	if (op == PACK) {
+		if (cmd->rdwrset == SPI_READ) {
+			if (cmd->search)
+				hostcmd = SJA1105_HOSTCMD_SEARCH;
+			else
+				hostcmd = SJA1105_HOSTCMD_READ;
+		} else {
+			/* SPI_WRITE */
+			if (cmd->valident)
+				hostcmd = SJA1105_HOSTCMD_WRITE;
+			else
+				hostcmd = SJA1105_HOSTCMD_INVALIDATE;
+		}
+		sja1105_pack(p, hostcmd, 25, 23, size);
 	}
-	sja1105_packing(p, &hostcmd, 25, 23, size, op);
 }
 
 static void
