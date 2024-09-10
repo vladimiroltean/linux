@@ -7,6 +7,8 @@
 #include <linux/packing.h>
 #include "sja1105.h"
 
+#define SJA1105_STATUS_SIZE	4
+
 struct sja1105_chunk {
 	u8	*buf;
 	size_t	len;
@@ -233,45 +235,38 @@ int sja1105_inhibit_tx(const struct sja1105_private *priv,
 }
 
 struct sja1105_status {
-	u64 configs;
-	u64 crcchkl;
-	u64 ids;
-	u64 crcchkg;
+	u8 configs;
+	u8 crcchkl;
+	u8 ids;
+	u8 crcchkg;
+};
+
+static const struct packed_field_s sja1105_status_fields[] = {
+	PACKED_FIELD(31, 31, struct sja1105_status, configs),
+	PACKED_FIELD(30, 30, struct sja1105_status, crcchkl),
+	PACKED_FIELD(29, 29, struct sja1105_status, ids),
+	PACKED_FIELD(28, 28, struct sja1105_status, crcchkg),
 };
 
 /* This is not reading the entire General Status area, which is also
  * divergent between E/T and P/Q/R/S, but only the relevant bits for
  * ensuring that the static config upload procedure was successful.
  */
-static void sja1105_status_unpack(void *buf, struct sja1105_status *status)
-{
-	/* So that addition translates to 4 bytes */
-	u32 *p = buf;
-
-	/* device_id is missing from the buffer, but we don't
-	 * want to diverge from the manual definition of the
-	 * register addresses, so we'll back off one step with
-	 * the register pointer, and never access p[0].
-	 */
-	p--;
-	sja1105_unpack(p + 0x1, &status->configs,   31, 31, 4);
-	sja1105_unpack(p + 0x1, &status->crcchkl,   30, 30, 4);
-	sja1105_unpack(p + 0x1, &status->ids,       29, 29, 4);
-	sja1105_unpack(p + 0x1, &status->crcchkg,   28, 28, 4);
-}
-
 static int sja1105_status_get(struct sja1105_private *priv,
 			      struct sja1105_status *status)
 {
 	const struct sja1105_regs *regs = priv->info->regs;
-	u8 packed_buf[4];
+	u8 packed_buf[SJA1105_STATUS_SIZE];
 	int rc;
 
-	rc = sja1105_read_buf(priv, regs->status, packed_buf, 4);
+	CHECK_PACKED_FIELDS_4(sja1105_status_fields, SJA1105_STATUS_SIZE);
+
+	rc = sja1105_read_buf(priv, regs->status, packed_buf, SJA1105_STATUS_SIZE);
 	if (rc < 0)
 		return rc;
 
-	sja1105_status_unpack(packed_buf, status);
+	sja1105_unpack_fields(packed_buf, SJA1105_STATUS_SIZE, status,
+			      sja1105_status_fields);
 
 	return 0;
 }
