@@ -53,11 +53,6 @@
 #define SJA1105PQRS_SIZE_CBS_ENTRY			20
 #define SJA1110_SIZE_PCP_REMAPPING_ENTRY		4
 
-enum packing_op {
-	PACK,
-	UNPACK,
-};
-
 /* UM10944.pdf Page 11, Table 2. Configuration Blocks */
 enum {
 	BLKID_SCHEDULE					= 0x00,
@@ -508,8 +503,6 @@ u32 sja1105_crc32(const void *buf, size_t len);
 
 void sja1105_pack(void *buf, u64 val, int start, int end, size_t len);
 void sja1105_unpack(const void *buf, u64 *val, int start, int end, size_t len);
-void sja1105_packing(void *buf, u64 *val, int start, int end,
-		     size_t len, enum packing_op op);
 
 #define sja1105_pack_fields(buf, len, ustruct, fields) \
 	pack_fields((buf), (len), (ustruct), (fields), QUIRK_LSW32_IS_FIRST)

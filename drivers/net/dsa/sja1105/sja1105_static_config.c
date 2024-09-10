@@ -47,15 +47,6 @@ void sja1105_unpack(const void *buf, u64 *val, int start, int end, size_t len)
 	dump_stack();
 }
 
-void sja1105_packing(void *buf, u64 *val, int start, int end,
-		     size_t len, enum packing_op op)
-{
-	if (op == PACK)
-		sja1105_pack(buf, *val, start, end, len);
-	else
-		sja1105_unpack(buf, val, start, end, len);
-}
-
 /* Little-endian Ethernet CRC32 of data packed as big-endian u32 words */
 u32 sja1105_crc32(const void *buf, size_t len)
 {
