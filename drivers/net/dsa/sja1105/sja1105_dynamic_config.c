@@ -1177,10 +1177,11 @@ const struct sja1105_dynamic_table_ops sja1110_dyn_ops[BLK_IDX_MAX_DYN] = {
 
 static int
 sja1105_dynamic_config_poll_valid(struct sja1105_private *priv,
-				  const struct sja1105_dynamic_table_ops *ops,
+				  enum sja1105_blk_idx blk_idx,
 				  void *entry, bool check_valident,
 				  bool check_errors)
 {
+	const struct sja1105_dynamic_table_ops *ops = &priv->info->dyn_ops[blk_idx];
 	u8 packed_buf[SJA1105_MAX_DYN_CMD_SIZE] = {};
 	struct sja1105_dyn_cmd cmd = {};
 	int rc;
@@ -1220,7 +1221,7 @@ sja1105_dynamic_config_poll_valid(struct sja1105_private *priv,
  */
 static int
 sja1105_dynamic_config_wait_complete(struct sja1105_private *priv,
-				     const struct sja1105_dynamic_table_ops *ops,
+				     enum sja1105_blk_idx blk_idx,
 				     void *entry, bool check_valident,
 				     bool check_errors)
 {
@@ -1230,7 +1231,7 @@ sja1105_dynamic_config_wait_complete(struct sja1105_private *priv,
 				rc, rc != -EAGAIN,
 				SJA1105_DYNAMIC_CONFIG_SLEEP_US,
 				SJA1105_DYNAMIC_CONFIG_TIMEOUT_US,
-				false, priv, ops, entry, check_valident,
+				false, priv, blk_idx, entry, check_valident,
 				check_errors);
 	return err < 0 ? err : rc;
 }
@@ -1303,7 +1304,7 @@ int sja1105_dynamic_config_read(struct sja1105_private *priv,
 	if (rc < 0)
 		goto out;
 
-	rc = sja1105_dynamic_config_wait_complete(priv, ops, entry, true, false);
+	rc = sja1105_dynamic_config_wait_complete(priv, blk_idx, entry, true, false);
 out:
 	mutex_unlock(&priv->dynamic_config_lock);
 
@@ -1361,7 +1362,7 @@ int sja1105_dynamic_config_write(struct sja1105_private *priv,
 	if (rc < 0)
 		goto out;
 
-	rc = sja1105_dynamic_config_wait_complete(priv, ops, NULL, false, true);
+	rc = sja1105_dynamic_config_wait_complete(priv, blk_idx, NULL, false, true);
 out:
 	mutex_unlock(&priv->dynamic_config_lock);
 
