@@ -203,7 +203,7 @@ static void sja1105_standard_dynamic_entry_pack(struct sja1105_private *priv,
 
 	ops = priv->static_config.tables[blk_idx].ops;
 
-	ops->packing(buf, (void *)entry_ptr, PACK);
+	sja1105_table_entry_pack(buf, entry_ptr, ops);
 }
 
 /* Unpack a dynamic entry using the same format as the static variant */
@@ -215,7 +215,7 @@ static void sja1105_standard_dynamic_entry_unpack(struct sja1105_private *priv,
 
 	ops = priv->static_config.tables[blk_idx].ops;
 
-	ops->packing((void *)buf, entry_ptr, UNPACK);
+	sja1105_table_entry_unpack(buf, entry_ptr, ops);
 }
 
 /* Command and entry overlap */

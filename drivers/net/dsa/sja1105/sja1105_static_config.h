@@ -436,10 +436,18 @@ struct sja1105_table_header {
 };
 
 struct sja1105_table_ops {
-	size_t (*packing)(void *buf, void *entry_ptr, enum packing_op op);
+	const void *fields1;
+	const void *fields2;
+	size_t num_fields1;
+	size_t num_fields2;
+	size_t fields1_elem_size;
+	size_t fields2_elem_size;
 	size_t unpacked_entry_size;
 	size_t packed_entry_size;
 	size_t max_entry_count;
+	size_t cond_field_offset;
+	size_t cond_field_size;
+	u64 cond_field_val;
 };
 
 struct sja1105_table {
@@ -459,8 +467,8 @@ extern const struct sja1105_table_ops sja1105pr_table_ops[BLK_IDX_MAX];
 extern const struct sja1105_table_ops sja1105qs_table_ops[BLK_IDX_MAX];
 extern const struct sja1105_table_ops sja1110_table_ops[BLK_IDX_MAX];
 
-size_t sja1105_table_header_pack(void *buf, const void *hdr);
-size_t sja1105_table_header_unpack(const void *buf, void *hdr);
+void sja1105_table_header_pack(void *buf, const void *hdr);
+void sja1105_table_header_unpack(const void *buf, void *hdr);
 void
 sja1105_table_header_pack_with_crc(void *buf, struct sja1105_table_header *hdr);
 size_t
@@ -507,5 +515,10 @@ void sja1105_packing(void *buf, u64 *val, int start, int end,
 	pack_fields((buf), (len), (ustruct), (fields), QUIRK_LSW32_IS_FIRST)
 #define sja1105_unpack_fields(buf, len, ustruct, fields) \
 	unpack_fields((buf), (len), (ustruct), (fields), QUIRK_LSW32_IS_FIRST)
+
+void sja1105_table_entry_pack(void *buf, const void *entry_ptr,
+			      const struct sja1105_table_ops *ops);
+void sja1105_table_entry_unpack(const void *buf, void *entry_ptr,
+			        const struct sja1105_table_ops *ops);
 
 #endif
