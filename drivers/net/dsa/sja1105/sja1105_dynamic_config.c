@@ -29,9 +29,7 @@
  * <----------------------- packed_size ------------------------>
  *
  * The ENTRY BUFFER may or may not have the same layout, or size, as its static
- * configuration table entry counterpart. When it does, the same packing
- * function is reused (bar exceptional cases - see
- * sja1105pqrs_dyn_l2_lookup_entry_packing).
+ * configuration table entry counterpart.
  *
  * The reason for the COMMAND BUFFER being at the end is to be able to send
  * a dynamic write command through a single SPI burst. By the time the switch
@@ -51,6 +49,8 @@
  *		     from one.
  *		     The @packed_buf pointer it's given does always point to
  *		     the ENTRY portion of the buffer.
+ *		     Optional. If absent, the entry is packed using the static
+ *		     layout.
  * - .cmd_packing: A function that deals with packing/unpacking the COMMAND
  *		   structure to/from the SPI buffer.
  *		   It is given the same @packed_buf pointer as .entry_packing,
@@ -194,6 +194,30 @@ enum sja1105_hostcmd {
 	SJA1105_HOSTCMD_INVALIDATE = 4,
 };
 
+/* Pack a dynamic entry using the same format as the static variant */
+static void sja1105_standard_dynamic_entry_pack(struct sja1105_private *priv,
+						void *buf, const void *entry_ptr,
+						enum sja1105_blk_idx blk_idx)
+{
+	const struct sja1105_table_ops *ops;
+
+	ops = priv->static_config.tables[blk_idx].ops;
+
+	ops->packing(buf, (void *)entry_ptr, PACK);
+}
+
+/* Unpack a dynamic entry using the same format as the static variant */
+static void sja1105_standard_dynamic_entry_unpack(struct sja1105_private *priv,
+						  const void *buf, void *entry_ptr,
+						  enum sja1105_blk_idx blk_idx)
+{
+	const struct sja1105_table_ops *ops;
+
+	ops = priv->static_config.tables[blk_idx].ops;
+
+	ops->packing((void *)buf, entry_ptr, UNPACK);
+}
+
 /* Command and entry overlap */
 static void
 sja1105et_vl_lookup_cmd_packing(void *buf, struct sja1105_dyn_cmd *cmd,
@@ -234,15 +258,15 @@ sja1110_vl_lookup_cmd_packing(void *buf, struct sja1105_dyn_cmd *cmd,
 	sja1105_packing(p, &cmd->index,   11,  0, size, op);
 }
 
-static size_t sja1105et_vl_lookup_entry_packing(void *buf, void *entry_ptr,
-						enum packing_op op)
+static void sja1105et_vl_lookup_entry_packing(struct sja1105_private *priv,
+					      void *buf, void *entry_ptr,
+					      enum packing_op op)
 {
 	struct sja1105_vl_lookup_entry *entry = entry_ptr;
 	const int size = SJA1105ET_SIZE_VL_LOOKUP_DYN_CMD;
 
 	sja1105_packing(buf, &entry->egrmirr,  21, 17, size, op);
 	sja1105_packing(buf, &entry->ingrmirr, 16, 16, size, op);
-	return size;
 }
 
 static void
@@ -383,8 +407,9 @@ sja1110_l2_lookup_cmd_packing(void *buf, struct sja1105_dyn_cmd *cmd,
  * a peek outside of the caller-supplied @buf (the entry buffer), to reach the
  * command buffer.
  */
-static size_t
-sja1105pqrs_dyn_l2_lookup_entry_packing(void *buf, void *entry_ptr,
+static void
+sja1105pqrs_dyn_l2_lookup_entry_packing(struct sja1105_private *priv,
+					void *buf, void *entry_ptr,
 					enum packing_op op)
 {
 	struct sja1105_l2_lookup_entry *entry = entry_ptr;
@@ -393,11 +418,18 @@ sja1105pqrs_dyn_l2_lookup_entry_packing(void *buf, void *entry_ptr,
 
 	sja1105_packing(cmd, &entry->lockeds, 28, 28, size, op);
 
-	return sja1105pqrs_l2_lookup_entry_packing(buf, entry_ptr, op);
+	if (op == PACK) {
+		sja1105_standard_dynamic_entry_pack(priv, buf, entry_ptr,
+						    BLK_IDX_L2_LOOKUP);
+	} else {
+		sja1105_standard_dynamic_entry_unpack(priv, buf, entry_ptr,
+						      BLK_IDX_L2_LOOKUP);
+	}
 }
 
-static size_t sja1110_dyn_l2_lookup_entry_packing(void *buf, void *entry_ptr,
-						  enum packing_op op)
+static void sja1110_dyn_l2_lookup_entry_packing(struct sja1105_private *priv,
+						void *buf, void *entry_ptr,
+						enum packing_op op)
 {
 	struct sja1105_l2_lookup_entry *entry = entry_ptr;
 	u8 *cmd = buf + SJA1110_SIZE_L2_LOOKUP_ENTRY;
@@ -405,7 +437,13 @@ static size_t sja1110_dyn_l2_lookup_entry_packing(void *buf, void *entry_ptr,
 
 	sja1105_packing(cmd, &entry->lockeds, 28, 28, size, op);
 
-	return sja1110_l2_lookup_entry_packing(buf, entry_ptr, op);
+	if (op == PACK) {
+		sja1105_standard_dynamic_entry_pack(priv, buf, entry_ptr,
+						    BLK_IDX_L2_LOOKUP);
+	} else {
+		sja1105_standard_dynamic_entry_unpack(priv, buf, entry_ptr,
+						      BLK_IDX_L2_LOOKUP);
+	}
 }
 
 static void
@@ -424,8 +462,9 @@ sja1105et_l2_lookup_cmd_packing(void *buf, struct sja1105_dyn_cmd *cmd,
 			SJA1105ET_SIZE_L2_LOOKUP_ENTRY, op);
 }
 
-static size_t sja1105et_dyn_l2_lookup_entry_packing(void *buf, void *entry_ptr,
-						    enum packing_op op)
+static void sja1105et_dyn_l2_lookup_entry_packing(struct sja1105_private *priv,
+						  void *buf, void *entry_ptr,
+						  enum packing_op op)
 {
 	struct sja1105_l2_lookup_entry *entry = entry_ptr;
 	u8 *cmd = buf + SJA1105ET_SIZE_L2_LOOKUP_ENTRY;
@@ -433,7 +472,13 @@ static size_t sja1105et_dyn_l2_lookup_entry_packing(void *buf, void *entry_ptr,
 
 	sja1105_packing(cmd, &entry->lockeds, 28, 28, size, op);
 
-	return sja1105et_l2_lookup_entry_packing(buf, entry_ptr, op);
+	if (op == PACK) {
+		sja1105_standard_dynamic_entry_pack(priv, buf, entry_ptr,
+						    BLK_IDX_L2_LOOKUP);
+	} else {
+		sja1105_standard_dynamic_entry_unpack(priv, buf, entry_ptr,
+						      BLK_IDX_L2_LOOKUP);
+	}
 }
 
 static void
@@ -448,8 +493,9 @@ sja1105et_mgmt_route_cmd_packing(void *buf, struct sja1105_dyn_cmd *cmd,
 		sja1105_pack(p, 1, 26, 26, SJA1105_SIZE_DYN_CMD);
 }
 
-static size_t sja1105et_mgmt_route_entry_packing(void *buf, void *entry_ptr,
-						 enum packing_op op)
+static void sja1105et_mgmt_route_entry_packing(struct sja1105_private *priv,
+					       void *buf, void *entry_ptr,
+					       enum packing_op op)
 {
 	struct sja1105_mgmt_entry *entry = entry_ptr;
 	const size_t size = SJA1105ET_SIZE_L2_LOOKUP_ENTRY;
@@ -465,7 +511,6 @@ static size_t sja1105et_mgmt_route_entry_packing(void *buf, void *entry_ptr,
 	sja1105_packing(buf, &entry->macaddr,   83, 36, size, op);
 	sja1105_packing(buf, &entry->destports, 35, 31, size, op);
 	sja1105_packing(buf, &entry->enfport,   30, 30, size, op);
-	return size;
 }
 
 static void
@@ -480,8 +525,9 @@ sja1105pqrs_mgmt_route_cmd_packing(void *buf, struct sja1105_dyn_cmd *cmd,
 		sja1105_pack(p, 1, 26, 26, SJA1105_SIZE_DYN_CMD);
 }
 
-static size_t sja1105pqrs_mgmt_route_entry_packing(void *buf, void *entry_ptr,
-						   enum packing_op op)
+static void sja1105pqrs_mgmt_route_entry_packing(struct sja1105_private *priv,
+						 void *buf, void *entry_ptr,
+						 enum packing_op op)
 {
 	const size_t size = SJA1105PQRS_SIZE_L2_LOOKUP_ENTRY;
 	struct sja1105_mgmt_entry *entry = entry_ptr;
@@ -495,7 +541,6 @@ static size_t sja1105pqrs_mgmt_route_entry_packing(void *buf, void *entry_ptr,
 	sja1105_packing(buf, &entry->macaddr,   69, 22, size, op);
 	sja1105_packing(buf, &entry->destports, 21, 17, size, op);
 	sja1105_packing(buf, &entry->enfport,   16, 16, size, op);
-	return size;
 }
 
 /* In E/T, entry is at addresses 0x27-0x28. There is a 4 byte gap at 0x29,
@@ -590,8 +635,9 @@ sja1105et_mac_config_cmd_packing(void *buf, struct sja1105_dyn_cmd *cmd,
 	sja1105_packing(reg1, &cmd->index, 26, 24, size, op);
 }
 
-static size_t sja1105et_mac_config_entry_packing(void *buf, void *entry_ptr,
-						 enum packing_op op)
+static void sja1105et_mac_config_entry_packing(struct sja1105_private *priv,
+					       void *buf, void *entry_ptr,
+					       enum packing_op op)
 {
 	const int size = SJA1105ET_SIZE_MAC_CONFIG_DYN_ENTRY;
 	struct sja1105_mac_config_entry *entry = entry_ptr;
@@ -615,8 +661,6 @@ static size_t sja1105et_mac_config_entry_packing(void *buf, void *entry_ptr,
 	/* MAC configuration table entries which can't be reconfigured:
 	 * top, base, enabled, ifg, maxage, drpnona664
 	 */
-	/* Bogus return value, not used anywhere */
-	return 0;
 }
 
 static void
@@ -653,16 +697,15 @@ sja1105et_l2_lookup_params_cmd_packing(void *buf, struct sja1105_dyn_cmd *cmd,
 			SJA1105ET_SIZE_L2_LOOKUP_PARAMS_DYN_CMD, op);
 }
 
-static size_t
-sja1105et_l2_lookup_params_entry_packing(void *buf, void *entry_ptr,
+static void
+sja1105et_l2_lookup_params_entry_packing(struct sja1105_private *priv,
+					 void *buf, void *entry_ptr,
 					 enum packing_op op)
 {
 	struct sja1105_l2_lookup_params_entry *entry = entry_ptr;
 
 	sja1105_packing(buf, &entry->poly, 7, 0,
 			SJA1105ET_SIZE_L2_LOOKUP_PARAMS_DYN_CMD, op);
-	/* Bogus return value, not used anywhere */
-	return 0;
 }
 
 static void
@@ -699,16 +742,15 @@ sja1105et_general_params_cmd_packing(void *buf, struct sja1105_dyn_cmd *cmd,
 	sja1105_packing(buf, &cmd->errors, 30, 30, size, op);
 }
 
-static size_t
-sja1105et_general_params_entry_packing(void *buf, void *entry_ptr,
+static void
+sja1105et_general_params_entry_packing(struct sja1105_private *priv,
+				       void *buf, void *entry_ptr,
 				       enum packing_op op)
 {
 	struct sja1105_general_params_entry *entry = entry_ptr;
 	const int size = SJA1105ET_SIZE_GENERAL_PARAMS_DYN_CMD;
 
 	sja1105_packing(buf, &entry->mirr_port, 2, 0, size, op);
-	/* Bogus return value, not used anywhere */
-	return 0;
 }
 
 static void
@@ -785,8 +827,9 @@ static void sja1105et_cbs_cmd_packing(void *buf, struct sja1105_dyn_cmd *cmd,
 	sja1105_packing(p, &cmd->index, 19, 16, size, op);
 }
 
-static size_t sja1105et_cbs_entry_packing(void *buf, void *entry_ptr,
-					  enum packing_op op)
+static void sja1105et_cbs_entry_packing(struct sja1105_private *priv,
+					void *buf, void *entry_ptr,
+					enum packing_op op)
 {
 	const size_t size = SJA1105ET_SIZE_CBS_ENTRY;
 	struct sja1105_cbs_entry *entry = entry_ptr;
@@ -799,7 +842,6 @@ static size_t sja1105et_cbs_entry_packing(void *buf, void *entry_ptr,
 	sja1105_packing(p + 2, &entry->credit_hi,  31, 0, size, op);
 	sja1105_packing(p + 1, &entry->send_slope, 31, 0, size, op);
 	sja1105_packing(p + 0, &entry->idle_slope, 31, 0, size, op);
-	return size;
 }
 
 static void sja1105pqrs_cbs_cmd_packing(void *buf, struct sja1105_dyn_cmd *cmd,
@@ -826,8 +868,9 @@ static void sja1110_cbs_cmd_packing(void *buf, struct sja1105_dyn_cmd *cmd,
 	sja1105_packing(p, &cmd->index,    7,  0, size, op);
 }
 
-static size_t sja1105pqrs_cbs_entry_packing(void *buf, void *entry_ptr,
-					    enum packing_op op)
+static void sja1105pqrs_cbs_entry_packing(struct sja1105_private *priv,
+					  void *buf, void *entry_ptr,
+					  enum packing_op op)
 {
 	const size_t size = SJA1105PQRS_SIZE_CBS_ENTRY;
 	struct sja1105_cbs_entry *entry = entry_ptr;
@@ -838,11 +881,10 @@ static size_t sja1105pqrs_cbs_entry_packing(void *buf, void *entry_ptr,
 	sja1105_packing(buf, &entry->credit_hi, 121,  90, size, op);
 	sja1105_packing(buf, &entry->send_slope, 89,  58, size, op);
 	sja1105_packing(buf, &entry->idle_slope, 57,  26, size, op);
-	return size;
 }
 
-static size_t sja1110_cbs_entry_packing(void *buf, void *entry_ptr,
-					enum packing_op op)
+static void sja1110_cbs_entry_packing(struct sja1105_private *priv, void *buf,
+				      void *entry_ptr, enum packing_op op)
 {
 	const size_t size = SJA1105PQRS_SIZE_CBS_ENTRY;
 	struct sja1105_cbs_entry *entry = entry_ptr;
@@ -853,7 +895,6 @@ static size_t sja1110_cbs_entry_packing(void *buf, void *entry_ptr,
 	sja1105_packing(buf, &entry->credit_hi, 119,  88, size, op);
 	sja1105_packing(buf, &entry->send_slope, 87,  56, size, op);
 	sja1105_packing(buf, &entry->idle_slope, 55,  24, size, op);
-	return size;
 }
 
 static void sja1110_dummy_cmd_packing(void *buf, struct sja1105_dyn_cmd *cmd,
@@ -907,7 +948,6 @@ const struct sja1105_dynamic_table_ops sja1105et_dyn_ops[BLK_IDX_MAX_DYN] = {
 		.addr = 0x20,
 	},
 	[BLK_IDX_VLAN_LOOKUP] = {
-		.entry_packing = sja1105_vlan_lookup_entry_packing,
 		.cmd_packing = sja1105_vlan_lookup_cmd_packing,
 		.access = (OP_WRITE | OP_DEL),
 		.max_entry_count = SJA1105_MAX_VLAN_LOOKUP_COUNT,
@@ -915,7 +955,6 @@ const struct sja1105_dynamic_table_ops sja1105et_dyn_ops[BLK_IDX_MAX_DYN] = {
 		.addr = 0x27,
 	},
 	[BLK_IDX_L2_FORWARDING] = {
-		.entry_packing = sja1105_l2_forwarding_entry_packing,
 		.cmd_packing = sja1105_l2_forwarding_cmd_packing,
 		.max_entry_count = SJA1105_MAX_L2_FORWARDING_COUNT,
 		.access = OP_WRITE,
@@ -947,7 +986,6 @@ const struct sja1105_dynamic_table_ops sja1105et_dyn_ops[BLK_IDX_MAX_DYN] = {
 		.addr = 0x34,
 	},
 	[BLK_IDX_RETAGGING] = {
-		.entry_packing = sja1105_retagging_entry_packing,
 		.cmd_packing = sja1105_retagging_cmd_packing,
 		.max_entry_count = SJA1105_MAX_RETAGGING_COUNT,
 		.access = (OP_WRITE | OP_DEL),
@@ -967,7 +1005,6 @@ const struct sja1105_dynamic_table_ops sja1105et_dyn_ops[BLK_IDX_MAX_DYN] = {
 /* SJA1105P/Q/R/S: Second generation */
 const struct sja1105_dynamic_table_ops sja1105pqrs_dyn_ops[BLK_IDX_MAX_DYN] = {
 	[BLK_IDX_VL_LOOKUP] = {
-		.entry_packing = sja1105_vl_lookup_entry_packing,
 		.cmd_packing = sja1105pqrs_vl_lookup_cmd_packing,
 		.access = (OP_READ | OP_WRITE),
 		.max_entry_count = SJA1105_MAX_VL_LOOKUP_COUNT,
@@ -991,7 +1028,6 @@ const struct sja1105_dynamic_table_ops sja1105pqrs_dyn_ops[BLK_IDX_MAX_DYN] = {
 		.addr = 0x24,
 	},
 	[BLK_IDX_VLAN_LOOKUP] = {
-		.entry_packing = sja1105_vlan_lookup_entry_packing,
 		.cmd_packing = sja1105_vlan_lookup_cmd_packing,
 		.access = (OP_READ | OP_WRITE | OP_DEL),
 		.max_entry_count = SJA1105_MAX_VLAN_LOOKUP_COUNT,
@@ -999,7 +1035,6 @@ const struct sja1105_dynamic_table_ops sja1105pqrs_dyn_ops[BLK_IDX_MAX_DYN] = {
 		.addr = 0x2D,
 	},
 	[BLK_IDX_L2_FORWARDING] = {
-		.entry_packing = sja1105_l2_forwarding_entry_packing,
 		.cmd_packing = sja1105_l2_forwarding_cmd_packing,
 		.max_entry_count = SJA1105_MAX_L2_FORWARDING_COUNT,
 		.access = OP_WRITE,
@@ -1007,7 +1042,6 @@ const struct sja1105_dynamic_table_ops sja1105pqrs_dyn_ops[BLK_IDX_MAX_DYN] = {
 		.addr = 0x2A,
 	},
 	[BLK_IDX_MAC_CONFIG] = {
-		.entry_packing = sja1105pqrs_mac_config_entry_packing,
 		.cmd_packing = sja1105pqrs_mac_config_cmd_packing,
 		.max_entry_count = SJA1105_MAX_MAC_CONFIG_COUNT,
 		.access = (OP_READ | OP_WRITE),
@@ -1015,7 +1049,6 @@ const struct sja1105_dynamic_table_ops sja1105pqrs_dyn_ops[BLK_IDX_MAX_DYN] = {
 		.addr = 0x4B,
 	},
 	[BLK_IDX_L2_LOOKUP_PARAMS] = {
-		.entry_packing = sja1105pqrs_l2_lookup_params_entry_packing,
 		.cmd_packing = sja1105pqrs_l2_lookup_params_cmd_packing,
 		.max_entry_count = SJA1105_MAX_L2_LOOKUP_PARAMS_COUNT,
 		.access = (OP_READ | OP_WRITE),
@@ -1023,7 +1056,6 @@ const struct sja1105_dynamic_table_ops sja1105pqrs_dyn_ops[BLK_IDX_MAX_DYN] = {
 		.addr = 0x54,
 	},
 	[BLK_IDX_AVB_PARAMS] = {
-		.entry_packing = sja1105pqrs_avb_params_entry_packing,
 		.cmd_packing = sja1105pqrs_avb_params_cmd_packing,
 		.max_entry_count = SJA1105_MAX_AVB_PARAMS_COUNT,
 		.access = (OP_READ | OP_WRITE),
@@ -1031,7 +1063,6 @@ const struct sja1105_dynamic_table_ops sja1105pqrs_dyn_ops[BLK_IDX_MAX_DYN] = {
 		.addr = 0x8003,
 	},
 	[BLK_IDX_GENERAL_PARAMS] = {
-		.entry_packing = sja1105pqrs_general_params_entry_packing,
 		.cmd_packing = sja1105pqrs_general_params_cmd_packing,
 		.max_entry_count = SJA1105_MAX_GENERAL_PARAMS_COUNT,
 		.access = (OP_READ | OP_WRITE),
@@ -1039,7 +1070,6 @@ const struct sja1105_dynamic_table_ops sja1105pqrs_dyn_ops[BLK_IDX_MAX_DYN] = {
 		.addr = 0x3B,
 	},
 	[BLK_IDX_RETAGGING] = {
-		.entry_packing = sja1105_retagging_entry_packing,
 		.cmd_packing = sja1105_retagging_cmd_packing,
 		.max_entry_count = SJA1105_MAX_RETAGGING_COUNT,
 		.access = (OP_READ | OP_WRITE | OP_DEL),
@@ -1059,7 +1089,6 @@ const struct sja1105_dynamic_table_ops sja1105pqrs_dyn_ops[BLK_IDX_MAX_DYN] = {
 /* SJA1110: Third generation */
 const struct sja1105_dynamic_table_ops sja1110_dyn_ops[BLK_IDX_MAX_DYN] = {
 	[BLK_IDX_VL_LOOKUP] = {
-		.entry_packing = sja1110_vl_lookup_entry_packing,
 		.cmd_packing = sja1110_vl_lookup_cmd_packing,
 		.access = (OP_READ | OP_WRITE | OP_VALID_ANYWAY),
 		.max_entry_count = SJA1110_MAX_VL_LOOKUP_COUNT,
@@ -1067,7 +1096,6 @@ const struct sja1105_dynamic_table_ops sja1110_dyn_ops[BLK_IDX_MAX_DYN] = {
 		.addr = SJA1110_SPI_ADDR(0x124),
 	},
 	[BLK_IDX_VL_POLICING] = {
-		.entry_packing = sja1110_vl_policing_entry_packing,
 		.cmd_packing = sja1110_vl_policing_cmd_packing,
 		.access = (OP_READ | OP_WRITE | OP_VALID_ANYWAY),
 		.max_entry_count = SJA1110_MAX_VL_POLICING_COUNT,
@@ -1083,7 +1111,6 @@ const struct sja1105_dynamic_table_ops sja1110_dyn_ops[BLK_IDX_MAX_DYN] = {
 		.addr = SJA1110_SPI_ADDR(0x8c),
 	},
 	[BLK_IDX_VLAN_LOOKUP] = {
-		.entry_packing = sja1110_vlan_lookup_entry_packing,
 		.cmd_packing = sja1110_vlan_lookup_cmd_packing,
 		.access = (OP_READ | OP_WRITE | OP_DEL),
 		.max_entry_count = SJA1105_MAX_VLAN_LOOKUP_COUNT,
@@ -1091,7 +1118,6 @@ const struct sja1105_dynamic_table_ops sja1110_dyn_ops[BLK_IDX_MAX_DYN] = {
 		.addr = SJA1110_SPI_ADDR(0xb4),
 	},
 	[BLK_IDX_L2_FORWARDING] = {
-		.entry_packing = sja1110_l2_forwarding_entry_packing,
 		.cmd_packing = sja1110_l2_forwarding_cmd_packing,
 		.max_entry_count = SJA1110_MAX_L2_FORWARDING_COUNT,
 		.access = (OP_READ | OP_WRITE | OP_VALID_ANYWAY),
@@ -1099,7 +1125,6 @@ const struct sja1105_dynamic_table_ops sja1110_dyn_ops[BLK_IDX_MAX_DYN] = {
 		.addr = SJA1110_SPI_ADDR(0xa8),
 	},
 	[BLK_IDX_MAC_CONFIG] = {
-		.entry_packing = sja1110_mac_config_entry_packing,
 		.cmd_packing = sja1110_mac_config_cmd_packing,
 		.max_entry_count = SJA1110_MAX_MAC_CONFIG_COUNT,
 		.access = (OP_READ | OP_WRITE | OP_VALID_ANYWAY),
@@ -1107,7 +1132,6 @@ const struct sja1105_dynamic_table_ops sja1110_dyn_ops[BLK_IDX_MAX_DYN] = {
 		.addr = SJA1110_SPI_ADDR(0x134),
 	},
 	[BLK_IDX_L2_LOOKUP_PARAMS] = {
-		.entry_packing = sja1110_l2_lookup_params_entry_packing,
 		.cmd_packing = sja1110_l2_lookup_params_cmd_packing,
 		.max_entry_count = SJA1105_MAX_L2_LOOKUP_PARAMS_COUNT,
 		.access = (OP_READ | OP_WRITE | OP_VALID_ANYWAY),
@@ -1115,7 +1139,6 @@ const struct sja1105_dynamic_table_ops sja1110_dyn_ops[BLK_IDX_MAX_DYN] = {
 		.addr = SJA1110_SPI_ADDR(0x158),
 	},
 	[BLK_IDX_AVB_PARAMS] = {
-		.entry_packing = sja1105pqrs_avb_params_entry_packing,
 		.cmd_packing = sja1105pqrs_avb_params_cmd_packing,
 		.max_entry_count = SJA1105_MAX_AVB_PARAMS_COUNT,
 		.access = (OP_READ | OP_WRITE | OP_VALID_ANYWAY),
@@ -1123,7 +1146,6 @@ const struct sja1105_dynamic_table_ops sja1110_dyn_ops[BLK_IDX_MAX_DYN] = {
 		.addr = SJA1110_SPI_ADDR(0x2000C),
 	},
 	[BLK_IDX_GENERAL_PARAMS] = {
-		.entry_packing = sja1110_general_params_entry_packing,
 		.cmd_packing = sja1110_general_params_cmd_packing,
 		.max_entry_count = SJA1105_MAX_GENERAL_PARAMS_COUNT,
 		.access = (OP_READ | OP_WRITE | OP_VALID_ANYWAY),
@@ -1131,7 +1153,6 @@ const struct sja1105_dynamic_table_ops sja1110_dyn_ops[BLK_IDX_MAX_DYN] = {
 		.addr = SJA1110_SPI_ADDR(0xe8),
 	},
 	[BLK_IDX_RETAGGING] = {
-		.entry_packing = sja1110_retagging_entry_packing,
 		.cmd_packing = sja1110_retagging_cmd_packing,
 		.max_entry_count = SJA1105_MAX_RETAGGING_COUNT,
 		.access = (OP_READ | OP_WRITE | OP_DEL),
@@ -1147,7 +1168,6 @@ const struct sja1105_dynamic_table_ops sja1110_dyn_ops[BLK_IDX_MAX_DYN] = {
 		.addr = SJA1110_SPI_ADDR(0xc4),
 	},
 	[BLK_IDX_XMII_PARAMS] = {
-		.entry_packing = sja1110_xmii_params_entry_packing,
 		.cmd_packing = sja1110_dummy_cmd_packing,
 		.max_entry_count = SJA1105_MAX_XMII_PARAMS_COUNT,
 		.access = (OP_READ | OP_VALID_ANYWAY),
@@ -1155,7 +1175,6 @@ const struct sja1105_dynamic_table_ops sja1110_dyn_ops[BLK_IDX_MAX_DYN] = {
 		.addr = SJA1110_SPI_ADDR(0x3c),
 	},
 	[BLK_IDX_L2_POLICING] = {
-		.entry_packing = sja1110_l2_policing_entry_packing,
 		.cmd_packing = sja1110_l2_policing_cmd_packing,
 		.max_entry_count = SJA1110_MAX_L2_POLICING_COUNT,
 		.access = (OP_READ | OP_WRITE | OP_VALID_ANYWAY),
@@ -1163,7 +1182,6 @@ const struct sja1105_dynamic_table_ops sja1110_dyn_ops[BLK_IDX_MAX_DYN] = {
 		.addr = SJA1110_SPI_ADDR(0x2fc),
 	},
 	[BLK_IDX_L2_FORWARDING_PARAMS] = {
-		.entry_packing = sja1110_l2_forwarding_params_entry_packing,
 		.cmd_packing = sja1110_dummy_cmd_packing,
 		.max_entry_count = SJA1105_MAX_L2_FORWARDING_PARAMS_COUNT,
 		.access = (OP_READ | OP_VALID_ANYWAY),
@@ -1171,6 +1189,30 @@ const struct sja1105_dynamic_table_ops sja1110_dyn_ops[BLK_IDX_MAX_DYN] = {
 		.addr = SJA1110_SPI_ADDR(0x20000),
 	},
 };
+
+static void sja1105_dynamic_table_entry_pack(struct sja1105_private *priv,
+					     enum sja1105_blk_idx blk_idx,
+					     void *buf, const void *entry_ptr)
+{
+	const struct sja1105_dynamic_table_ops *ops = &priv->info->dyn_ops[blk_idx];
+
+	if (ops->entry_packing)
+		return ops->entry_packing(priv, buf, (void *)entry_ptr, PACK);
+
+	sja1105_standard_dynamic_entry_pack(priv, buf, entry_ptr, blk_idx);
+}
+
+static void sja1105_dynamic_table_entry_unpack(struct sja1105_private *priv,
+					       enum sja1105_blk_idx blk_idx,
+					       const void *buf, void *entry_ptr)
+{
+	const struct sja1105_dynamic_table_ops *ops = &priv->info->dyn_ops[blk_idx];
+
+	if (ops->entry_packing)
+		return ops->entry_packing(priv, (void *)buf, entry_ptr, UNPACK);
+
+	sja1105_standard_dynamic_entry_unpack(priv, buf, entry_ptr, blk_idx);
+}
 
 #define SJA1105_DYNAMIC_CONFIG_SLEEP_US		10
 #define SJA1105_DYNAMIC_CONFIG_TIMEOUT_US	100000
@@ -1209,8 +1251,10 @@ sja1105_dynamic_config_poll_valid(struct sja1105_private *priv,
 	/* Don't dereference possibly NULL pointer - maybe caller
 	 * only wanted to see whether the entry existed or not.
 	 */
-	if (entry)
-		ops->entry_packing(packed_buf, entry, UNPACK);
+	if (entry) {
+		sja1105_dynamic_table_entry_unpack(priv, blk_idx, packed_buf,
+						   entry);
+	}
 
 	return 0;
 }
@@ -1295,8 +1339,10 @@ int sja1105_dynamic_config_read(struct sja1105_private *priv,
 	cmd.valident = true;
 	ops->cmd_packing(packed_buf, &cmd, PACK);
 
-	if (cmd.search)
-		ops->entry_packing(packed_buf, entry, PACK);
+	if (cmd.search) {
+		sja1105_dynamic_table_entry_pack(priv, blk_idx, packed_buf,
+						 entry);
+	}
 
 	/* Send SPI write operation: read config table entry */
 	mutex_lock(&priv->dynamic_config_lock);
@@ -1353,8 +1399,10 @@ int sja1105_dynamic_config_write(struct sja1105_private *priv,
 	 * where 'index' field is physically part of entry structure,
 	 * and needed here, we deal with that in the cmd_packing callback.
 	 */
-	if (keep)
-		ops->entry_packing(packed_buf, entry, PACK);
+	if (keep) {
+		sja1105_dynamic_table_entry_pack(priv, blk_idx, packed_buf,
+						 entry);
+	}
 
 	/* Send SPI write operation: read config table entry */
 	mutex_lock(&priv->dynamic_config_lock);

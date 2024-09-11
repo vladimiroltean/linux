@@ -83,8 +83,8 @@ static size_t sja1105et_avb_params_entry_packing(void *buf, void *entry_ptr,
 	return size;
 }
 
-size_t sja1105pqrs_avb_params_entry_packing(void *buf, void *entry_ptr,
-					    enum packing_op op)
+static size_t sja1105pqrs_avb_params_entry_packing(void *buf, void *entry_ptr,
+						   enum packing_op op)
 {
 	const size_t size = SJA1105PQRS_SIZE_AVB_PARAMS_ENTRY;
 	struct sja1105_avb_params_entry *entry = entry_ptr;
@@ -127,8 +127,9 @@ static size_t sja1105et_general_params_entry_packing(void *buf, void *entry_ptr,
 /* TPID and TPID2 are intentionally reversed so that semantic
  * compatibility with E/T is kept.
  */
-size_t sja1105pqrs_general_params_entry_packing(void *buf, void *entry_ptr,
-						enum packing_op op)
+static size_t sja1105pqrs_general_params_entry_packing(void *buf,
+						       void *entry_ptr,
+						       enum packing_op op)
 {
 	const size_t size = SJA1105PQRS_SIZE_GENERAL_PARAMS_ENTRY;
 	struct sja1105_general_params_entry *entry = entry_ptr;
@@ -161,8 +162,8 @@ size_t sja1105pqrs_general_params_entry_packing(void *buf, void *entry_ptr,
 	return size;
 }
 
-size_t sja1110_general_params_entry_packing(void *buf, void *entry_ptr,
-					    enum packing_op op)
+static size_t sja1110_general_params_entry_packing(void *buf, void *entry_ptr,
+						   enum packing_op op)
 {
 	struct sja1105_general_params_entry *entry = entry_ptr;
 	const size_t size = SJA1110_SIZE_GENERAL_PARAMS_ENTRY;
@@ -213,8 +214,9 @@ sja1105_l2_forwarding_params_entry_packing(void *buf, void *entry_ptr,
 	return size;
 }
 
-size_t sja1110_l2_forwarding_params_entry_packing(void *buf, void *entry_ptr,
-						  enum packing_op op)
+static size_t sja1110_l2_forwarding_params_entry_packing(void *buf,
+							 void *entry_ptr,
+							 enum packing_op op)
 {
 	struct sja1105_l2_forwarding_params_entry *entry = entry_ptr;
 	const size_t size = SJA1105_SIZE_L2_FORWARDING_PARAMS_ENTRY;
@@ -227,8 +229,8 @@ size_t sja1110_l2_forwarding_params_entry_packing(void *buf, void *entry_ptr,
 	return size;
 }
 
-size_t sja1105_l2_forwarding_entry_packing(void *buf, void *entry_ptr,
-					   enum packing_op op)
+static size_t sja1105_l2_forwarding_entry_packing(void *buf, void *entry_ptr,
+						  enum packing_op op)
 {
 	const size_t size = SJA1105_SIZE_L2_FORWARDING_ENTRY;
 	struct sja1105_l2_forwarding_entry *entry = entry_ptr;
@@ -243,8 +245,8 @@ size_t sja1105_l2_forwarding_entry_packing(void *buf, void *entry_ptr,
 	return size;
 }
 
-size_t sja1110_l2_forwarding_entry_packing(void *buf, void *entry_ptr,
-					   enum packing_op op)
+static size_t sja1110_l2_forwarding_entry_packing(void *buf, void *entry_ptr,
+						  enum packing_op op)
 {
 	struct sja1105_l2_forwarding_entry *entry = entry_ptr;
 	const size_t size = SJA1105_SIZE_L2_FORWARDING_ENTRY;
@@ -280,8 +282,9 @@ sja1105et_l2_lookup_params_entry_packing(void *buf, void *entry_ptr,
 	return size;
 }
 
-size_t sja1105pqrs_l2_lookup_params_entry_packing(void *buf, void *entry_ptr,
-						  enum packing_op op)
+static size_t sja1105pqrs_l2_lookup_params_entry_packing(void *buf,
+							 void *entry_ptr,
+							 enum packing_op op)
 {
 	const size_t size = SJA1105PQRS_SIZE_L2_LOOKUP_PARAMS_ENTRY;
 	struct sja1105_l2_lookup_params_entry *entry = entry_ptr;
@@ -302,8 +305,8 @@ size_t sja1105pqrs_l2_lookup_params_entry_packing(void *buf, void *entry_ptr,
 	return size;
 }
 
-size_t sja1110_l2_lookup_params_entry_packing(void *buf, void *entry_ptr,
-					      enum packing_op op)
+static size_t sja1110_l2_lookup_params_entry_packing(void *buf, void *entry_ptr,
+						     enum packing_op op)
 {
 	struct sja1105_l2_lookup_params_entry *entry = entry_ptr;
 	const size_t size = SJA1110_SIZE_L2_LOOKUP_PARAMS_ENTRY;
@@ -324,8 +327,8 @@ size_t sja1110_l2_lookup_params_entry_packing(void *buf, void *entry_ptr,
 	return size;
 }
 
-size_t sja1105et_l2_lookup_entry_packing(void *buf, void *entry_ptr,
-					 enum packing_op op)
+static size_t sja1105et_l2_lookup_entry_packing(void *buf, void *entry_ptr,
+						enum packing_op op)
 {
 	const size_t size = SJA1105ET_SIZE_L2_LOOKUP_ENTRY;
 	struct sja1105_l2_lookup_entry *entry = entry_ptr;
@@ -338,8 +341,8 @@ size_t sja1105et_l2_lookup_entry_packing(void *buf, void *entry_ptr,
 	return size;
 }
 
-size_t sja1105pqrs_l2_lookup_entry_packing(void *buf, void *entry_ptr,
-					   enum packing_op op)
+static size_t sja1105pqrs_l2_lookup_entry_packing(void *buf, void *entry_ptr,
+						  enum packing_op op)
 {
 	const size_t size = SJA1105PQRS_SIZE_L2_LOOKUP_ENTRY;
 	struct sja1105_l2_lookup_entry *entry = entry_ptr;
@@ -366,8 +369,8 @@ size_t sja1105pqrs_l2_lookup_entry_packing(void *buf, void *entry_ptr,
 	return size;
 }
 
-size_t sja1110_l2_lookup_entry_packing(void *buf, void *entry_ptr,
-				       enum packing_op op)
+static size_t sja1110_l2_lookup_entry_packing(void *buf, void *entry_ptr,
+					      enum packing_op op)
 {
 	const size_t size = SJA1110_SIZE_L2_LOOKUP_ENTRY;
 	struct sja1105_l2_lookup_entry *entry = entry_ptr;
@@ -410,8 +413,8 @@ static size_t sja1105_l2_policing_entry_packing(void *buf, void *entry_ptr,
 	return size;
 }
 
-size_t sja1110_l2_policing_entry_packing(void *buf, void *entry_ptr,
-					 enum packing_op op)
+static size_t sja1110_l2_policing_entry_packing(void *buf, void *entry_ptr,
+						enum packing_op op)
 {
 	struct sja1105_l2_policing_entry *entry = entry_ptr;
 	const size_t size = SJA1105_SIZE_L2_POLICING_ENTRY;
@@ -458,8 +461,8 @@ static size_t sja1105et_mac_config_entry_packing(void *buf, void *entry_ptr,
 	return size;
 }
 
-size_t sja1105pqrs_mac_config_entry_packing(void *buf, void *entry_ptr,
-					    enum packing_op op)
+static size_t sja1105pqrs_mac_config_entry_packing(void *buf, void *entry_ptr,
+						   enum packing_op op)
 {
 	const size_t size = SJA1105PQRS_SIZE_MAC_CONFIG_ENTRY;
 	struct sja1105_mac_config_entry *entry = entry_ptr;
@@ -492,8 +495,8 @@ size_t sja1105pqrs_mac_config_entry_packing(void *buf, void *entry_ptr,
 	return size;
 }
 
-size_t sja1110_mac_config_entry_packing(void *buf, void *entry_ptr,
-					enum packing_op op)
+static size_t sja1110_mac_config_entry_packing(void *buf, void *entry_ptr,
+					       enum packing_op op)
 {
 	const size_t size = SJA1105PQRS_SIZE_MAC_CONFIG_ENTRY;
 	struct sja1105_mac_config_entry *entry = entry_ptr;
@@ -684,8 +687,8 @@ static size_t sja1110_vl_forwarding_entry_packing(void *buf, void *entry_ptr,
 	return size;
 }
 
-size_t sja1105_vl_lookup_entry_packing(void *buf, void *entry_ptr,
-				       enum packing_op op)
+static size_t sja1105_vl_lookup_entry_packing(void *buf, void *entry_ptr,
+					      enum packing_op op)
 {
 	struct sja1105_vl_lookup_entry *entry = entry_ptr;
 	const size_t size = SJA1105_SIZE_VL_LOOKUP_ENTRY;
@@ -718,8 +721,8 @@ size_t sja1105_vl_lookup_entry_packing(void *buf, void *entry_ptr,
 	return size;
 }
 
-size_t sja1110_vl_lookup_entry_packing(void *buf, void *entry_ptr,
-				       enum packing_op op)
+static size_t sja1110_vl_lookup_entry_packing(void *buf, void *entry_ptr,
+					      enum packing_op op)
 {
 	struct sja1105_vl_lookup_entry *entry = entry_ptr;
 	const size_t size = SJA1105_SIZE_VL_LOOKUP_ENTRY;
@@ -768,8 +771,8 @@ static size_t sja1105_vl_policing_entry_packing(void *buf, void *entry_ptr,
 	return size;
 }
 
-size_t sja1110_vl_policing_entry_packing(void *buf, void *entry_ptr,
-					 enum packing_op op)
+static size_t sja1110_vl_policing_entry_packing(void *buf, void *entry_ptr,
+						enum packing_op op)
 {
 	struct sja1105_vl_policing_entry *entry = entry_ptr;
 	const size_t size = SJA1105_SIZE_VL_POLICING_ENTRY;
@@ -784,8 +787,8 @@ size_t sja1110_vl_policing_entry_packing(void *buf, void *entry_ptr,
 	return size;
 }
 
-size_t sja1105_vlan_lookup_entry_packing(void *buf, void *entry_ptr,
-					 enum packing_op op)
+static size_t sja1105_vlan_lookup_entry_packing(void *buf, void *entry_ptr,
+						enum packing_op op)
 {
 	const size_t size = SJA1105_SIZE_VLAN_LOOKUP_ENTRY;
 	struct sja1105_vlan_lookup_entry *entry = entry_ptr;
@@ -799,8 +802,8 @@ size_t sja1105_vlan_lookup_entry_packing(void *buf, void *entry_ptr,
 	return size;
 }
 
-size_t sja1110_vlan_lookup_entry_packing(void *buf, void *entry_ptr,
-					 enum packing_op op)
+static size_t sja1110_vlan_lookup_entry_packing(void *buf, void *entry_ptr,
+						enum packing_op op)
 {
 	struct sja1105_vlan_lookup_entry *entry = entry_ptr;
 	const size_t size = SJA1110_SIZE_VLAN_LOOKUP_ENTRY;
@@ -831,8 +834,8 @@ static size_t sja1105_xmii_params_entry_packing(void *buf, void *entry_ptr,
 	return size;
 }
 
-size_t sja1110_xmii_params_entry_packing(void *buf, void *entry_ptr,
-					 enum packing_op op)
+static size_t sja1110_xmii_params_entry_packing(void *buf, void *entry_ptr,
+						enum packing_op op)
 {
 	const size_t size = SJA1110_SIZE_XMII_PARAMS_ENTRY;
 	struct sja1105_xmii_params_entry *entry = entry_ptr;
@@ -849,8 +852,8 @@ size_t sja1110_xmii_params_entry_packing(void *buf, void *entry_ptr,
 	return size;
 }
 
-size_t sja1105_retagging_entry_packing(void *buf, void *entry_ptr,
-				       enum packing_op op)
+static size_t sja1105_retagging_entry_packing(void *buf, void *entry_ptr,
+					      enum packing_op op)
 {
 	struct sja1105_retagging_entry *entry = entry_ptr;
 	const size_t size = SJA1105_SIZE_RETAGGING_ENTRY;
@@ -865,8 +868,8 @@ size_t sja1105_retagging_entry_packing(void *buf, void *entry_ptr,
 	return size;
 }
 
-size_t sja1110_retagging_entry_packing(void *buf, void *entry_ptr,
-				       enum packing_op op)
+static size_t sja1110_retagging_entry_packing(void *buf, void *entry_ptr,
+					      enum packing_op op)
 {
 	struct sja1105_retagging_entry *entry = entry_ptr;
 	const size_t size = SJA1105_SIZE_RETAGGING_ENTRY;

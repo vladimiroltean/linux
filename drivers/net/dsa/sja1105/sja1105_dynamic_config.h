@@ -13,10 +13,8 @@
 struct sja1105_dyn_cmd;
 
 struct sja1105_dynamic_table_ops {
-	/* This returns size_t just to keep same prototype as the
-	 * static config ops, of which we are reusing some functions.
-	 */
-	size_t (*entry_packing)(void *buf, void *entry_ptr, enum packing_op op);
+	void (*entry_packing)(struct sja1105_private *priv, void *buf,
+			      void *entry_ptr, enum packing_op op);
 	void (*cmd_packing)(void *buf, struct sja1105_dyn_cmd *cmd,
 			    enum packing_op op);
 	size_t max_entry_count;
