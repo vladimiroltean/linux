@@ -7,7 +7,7 @@
 #define SJA1105_TAS_CLKSRC_STANDALONE	1
 #define SJA1105_TAS_CLKSRC_AS6802	2
 #define SJA1105_TAS_CLKSRC_PTP		3
-#define SJA1105_GATE_MASK		GENMASK_ULL(SJA1105_NUM_TC - 1, 0)
+#define SJA1105_GATE_MASK		GENMASK(SJA1105_NUM_TC - 1, 0)
 
 #define work_to_sja1105_tas(d) \
 	container_of((d), struct sja1105_tas_data, tas_work)

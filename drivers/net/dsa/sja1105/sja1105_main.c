@@ -826,7 +826,7 @@ static int sja1105_init_topology(struct sja1105_private *priv,
 				general_params->host_port = port;
 			} else {
 				dev_err(ds->dev,
-					"Port %llu is already a host port, configuring %d as one too is not supported\n",
+					"Port %u is already a host port, configuring %d as one too is not supported\n",
 					general_params->host_port, port);
 				return -EINVAL;
 			}
@@ -840,7 +840,7 @@ static int sja1105_init_topology(struct sja1105_private *priv,
 				general_params->casc_port = port;
 			} else {
 				dev_err(ds->dev,
-					"Port %llu is already a cascade port, configuring %d as one too is not supported\n",
+					"Port %u is already a cascade port, configuring %d as one too is not supported\n",
 					general_params->casc_port, port);
 				return -EINVAL;
 			}
@@ -1955,7 +1955,7 @@ static void sja1105_fast_age(struct dsa_switch *ds, int port)
 		rc = __sja1105_fdb_del(ds, port, macaddr, l2_lookup.vlanid, db);
 		if (rc) {
 			dev_err(ds->dev,
-				"Failed to delete FDB entry %pM vid %lld: %pe\n",
+				"Failed to delete FDB entry %pM vid %u: %pe\n",
 				macaddr, l2_lookup.vlanid, ERR_PTR(rc));
 			break;
 		}
@@ -2860,7 +2860,7 @@ static int sja1105_mirror_apply(struct sja1105_private *priv, int from, int to,
 	already_enabled = (general_params->mirr_port != ds->num_ports);
 	if (already_enabled && enabled && general_params->mirr_port != to) {
 		dev_err(priv->ds->dev,
-			"Delete mirroring rules towards port %llu first\n",
+			"Delete mirroring rules towards port %u first\n",
 			general_params->mirr_port);
 		return -EBUSY;
 	}

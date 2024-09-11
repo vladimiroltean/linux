@@ -143,11 +143,11 @@ enum sja1105_blk_idx {
 #define SJA1105_FRAME_MEMORY_RETAGGING_OVERHEAD		19
 #define SJA1105_VL_FRAME_MEMORY				100
 
-#define SJA1105E_DEVICE_ID				0x9C00000Cull
-#define SJA1105T_DEVICE_ID				0x9E00030Eull
-#define SJA1105PR_DEVICE_ID				0xAF00030Eull
-#define SJA1105QS_DEVICE_ID				0xAE00030Eull
-#define SJA1110_DEVICE_ID				0xB700030Full
+#define SJA1105E_DEVICE_ID				0x9C00000C
+#define SJA1105T_DEVICE_ID				0x9E00030E
+#define SJA1105PR_DEVICE_ID				0xAF00030E
+#define SJA1105QS_DEVICE_ID				0xAE00030E
+#define SJA1110_DEVICE_ID				0xB700030F
 
 #define SJA1105ET_PART_NO				0x9A83
 #define SJA1105P_PART_NO				0x9A84
@@ -168,212 +168,212 @@ enum sja1105_blk_idx {
 #define SJA1110_CGU_ADDR(x)		(SJA1110_CGU + SJA1110_SPI_ADDR(x))
 #define SJA1110_RGU_ADDR(x)		(SJA1110_RGU + SJA1110_SPI_ADDR(x))
 
-#define SJA1105_RSV_ADDR		0xffffffffffffffffull
+#define SJA1105_RSV_ADDR		0xffffffff
 
 struct sja1105_schedule_entry {
-	u64 winstindex;
-	u64 winend;
-	u64 winst;
-	u64 destports;
-	u64 setvalid;
-	u64 txen;
-	u64 resmedia_en;
-	u64 resmedia;
-	u64 vlindex;
-	u64 delta;
+	u16 winstindex;
+	u8 winend;
+	u8 winst;
+	u16 destports;
+	u8 setvalid;
+	u8 txen;
+	u8 resmedia_en;
+	u8 resmedia;
+	u16 vlindex;
+	u32 delta;
 };
 
 struct sja1105_schedule_params_entry {
-	u64 subscheind[8];
+	u16 subscheind[8];
 };
 
 struct sja1105_general_params_entry {
-	u64 vllupformat;
-	u64 mirr_ptacu;
-	u64 switchid;
-	u64 hostprio;
+	u8 vllupformat;
+	u8 mirr_ptacu;
+	u8 switchid;
+	u8 hostprio;
 	u64 mac_fltres1;
 	u64 mac_fltres0;
 	u64 mac_flt1;
 	u64 mac_flt0;
-	u64 incl_srcpt1;
-	u64 incl_srcpt0;
-	u64 send_meta1;
-	u64 send_meta0;
-	u64 casc_port;
-	u64 host_port;
-	u64 mirr_port;
-	u64 vlmarker;
-	u64 vlmask;
-	u64 tpid;
-	u64 ignore2stf;
-	u64 tpid2;
+	u8 incl_srcpt1;
+	u8 incl_srcpt0;
+	u8 send_meta1;
+	u8 send_meta0;
+	u16 casc_port;
+	u8 host_port;
+	u8 mirr_port;
+	u32 vlmarker;
+	u32 vlmask;
+	u16 tpid;
+	u8 ignore2stf;
+	u16 tpid2;
 	/* P/Q/R/S only */
-	u64 queue_ts;
-	u64 egrmirrvid;
-	u64 egrmirrpcp;
-	u64 egrmirrdei;
-	u64 replay_port;
+	u8 queue_ts;
+	u16 egrmirrvid;
+	u8 egrmirrpcp;
+	u8 egrmirrdei;
+	u8 replay_port;
 	/* SJA1110 only */
-	u64 tte_en;
-	u64 tdmaconfigidx;
-	u64 header_type;
+	u8 tte_en;
+	u8 tdmaconfigidx;
+	u16 header_type;
 };
 
 struct sja1105_schedule_entry_points_entry {
-	u64 subschindx;
-	u64 delta;
-	u64 address;
+	u8 subschindx;
+	u32 delta;
+	u16 address;
 };
 
 struct sja1105_schedule_entry_points_params_entry {
-	u64 clksrc;
-	u64 actsubsch;
+	u8 clksrc;
+	u8 actsubsch;
 };
 
 struct sja1105_vlan_lookup_entry {
-	u64 ving_mirr;
-	u64 vegr_mirr;
-	u64 vmemb_port;
-	u64 vlan_bc;
-	u64 tag_port;
-	u64 vlanid;
-	u64 type_entry; /* SJA1110 only */
+	u16 ving_mirr;
+	u16 vegr_mirr;
+	u16 vmemb_port;
+	u16 vlan_bc;
+	u16 tag_port;
+	u16 vlanid;
+	u8 type_entry; /* SJA1110 only */
 };
 
 struct sja1105_l2_lookup_entry {
-	u64 vlanid;
+	u16 vlanid;
 	u64 macaddr;
-	u64 destports;
-	u64 enfport;
-	u64 index;
+	u16 destports;
+	u8 enfport;
+	u16 index;
 	/* P/Q/R/S only */
-	u64 mask_iotag;
-	u64 mask_vlanid;
+	u8 mask_iotag;
+	u16 mask_vlanid;
 	u64 mask_macaddr;
-	u64 mask_srcport;
-	u64 iotag;
-	u64 srcport;
-	u64 lockeds;
+	u8 mask_srcport;
+	u8 iotag;
+	u8 srcport;
+	u8 lockeds;
 	union {
 		/* LOCKEDS=1: Static FDB entries */
 		struct {
 			/* TSREG is deprecated in SJA1110, TRAP is supported only
 			 * in SJA1110.
 			 */
-			u64 trap;
-			u64 tsreg;
-			u64 mirrvlan;
-			u64 takets;
-			u64 mirr;
-			u64 retag;
+			u8 trap;
+			u8 tsreg;
+			u16 mirrvlan;
+			u8 takets;
+			u8 mirr;
+			u8 retag;
 		};
 		/* LOCKEDS=0: Dynamically learned FDB entries */
 		struct {
-			u64 touched;
-			u64 age;
+			u8 touched;
+			u16 age;
 		};
 	};
 };
 
 struct sja1105_l2_lookup_params_entry {
-	u64 maxaddrp[SJA1105_MAX_NUM_PORTS]; /* P/Q/R/S only */
-	u64 start_dynspc;    /* P/Q/R/S only */
-	u64 drpnolearn;      /* P/Q/R/S only */
-	u64 use_static;      /* P/Q/R/S only */
-	u64 owr_dyn;         /* P/Q/R/S only */
-	u64 learn_once;      /* P/Q/R/S only */
-	u64 maxage;          /* Shared */
-	u64 dyn_tbsz;        /* E/T only */
-	u64 poly;            /* E/T only */
-	u64 shared_learn;    /* Shared */
-	u64 no_enf_hostprt;  /* Shared */
-	u64 no_mgmt_learn;   /* Shared */
+	u16 maxaddrp[SJA1105_MAX_NUM_PORTS];	/* P/Q/R/S only */
+	u16 start_dynspc;			/* P/Q/R/S only */
+	u16 drpnolearn;				/* P/Q/R/S only */
+	u8 use_static;				/* P/Q/R/S only */
+	u8 owr_dyn;				/* P/Q/R/S only */
+	u8 learn_once;				/* P/Q/R/S only */
+	u16 maxage;				/* Shared */
+	u8 dyn_tbsz;				/* E/T only */
+	u8 poly;				/* E/T only */
+	u8 shared_learn;			/* Shared */
+	u8 no_enf_hostprt;			/* Shared */
+	u8 no_mgmt_learn;			/* Shared */
 };
 
 struct sja1105_l2_forwarding_entry {
-	u64 bc_domain;
-	u64 reach_port;
-	u64 fl_domain;
+	u16 bc_domain;
+	u16 reach_port;
+	u16 fl_domain;
 	/* This is actually max(SJA1105_NUM_TC, SJA1105_MAX_NUM_PORTS) */
-	u64 vlan_pmap[SJA1105_MAX_NUM_PORTS];
+	u8 vlan_pmap[SJA1105_MAX_NUM_PORTS];
 	bool type_egrpcp2outputq;
 };
 
 struct sja1105_l2_forwarding_params_entry {
-	u64 max_dynp;
-	u64 part_spc[8];
+	u8 max_dynp;
+	u16 part_spc[8];
 };
 
 struct sja1105_l2_policing_entry {
-	u64 sharindx;
-	u64 smax;
-	u64 rate;
-	u64 maxlen;
-	u64 partition;
+	u8 sharindx;
+	u32 smax;
+	u32 rate;
+	u16 maxlen;
+	u8 partition;
 };
 
 struct sja1105_avb_params_entry {
-	u64 cas_master;
+	u8 cas_master;
 	u64 destmeta;
 	u64 srcmeta;
 };
 
 struct sja1105_mac_config_entry {
-	u64 top[8];
-	u64 base[8];
-	u64 enabled[8];
-	u64 ifg;
-	u64 speed;
-	u64 tp_delin;
-	u64 tp_delout;
-	u64 maxage;
-	u64 vlanprio;
-	u64 vlanid;
-	u64 ing_mirr;
-	u64 egr_mirr;
-	u64 drpnona664;
-	u64 drpdtag;
-	u64 drpuntag;
-	u64 retag;
-	u64 dyn_learn;
-	u64 egress;
-	u64 ingress;
+	u16 top[8];
+	u16 base[8];
+	u8 enabled[8];
+	u8 ifg;
+	u8 speed;
+	u16 tp_delin;
+	u16 tp_delout;
+	u8 maxage;
+	u8 vlanprio;
+	u16 vlanid;
+	u8 ing_mirr;
+	u8 egr_mirr;
+	u8 drpnona664;
+	u8 drpdtag;
+	u8 drpuntag;
+	u8 retag;
+	u8 dyn_learn;
+	u8 egress;
+	u8 ingress;
 };
 
 struct sja1105_retagging_entry {
-	u64 egr_port;
-	u64 ing_port;
-	u64 vlan_ing;
-	u64 vlan_egr;
-	u64 do_not_learn;
-	u64 use_dest_ports;
-	u64 destports;
+	u16 egr_port;
+	u16 ing_port;
+	u16 vlan_ing;
+	u16 vlan_egr;
+	u8 do_not_learn;
+	u8 use_dest_ports;
+	u16 destports;
 };
 
 struct sja1105_cbs_entry {
-	u64 port; /* Not used for SJA1110 */
-	u64 prio; /* Not used for SJA1110 */
-	u64 credit_hi;
-	u64 credit_lo;
-	u64 send_slope;
-	u64 idle_slope;
+	u8 port; /* Not used for SJA1110 */
+	u8 prio; /* Not used for SJA1110 */
+	u32 credit_hi;
+	u32 credit_lo;
+	u32 send_slope;
+	u32 idle_slope;
 };
 
 struct sja1105_xmii_params_entry {
-	u64 phy_mac[SJA1105_MAX_NUM_PORTS];
-	u64 xmii_mode[SJA1105_MAX_NUM_PORTS];
+	u8 phy_mac[SJA1105_MAX_NUM_PORTS];
+	u8 xmii_mode[SJA1105_MAX_NUM_PORTS];
 	/* The SJA1110 insists being a snowflake, and requires SGMII,
 	 * 2500base-x and internal MII ports connected to the 100base-TX PHY to
 	 * set this bit. We set it unconditionally from the high-level logic,
 	 * and only sja1110_xmii_params_entry_packing writes it to the static
 	 * config. I have no better name for it than "special".
 	 */
-	u64 special[SJA1105_MAX_NUM_PORTS];
+	u8 special[SJA1105_MAX_NUM_PORTS];
 };
 
 struct sja1110_pcp_remapping_entry {
-	u64 egrpcp[SJA1105_NUM_TC];
+	u8 egrpcp[SJA1105_NUM_TC];
 };
 
 enum {
@@ -382,22 +382,22 @@ enum {
 };
 
 struct sja1105_vl_lookup_entry {
-	u64 format;
-	u64 port;
+	u8 format;
+	u8 port;
 	union {
 		/* SJA1105_VL_FORMAT_PSFP */
 		struct {
-			u64 destports;
-			u64 iscritical;
+			u16 destports;
+			u8 iscritical;
 			u64 macaddr;
-			u64 vlanid;
-			u64 vlanprior;
+			u16 vlanid;
+			u8 vlanprior;
 		};
 		/* SJA1105_VL_FORMAT_ARINC664 */
 		struct {
-			u64 egrmirr;
-			u64 ingrmirr;
-			u64 vlid;
+			u16 egrmirr;
+			u8 ingrmirr;
+			u16 vlid;
 		};
 	};
 	/* Not part of hardware structure */
@@ -405,29 +405,29 @@ struct sja1105_vl_lookup_entry {
 };
 
 struct sja1105_vl_policing_entry {
-	u64 type;
-	u64 maxlen;
-	u64 sharindx;
-	u64 bag;
-	u64 jitter;
+	u8 type;
+	u16 maxlen;
+	u16 sharindx;
+	u16 bag;
+	u16 jitter;
 };
 
 struct sja1105_vl_forwarding_entry {
-	u64 type;
-	u64 priority;
-	u64 partition;
-	u64 destports;
+	u8 type;
+	u8 priority;
+	u8 partition;
+	u16 destports;
 };
 
 struct sja1105_vl_forwarding_params_entry {
-	u64 partspc[8];
-	u64 debugen;
+	u16 partspc[8];
+	u8 debugen;
 };
 
 struct sja1105_table_header {
-	u64 block_id;
-	u64 len;
-	u64 crc;
+	u32 block_id;
+	u32 len;
+	u32 crc;
 };
 
 struct sja1105_table_ops {
@@ -452,7 +452,7 @@ struct sja1105_table {
 };
 
 struct sja1105_static_config {
-	u64 device_id;
+	u32 device_id;
 	struct sja1105_table tables[BLK_IDX_MAX];
 };
 
@@ -493,7 +493,7 @@ void
 sja1105_static_config_pack(void *buf, struct sja1105_static_config *config);
 int sja1105_static_config_init(struct sja1105_static_config *config,
 			       const struct sja1105_table_ops *static_ops,
-			       u64 device_id);
+			       u32 device_id);
 void sja1105_static_config_free(struct sja1105_static_config *config);
 
 int sja1105_table_delete_entry(struct sja1105_table *table, int i);

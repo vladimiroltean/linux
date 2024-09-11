@@ -21,17 +21,17 @@ struct sja1105_dynamic_table_ops {
 	void (*cmd_unpack)(const void *buf, struct sja1105_dyn_cmd *cmd);
 	size_t max_entry_count;
 	size_t packed_size;
-	u64 addr;
+	u32 addr;
 	u8 access;
 };
 
 struct sja1105_mgmt_entry {
-	u64 tsreg;
-	u64 takets;
+	u8 tsreg;
+	u8 takets;
 	u64 macaddr;
-	u64 destports;
-	u64 enfport;
-	u64 index;
+	u8 destports;
+	u8 enfport;
+	u8 index;
 };
 
 extern const struct sja1105_dynamic_table_ops sja1105et_dyn_ops[BLK_IDX_MAX_DYN];

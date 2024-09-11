@@ -356,7 +356,7 @@ static const struct packed_field_s sja1110_l2_policing_entry_fields[] = {
 	PACKED_FIELD(9, 7, struct sja1105_l2_policing_entry, partition),
 };
 
-static const struct packed_field_m sja1105et_mac_config_entry_fields[] = {
+static const struct packed_field_s sja1105et_mac_config_entry_fields[] = {
 	PACKED_FIELD(223, 215, struct sja1105_mac_config_entry, top[7]),
 	PACKED_FIELD(214, 206, struct sja1105_mac_config_entry, base[7]),
 	PACKED_FIELD(205, 205, struct sja1105_mac_config_entry, enabled[7]),
@@ -399,7 +399,7 @@ static const struct packed_field_m sja1105et_mac_config_entry_fields[] = {
 	PACKED_FIELD(1, 1, struct sja1105_mac_config_entry, ingress),
 };
 
-static const struct packed_field_m sja1105pqrs_mac_config_entry_fields[] = {
+static const struct packed_field_s sja1105pqrs_mac_config_entry_fields[] = {
 	PACKED_FIELD(255, 247, struct sja1105_mac_config_entry, top[7]),
 	PACKED_FIELD(246, 238, struct sja1105_mac_config_entry, base[7]),
 	PACKED_FIELD(237, 237, struct sja1105_mac_config_entry, enabled[7]),
@@ -442,7 +442,7 @@ static const struct packed_field_m sja1105pqrs_mac_config_entry_fields[] = {
 	PACKED_FIELD(31, 31, struct sja1105_mac_config_entry, ingress),
 };
 
-static const struct packed_field_m sja1110_mac_config_entry_fields[] = {
+static const struct packed_field_s sja1110_mac_config_entry_fields[] = {
 	PACKED_FIELD(255, 247, struct sja1105_mac_config_entry, top[7]),
 	PACKED_FIELD(246, 238, struct sja1105_mac_config_entry, base[7]),
 	PACKED_FIELD(237, 237, struct sja1105_mac_config_entry, enabled[7]),
@@ -680,7 +680,7 @@ static const struct packed_field_s sja1105_xmii_params_entry_fields[] = {
 	PACKED_FIELD(18, 17, struct sja1105_xmii_params_entry, xmii_mode[0]),
 };
 
-static const struct packed_field_m sja1110_xmii_params_entry_fields[] = {
+static const struct packed_field_s sja1110_xmii_params_entry_fields[] = {
 	PACKED_FIELD(63, 63, struct sja1105_xmii_params_entry, special[10]),
 	PACKED_FIELD(62, 62, struct sja1105_xmii_params_entry, phy_mac[10]),
 	PACKED_FIELD(61, 60, struct sja1105_xmii_params_entry, xmii_mode[10]),
@@ -1605,7 +1605,7 @@ const struct sja1105_table_ops sja1110_table_ops[BLK_IDX_MAX] = {
 
 int sja1105_static_config_init(struct sja1105_static_config *config,
 			       const struct sja1105_table_ops *static_ops,
-			       u64 device_id)
+			       u32 device_id)
 {
 	enum sja1105_blk_idx i;
 

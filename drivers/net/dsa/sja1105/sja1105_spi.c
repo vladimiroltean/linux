@@ -12,7 +12,7 @@
 struct sja1105_chunk {
 	u8	*buf;
 	size_t	len;
-	u64	reg_addr;
+	u32	reg_addr;
 };
 
 static const struct packed_field_s sja1105_spi_message_fields[] = {
@@ -40,7 +40,7 @@ sja1105_spi_message_pack(void *buf, const struct sja1105_spi_message *msg)
  *		address reg_addr, writing @len bytes into *buf
  */
 static int sja1105_xfer(const struct sja1105_private *priv,
-			sja1105_spi_rw_mode_t rw, u64 reg_addr, u8 *buf,
+			sja1105_spi_rw_mode_t rw, u32 reg_addr, u8 *buf,
 			size_t len, struct ptp_system_timestamp *ptp_sts)
 {
 	u8 hdr_buf[SJA1105_SIZE_SPI_MSG_HEADER] = {0};
@@ -120,19 +120,19 @@ static int sja1105_xfer(const struct sja1105_private *priv,
 	return 0;
 }
 
-int sja1105_read_buf(const struct sja1105_private *priv, u64 reg_addr, u8 *buf,
+int sja1105_read_buf(const struct sja1105_private *priv, u32 reg_addr, u8 *buf,
 		     size_t len)
 {
 	return sja1105_xfer(priv, SPI_READ, reg_addr, buf, len, NULL);
 }
 
-int sja1105_write_buf(const struct sja1105_private *priv, u64 reg_addr,
+int sja1105_write_buf(const struct sja1105_private *priv, u32 reg_addr,
 		      const u8 *buf, size_t len)
 {
 	return sja1105_xfer(priv, SPI_WRITE, reg_addr, (u8 *)buf, len, NULL);
 }
 
-int sja1105_read_u64(const struct sja1105_private *priv, u64 reg_addr,
+int sja1105_read_u64(const struct sja1105_private *priv, u32 reg_addr,
 		     u64 *value, struct ptp_system_timestamp *ptp_sts)
 {
 	u8 packed_buf[8];
@@ -147,7 +147,7 @@ int sja1105_read_u64(const struct sja1105_private *priv, u64 reg_addr,
 	return 0;
 }
 
-int sja1105_write_u64(const struct sja1105_private *priv, u64 reg_addr,
+int sja1105_write_u64(const struct sja1105_private *priv, u32 reg_addr,
 		      u64 value, struct ptp_system_timestamp *ptp_sts)
 {
 	u8 packed_buf[8];
@@ -157,7 +157,7 @@ int sja1105_write_u64(const struct sja1105_private *priv, u64 reg_addr,
 	return sja1105_xfer(priv, SPI_WRITE, reg_addr, packed_buf, 8, ptp_sts);
 }
 
-int sja1105_read_u32(const struct sja1105_private *priv, u64 reg_addr,
+int sja1105_read_u32(const struct sja1105_private *priv, u32 reg_addr,
 		     u32 *value, struct ptp_system_timestamp *ptp_sts)
 {
 	u8 packed_buf[4];
@@ -174,7 +174,7 @@ int sja1105_read_u32(const struct sja1105_private *priv, u64 reg_addr,
 	return 0;
 }
 
-int sja1105_write_u32(const struct sja1105_private *priv, u64 reg_addr,
+int sja1105_write_u32(const struct sja1105_private *priv, u32 reg_addr,
 		      u32 value, struct ptp_system_timestamp *ptp_sts)
 {
 	u8 packed_buf[4];
@@ -337,7 +337,7 @@ int sja1105_static_config_upload(struct sja1105_private *priv)
 	 * Tx on all ports and waiting for current packet to drain.
 	 * Otherwise, the PHY will see an unterminated Ethernet packet.
 	 */
-	rc = sja1105_inhibit_tx(priv, GENMASK_ULL(ds->num_ports - 1, 0), true);
+	rc = sja1105_inhibit_tx(priv, GENMASK(ds->num_ports - 1, 0), true);
 	if (rc < 0) {
 		dev_err(dev, "Failed to inhibit Tx on ports\n");
 		rc = -ENXIO;
@@ -370,7 +370,7 @@ int sja1105_static_config_upload(struct sja1105_private *priv)
 
 		if (status.ids == 1) {
 			dev_err(dev, "Mismatch between hardware and static config "
-				"device id. Wrote 0x%llx, wants 0x%llx\n",
+				"device id. Wrote 0x%x, wants 0x%x\n",
 				config->device_id, priv->info->device_id);
 			continue;
 		}

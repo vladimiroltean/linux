@@ -558,10 +558,12 @@ static void
 sja1105pqrs_l2_lookup_cmd_unpack(const void *buf, struct sja1105_dyn_cmd *cmd)
 {
 	int entry_size = SJA1105PQRS_SIZE_L2_LOOKUP_ENTRY;
+	u64 tmp;
 
 	sja1105pqrs_common_l2_lookup_cmd_unpack(buf, cmd, entry_size);
 
-	sja1105_unpack(buf, &cmd->index, 15, 6, entry_size);
+	sja1105_unpack(buf, &tmp, 15, 6, entry_size);
+	cmd->index = tmp;
 }
 
 static void sja1110_l2_lookup_cmd_pack(void *buf, const struct sja1105_dyn_cmd *cmd)
@@ -576,10 +578,12 @@ static void sja1110_l2_lookup_cmd_pack(void *buf, const struct sja1105_dyn_cmd *
 static void sja1110_l2_lookup_cmd_unpack(const void *buf, struct sja1105_dyn_cmd *cmd)
 {
 	int entry_size = SJA1110_SIZE_L2_LOOKUP_ENTRY;
+	u64 tmp;
 
 	sja1105pqrs_common_l2_lookup_cmd_unpack(buf, cmd, entry_size);
 
-	sja1105_unpack(buf, &cmd->index, 10, 1, entry_size);
+	sja1105_unpack(buf, &tmp, 10, 1, entry_size);
+	cmd->index = tmp;
 }
 
 /* The switch is so retarded that it makes our command/entry abstraction
@@ -646,8 +650,10 @@ sja1105pqrs_dyn_l2_lookup_entry_unpack(struct sja1105_private *priv, const void 
 	const u8 *cmd = buf + SJA1105PQRS_SIZE_L2_LOOKUP_ENTRY;
 	struct sja1105_l2_lookup_entry *entry = entry_ptr;
 	const int size = SJA1105_SIZE_DYN_CMD;
+	u64 tmp;
 
-	sja1105_unpack(cmd, &entry->lockeds, 28, 28, size);
+	sja1105_unpack(cmd, &tmp, 28, 28, size);
+	entry->lockeds = tmp;
 
 	sja1105_standard_dynamic_entry_unpack(priv, buf, entry_ptr,
 					      BLK_IDX_L2_LOOKUP);
@@ -670,8 +676,10 @@ static void sja1110_dyn_l2_lookup_entry_unpack(struct sja1105_private *priv, con
 	const u8 *cmd = buf + SJA1110_SIZE_L2_LOOKUP_ENTRY;
 	struct sja1105_l2_lookup_entry *entry = entry_ptr;
 	const int size = SJA1105_SIZE_DYN_CMD;
+	u64 tmp;
 
-	sja1105_unpack(cmd, &entry->lockeds, 28, 28, size);
+	sja1105_unpack(cmd, &tmp, 28, 28, size);
+	entry->lockeds = tmp;
 
 	sja1105_standard_dynamic_entry_unpack(priv, buf, entry_ptr,
 					      BLK_IDX_L2_LOOKUP);
@@ -691,12 +699,15 @@ sja1105et_l2_lookup_cmd_pack(void *buf, const struct sja1105_dyn_cmd *cmd)
 static void
 sja1105et_l2_lookup_cmd_unpack(const void *buf, struct sja1105_dyn_cmd *cmd)
 {
+	u64 tmp;
+
 	sja1105_unpack_fields(buf + SJA1105ET_SIZE_L2_LOOKUP_ENTRY,
 			      SJA1105_SIZE_DYN_CMD, cmd,
 			      sja1105_l2_lookup_cmd_fields);
 
 	/* Hack - see comments above. */
-	sja1105_unpack(buf, &cmd->index, 29, 20, SJA1105ET_SIZE_L2_LOOKUP_ENTRY);
+	sja1105_unpack(buf, &tmp, 29, 20, SJA1105ET_SIZE_L2_LOOKUP_ENTRY);
+	cmd->index = tmp;
 }
 
 static void sja1105et_dyn_l2_lookup_entry_pack(struct sja1105_private *priv, void *buf, const void *entry_ptr)
@@ -716,8 +727,10 @@ static void sja1105et_dyn_l2_lookup_entry_unpack(struct sja1105_private *priv, c
 	const u8 *cmd = buf + SJA1105ET_SIZE_L2_LOOKUP_ENTRY;
 	struct sja1105_l2_lookup_entry *entry = entry_ptr;
 	const int size = SJA1105_SIZE_DYN_CMD;
+	u64 tmp;
 
-	sja1105_unpack(cmd, &entry->lockeds, 28, 28, size);
+	sja1105_unpack(cmd, &tmp, 28, 28, size);
+	entry->lockeds = tmp;
 
 	sja1105_standard_dynamic_entry_unpack(priv, buf, entry_ptr,
 					      BLK_IDX_L2_LOOKUP);
@@ -844,11 +857,14 @@ sja1105_vlan_lookup_cmd_pack(void *buf, const struct sja1105_dyn_cmd *cmd)
 static void
 sja1105_vlan_lookup_cmd_unpack(const void *buf, struct sja1105_dyn_cmd *cmd)
 {
+	u64 tmp;
+
 	sja1105_unpack_fields(buf + SJA1105_SIZE_VLAN_LOOKUP_ENTRY + 4,
 			      SJA1105_SIZE_DYN_CMD, cmd,
 			      sja1105_vlan_lookup_cmd_fields);
 
-	sja1105_unpack(buf, &cmd->index, 38, 27, SJA1105_SIZE_VLAN_LOOKUP_ENTRY);
+	sja1105_unpack(buf, &tmp, 38, 27, SJA1105_SIZE_VLAN_LOOKUP_ENTRY);
+	cmd->index = tmp;
 }
 
 /* In SJA1110 there is no gap between the command and the data, yay... */
@@ -879,21 +895,22 @@ sja1110_vlan_lookup_cmd_pack(void *buf, const struct sja1105_dyn_cmd *cmd)
 static void
 sja1110_vlan_lookup_cmd_unpack(const void *buf, struct sja1105_dyn_cmd *cmd)
 {
-	u64 type_entry;
+	u64 tmp;
 
 	sja1105_unpack_fields(buf + SJA1110_SIZE_VLAN_LOOKUP_ENTRY,
 			      SJA1105_SIZE_DYN_CMD, cmd,
 			      sja1110_vlan_lookup_cmd_fields);
 
-	sja1105_unpack(buf, &cmd->index, 38, 27, SJA1110_SIZE_VLAN_LOOKUP_ENTRY);
+	sja1105_unpack(buf, &tmp, 38, 27, SJA1110_SIZE_VLAN_LOOKUP_ENTRY);
+	cmd->index = tmp;
 
 	/* But the VALIDENT bit has disappeared, now we are supposed to
 	 * invalidate an entry through the TYPE_ENTRY field of the entry..
 	 * This is a hack to transform the non-zero quality of the TYPE_ENTRY
 	 * field into a VALIDENT bit.
 	 */
-	sja1105_unpack(buf, &type_entry, 40, 39, SJA1110_SIZE_VLAN_LOOKUP_ENTRY);
-	cmd->valident = !!type_entry;
+	sja1105_unpack(buf, &tmp, 40, 39, SJA1110_SIZE_VLAN_LOOKUP_ENTRY);
+	cmd->valident = !!tmp;
 }
 
 static void
@@ -959,7 +976,7 @@ sja1105et_mac_config_cmd_unpack(const void *buf, struct sja1105_dyn_cmd *cmd)
 /* MAC configuration table entries which can't be reconfigured:
  * top, base, enabled, ifg, maxage, drpnona664
  */
-static const struct packed_field_m sja1105et_mac_config_entry_reg1_fields[] = {
+static const struct packed_field_s sja1105et_mac_config_entry_reg1_fields[] = {
 	PACKED_FIELD(30, 29, struct sja1105_mac_config_entry, speed),
 	PACKED_FIELD(23, 23, struct sja1105_mac_config_entry, drpdtag),
 	PACKED_FIELD(22, 22, struct sja1105_mac_config_entry, drpuntag),
@@ -1074,9 +1091,10 @@ static void
 sja1105et_l2_lookup_params_entry_unpack(struct sja1105_private *priv, const void *buf, void *entry_ptr)
 {
 	struct sja1105_l2_lookup_params_entry *entry = entry_ptr;
+	u64 tmp;
 
-	sja1105_unpack(buf, &entry->poly, 7, 0,
-		       SJA1105ET_SIZE_L2_LOOKUP_PARAMS_DYN_CMD);
+	sja1105_unpack(buf, &tmp, 7, 0, SJA1105ET_SIZE_L2_LOOKUP_PARAMS_DYN_CMD);
+	entry->poly = tmp;
 }
 
 static void
@@ -1144,9 +1162,10 @@ static void
 sja1105et_general_params_entry_unpack(struct sja1105_private *priv, const void *buf, void *entry_ptr)
 {
 	struct sja1105_general_params_entry *entry = entry_ptr;
+	u64 tmp;
 
-	sja1105_unpack(buf, &entry->mirr_port, 2, 0,
-		       SJA1105ET_SIZE_GENERAL_PARAMS_DYN_CMD);
+	sja1105_unpack(buf, &tmp, 2, 0, SJA1105ET_SIZE_GENERAL_PARAMS_DYN_CMD);
+	entry->mirr_port = tmp;
 }
 
 static void

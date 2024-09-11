@@ -113,12 +113,12 @@ enum sja1105_internal_phy_t {
 };
 
 struct sja1105_info {
-	u64 device_id;
+	u32 device_id;
 	/* Needed for distinction between P and R, and between Q and S
 	 * (since the parts with/without SGMII share the same
 	 * switch core and device_id)
 	 */
-	u64 part_no;
+	u16 part_no;
 	/* E/T and P/Q/R/S have partial timestamps of different sizes.
 	 * They must be reconstructed on both families anyway to get the full
 	 * 64-bit values back.
@@ -322,17 +322,17 @@ int sja1105_devlink_info_get(struct dsa_switch *ds,
 			     struct netlink_ext_ack *extack);
 
 /* From sja1105_spi.c */
-int sja1105_read_buf(const struct sja1105_private *priv, u64 reg_addr, u8 *buf,
+int sja1105_read_buf(const struct sja1105_private *priv, u32 reg_addr, u8 *buf,
 		     size_t len);
-int sja1105_write_buf(const struct sja1105_private *priv, u64 reg_addr,
+int sja1105_write_buf(const struct sja1105_private *priv, u32 reg_addr,
 		      const u8 *buf, size_t len);
-int sja1105_read_u64(const struct sja1105_private *priv, u64 reg_addr,
+int sja1105_read_u64(const struct sja1105_private *priv, u32 reg_addr,
 		     u64 *value, struct ptp_system_timestamp *ptp_sts);
-int sja1105_write_u64(const struct sja1105_private *priv, u64 reg_addr,
+int sja1105_write_u64(const struct sja1105_private *priv, u32 reg_addr,
 		      u64 value, struct ptp_system_timestamp *ptp_sts);
-int sja1105_read_u32(const struct sja1105_private *priv, u64 reg_addr,
+int sja1105_read_u32(const struct sja1105_private *priv, u32 reg_addr,
 		     u32 *value, struct ptp_system_timestamp *ptp_sts);
-int sja1105_write_u32(const struct sja1105_private *priv, u64 reg_addr,
+int sja1105_write_u32(const struct sja1105_private *priv, u32 reg_addr,
 		      u32 value, struct ptp_system_timestamp *ptp_sts);
 int static_config_buf_prepare_for_upload(struct sja1105_private *priv,
 					 void *config_buf, int buf_len);
