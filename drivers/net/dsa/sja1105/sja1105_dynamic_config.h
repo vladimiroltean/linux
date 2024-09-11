@@ -13,10 +13,12 @@
 struct sja1105_dyn_cmd;
 
 struct sja1105_dynamic_table_ops {
-	void (*entry_packing)(struct sja1105_private *priv, void *buf,
-			      void *entry_ptr, enum packing_op op);
-	void (*cmd_packing)(void *buf, struct sja1105_dyn_cmd *cmd,
-			    enum packing_op op);
+	void (*entry_pack)(struct sja1105_private *priv, void *buf,
+			   const void *entry_ptr);
+	void (*entry_unpack)(struct sja1105_private *priv, const void *buf,
+			     void *entry_ptr);
+	void (*cmd_pack)(void *buf, const struct sja1105_dyn_cmd *cmd);
+	void (*cmd_unpack)(const void *buf, struct sja1105_dyn_cmd *cmd);
 	size_t max_entry_count;
 	size_t packed_size;
 	u64 addr;
