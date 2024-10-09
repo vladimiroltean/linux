@@ -1318,6 +1318,14 @@ bool dsa_mdb_present_in_other_db(struct dsa_switch *ds, int port,
 				 const struct switchdev_obj_port_mdb *mdb,
 				 struct dsa_db db);
 
+static inline struct dsa_port *
+dsa_conduit_to_cpu_port_rcu(const struct net_device *dev)
+{
+	lockdep_assert_in_rcu_read_lock();
+
+	return dev->dsa_ptr;
+}
+
 /* Keep inline for faster access in hot path */
 static inline bool netdev_uses_dsa(const struct net_device *dev)
 {

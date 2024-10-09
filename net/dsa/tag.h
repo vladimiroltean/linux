@@ -32,7 +32,7 @@ static inline int dsa_tag_protocol_overhead(const struct dsa_device_ops *ops)
 static inline struct net_device *dsa_conduit_find_user(struct net_device *dev,
 						       int device, int port)
 {
-	struct dsa_port *cpu_dp = dev->dsa_ptr;
+	struct dsa_port *cpu_dp = dsa_conduit_to_cpu_port_rcu(dev);
 	struct dsa_switch_tree *dst = cpu_dp->dst;
 	struct dsa_port *dp;
 
@@ -184,7 +184,7 @@ static inline struct sk_buff *dsa_software_vlan_untag(struct sk_buff *skb)
 static inline struct net_device *
 dsa_find_designated_bridge_port_by_vid(struct net_device *conduit, u16 vid)
 {
-	struct dsa_port *cpu_dp = conduit->dsa_ptr;
+	struct dsa_port *cpu_dp = dsa_conduit_to_cpu_port_rcu(conduit);
 	struct dsa_switch_tree *dst = cpu_dp->dst;
 	struct bridge_vlan_info vinfo;
 	struct net_device *user;

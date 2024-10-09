@@ -534,7 +534,7 @@ static struct sk_buff *sja1110_rcv_meta(struct sk_buff *skb, u16 rx_header)
 	struct dsa_switch *ds;
 	int i;
 
-	cpu_dp = conduit->dsa_ptr;
+	cpu_dp = dsa_conduit_to_cpu_port_rcu(conduit);
 	ds = dsa_switch_find(cpu_dp->dst->index, switch_id);
 	if (!ds) {
 		net_err_ratelimited("%s: cannot find switch id %d\n",

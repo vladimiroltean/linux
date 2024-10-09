@@ -474,7 +474,7 @@ EXPORT_SYMBOL_GPL(dsa_8021q_xmit);
 static struct net_device *
 dsa_tag_8021q_find_port_by_vbid(struct net_device *conduit, int vbid)
 {
-	struct dsa_port *cpu_dp = conduit->dsa_ptr;
+	struct dsa_port *cpu_dp = dsa_conduit_to_cpu_port_rcu(conduit);
 	struct dsa_switch_tree *dst = cpu_dp->dst;
 	struct dsa_port *dp;
 

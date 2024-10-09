@@ -257,7 +257,7 @@ static struct sk_buff *dsa_rcv_ll(struct sk_buff *skb, struct net_device *dev,
 	source_port = (dsa_header[1] >> 3) & 0x1f;
 
 	if (trunk) {
-		struct dsa_port *cpu_dp = dev->dsa_ptr;
+		struct dsa_port *cpu_dp = dsa_conduit_to_cpu_port_rcu(dev);
 		struct dsa_lag *lag;
 
 		/* The exact source port is not available in the tag,

@@ -54,8 +54,8 @@ static bool dsa_skb_defer_rx_timestamp(struct dsa_user_priv *p,
 static int dsa_switch_rcv(struct sk_buff *skb, struct net_device *dev,
 			  struct packet_type *pt, struct net_device *unused)
 {
+	struct dsa_port *cpu_dp = dsa_conduit_to_cpu_port_rcu(dev);
 	struct metadata_dst *md_dst = skb_metadata_dst(skb);
-	struct dsa_port *cpu_dp = dev->dsa_ptr;
 	struct sk_buff *nskb = NULL;
 	struct dsa_user_priv *p;
 

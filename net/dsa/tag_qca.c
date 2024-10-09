@@ -35,8 +35,8 @@ static struct sk_buff *qca_tag_xmit(struct sk_buff *skb, struct net_device *dev)
 
 static struct sk_buff *qca_tag_rcv(struct sk_buff *skb, struct net_device *dev)
 {
+	struct dsa_port *dp = dsa_conduit_to_cpu_port_rcu(dev);
 	struct qca_tagger_data *tagger_data;
-	struct dsa_port *dp = dev->dsa_ptr;
 	struct dsa_switch *ds = dp->ds;
 	u8 ver, pk_type;
 	__be16 *phdr;
