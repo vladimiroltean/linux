@@ -1335,6 +1335,13 @@ static inline bool netdev_uses_dsa(const struct net_device *dev)
 	return false;
 }
 
+static inline bool netdev_uses_dsa_rcu(const struct net_device *dev)
+{
+	lockdep_assert_in_rcu_read_lock();
+
+	return netdev_uses_dsa(dev);
+}
+
 /* All DSA tags that push the EtherType to the right (basically all except tail
  * tags, which don't break dissection) can be treated the same from the
  * perspective of the flow dissector.
