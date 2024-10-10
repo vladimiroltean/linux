@@ -1353,7 +1353,8 @@ static inline void dsa_tag_generic_flow_dissect(const struct sk_buff *skb,
 						__be16 *proto, int *offset)
 {
 #if IS_ENABLED(CONFIG_NET_DSA)
-	const struct dsa_device_ops *ops = skb->dev->dsa_ptr->tag_ops;
+	const struct dsa_port *cpu_dp = dsa_conduit_to_cpu_port_rcu(skb->dev);
+	const struct dsa_device_ops *ops = cpu_dp->tag_ops;
 	int tag_len = ops->needed_headroom;
 
 	*offset = tag_len;

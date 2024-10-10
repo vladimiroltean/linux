@@ -1071,13 +1071,15 @@ bool __skb_flow_dissect(const struct net *net,
 		nhoff = skb_network_offset(skb);
 		hlen = skb_headlen(skb);
 #if IS_ENABLED(CONFIG_NET_DSA)
-		if (unlikely(skb->dev && netdev_uses_dsa(skb->dev) &&
+		rcu_read_lock();
+
+		if (unlikely(skb->dev && netdev_uses_dsa_rcu(skb->dev) &&
 			     proto == htons(ETH_P_XDSA))) {
 			struct metadata_dst *md_dst = skb_metadata_dst(skb);
 			const struct dsa_device_ops *ops;
 			int offset = 0;
 
-			ops = skb->dev->dsa_ptr->tag_ops;
+			ops = dsa_conduit_to_cpu_port_rcu(skb->dev)->tag_ops;
 			/* Only DSA header taggers break flow dissection */
 			if (ops->needed_headroom &&
 			    (!md_dst || md_dst->type != METADATA_HW_PORT_MUX)) {
@@ -1091,6 +1093,8 @@ bool __skb_flow_dissect(const struct net *net,
 				nhoff += offset;
 			}
 		}
+
+		rcu_read_unlock();
 #endif
 	}
 
