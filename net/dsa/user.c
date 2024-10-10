@@ -2881,7 +2881,7 @@ int dsa_user_change_conduit(struct net_device *dev, struct net_device *conduit,
 		return -EOPNOTSUPP;
 	}
 
-	if (!netdev_uses_dsa(conduit)) {
+	if (!netdev_uses_dsa_rtnl(conduit)) {
 		NL_SET_ERR_MSG_MOD(extack,
 				   "Interface not eligible as DSA conduit");
 		return -EOPNOTSUPP;
@@ -3183,8 +3183,8 @@ static int dsa_lag_conduit_validate(struct net_device *lag_dev,
 
 	netdev_for_each_lower_dev(lag_dev, lower1, iter1) {
 		netdev_for_each_lower_dev(lag_dev, lower2, iter2) {
-			if (!netdev_uses_dsa(lower1) ||
-			    !netdev_uses_dsa(lower2)) {
+			if (!netdev_uses_dsa_rtnl(lower1) ||
+			    !netdev_uses_dsa_rtnl(lower2)) {
 				NL_SET_ERR_MSG_MOD(extack,
 						   "All LAG ports must be eligible as DSA conduits");
 				return notifier_from_errno(-EINVAL);
@@ -3211,7 +3211,7 @@ dsa_conduit_prechangeupper_sanity_check(struct net_device *conduit,
 {
 	struct netlink_ext_ack *extack = netdev_notifier_info_to_extack(&info->info);
 
-	if (!netdev_uses_dsa(conduit))
+	if (!netdev_uses_dsa_rtnl(conduit))
 		return NOTIFY_DONE;
 
 	if (!info->linking)
@@ -3247,13 +3247,13 @@ dsa_lag_conduit_prechangelower_sanity_check(struct net_device *dev,
 	struct net_device *lower;
 	struct list_head *iter;
 
-	if (!netdev_uses_dsa(lag_dev) || !netif_is_lag_master(lag_dev))
+	if (!netdev_uses_dsa_rtnl(lag_dev) || !netif_is_lag_master(lag_dev))
 		return NOTIFY_DONE;
 
 	if (!info->linking)
 		return NOTIFY_DONE;
 
-	if (!netdev_uses_dsa(dev)) {
+	if (!netdev_uses_dsa_rtnl(dev)) {
 		NL_SET_ERR_MSG(extack,
 			       "Only DSA conduits can join a LAG DSA conduit");
 		return notifier_from_errno(-EINVAL);
@@ -3299,7 +3299,8 @@ dsa_bridge_prechangelower_sanity_check(struct net_device *new_lower,
 	extack = netdev_notifier_info_to_extack(&info->info);
 
 	netdev_for_each_lower_dev(br, lower, iter) {
-		if (!netdev_uses_dsa(new_lower) && !netdev_uses_dsa(lower))
+		if (!netdev_uses_dsa_rtnl(new_lower) &&
+		    !netdev_uses_dsa_rtnl(lower))
 			continue;
 
 		if (!netdev_port_same_parent_id(lower, new_lower)) {
@@ -3385,7 +3386,7 @@ static void dsa_conduit_lag_leave(struct net_device *conduit,
 	struct list_head *iter;
 
 	netdev_for_each_lower_dev(lag_dev, lower, iter) {
-		if (netdev_uses_dsa(lower)) {
+		if (netdev_uses_dsa_rtnl(lower)) {
 			new_cpu_dp = lower->dsa_ptr;
 			break;
 		}
@@ -3423,7 +3424,7 @@ static int dsa_conduit_changeupper(struct net_device *dev,
 	struct netlink_ext_ack *extack;
 	int err = NOTIFY_DONE;
 
-	if (!netdev_uses_dsa(dev))
+	if (!netdev_uses_dsa_rtnl(dev))
 		return err;
 
 	extack = netdev_notifier_info_to_extack(&info->info);
@@ -3509,7 +3510,7 @@ static int dsa_user_netdevice_event(struct notifier_block *nb,
 		/* Mirror LAG port events on DSA conduits that are in
 		 * a LAG towards their respective switch CPU ports
 		 */
-		if (netdev_uses_dsa(dev)) {
+		if (netdev_uses_dsa_rtnl(dev)) {
 			dp = dev->dsa_ptr;
 
 			err = dsa_port_lag_change(dp, info->lower_state_info);
@@ -3523,7 +3524,7 @@ static int dsa_user_netdevice_event(struct notifier_block *nb,
 		 * DSA driver may require the conduit port (and indirectly
 		 * the tagger) to be available for some special operation.
 		 */
-		if (netdev_uses_dsa(dev)) {
+		if (netdev_uses_dsa_rtnl(dev)) {
 			struct dsa_port *cpu_dp = dev->dsa_ptr;
 			struct dsa_switch_tree *dst = cpu_dp->ds->dst;
 
@@ -3552,7 +3553,7 @@ static int dsa_user_netdevice_event(struct notifier_block *nb,
 		struct dsa_switch_tree *dst;
 		LIST_HEAD(close_list);
 
-		if (!netdev_uses_dsa(dev))
+		if (!netdev_uses_dsa_rtnl(dev))
 			return NOTIFY_DONE;
 
 		cpu_dp = dev->dsa_ptr;

@@ -1593,7 +1593,7 @@ void dsa_switch_shutdown(struct dsa_switch *ds)
 	}
 
 	/* Disconnect from further netdevice notifiers on the conduit,
-	 * since netdev_uses_dsa() will now return false.
+	 * since netdev_uses_dsa_rtnl() will now return false.
 	 */
 	dsa_switch_for_each_cpu_port(dp, ds)
 		dp->conduit->dsa_ptr = NULL;

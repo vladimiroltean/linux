@@ -434,7 +434,7 @@ int dsa_conduit_lag_setup(struct net_device *lag_dev, struct dsa_port *cpu_dp,
 	bool conduit_setup = false;
 	int err;
 
-	if (!netdev_uses_dsa(lag_dev)) {
+	if (!netdev_uses_dsa_rtnl(lag_dev)) {
 		err = dsa_conduit_setup(lag_dev, cpu_dp);
 		if (err)
 			return err;
