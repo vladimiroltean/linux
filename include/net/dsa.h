@@ -1323,7 +1323,10 @@ dsa_conduit_to_cpu_port_rcu(const struct net_device *dev)
 {
 	lockdep_assert_in_rcu_read_lock();
 
+#if IS_ENABLED(CONFIG_NET_DSA)
 	return dev->dsa_ptr;
+#endif
+	return NULL;
 }
 
 static inline struct dsa_port *
@@ -1331,7 +1334,26 @@ dsa_conduit_to_cpu_port_rtnl(const struct net_device *dev)
 {
 	ASSERT_RTNL();
 
+#if IS_ENABLED(CONFIG_NET_DSA)
 	return dev->dsa_ptr;
+#endif
+	return NULL;
+}
+
+static inline enum dsa_tag_protocol
+dsa_conduit_get_tag_proto_rcu(const struct net_device *dev)
+{
+	const struct dsa_port *cpu_dp = dsa_conduit_to_cpu_port_rcu(dev);
+
+	return cpu_dp ? cpu_dp->tag_ops->proto : DSA_TAG_PROTO_NONE;
+}
+
+static inline enum dsa_tag_protocol
+dsa_conduit_get_tag_proto_rtnl(const struct net_device *dev)
+{
+	const struct dsa_port *cpu_dp = dsa_conduit_to_cpu_port_rtnl(dev);
+
+	return cpu_dp ? cpu_dp->tag_ops->proto : DSA_TAG_PROTO_NONE;
 }
 
 /* Keep inline for faster access in hot path */

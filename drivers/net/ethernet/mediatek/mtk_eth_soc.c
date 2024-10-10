@@ -3310,15 +3310,9 @@ static void mtk_gdm_config(struct mtk_eth *eth, u32 id, u32 config)
 	mtk_w32(eth, val, MTK_GDMA_FWD_CFG(id));
 }
 
-
-static bool mtk_uses_dsa(struct net_device *dev)
+static bool mtk_uses_dsa_rtnl(struct net_device *dev)
 {
-#if IS_ENABLED(CONFIG_NET_DSA)
-	return netdev_uses_dsa(dev) &&
-	       dev->dsa_ptr->tag_ops->proto == DSA_TAG_PROTO_MTK;
-#else
-	return false;
-#endif
+	return dsa_conduit_get_tag_proto_rtnl(dev) == DSA_TAG_PROTO_MTK;
 }
 
 static int mtk_device_event(struct notifier_block *n, unsigned long event, void *ptr)
@@ -3433,7 +3427,7 @@ static int mtk_open(struct net_device *dev)
 	if (mtk_is_netsys_v2_or_greater(eth))
 		return 0;
 
-	if (mtk_uses_dsa(dev) && !eth->prog) {
+	if (mtk_uses_dsa_rtnl(dev) && !eth->prog) {
 		for (i = 0; i < ARRAY_SIZE(eth->dsa_meta); i++) {
 			struct metadata_dst *md_dst = eth->dsa_meta[i];
 

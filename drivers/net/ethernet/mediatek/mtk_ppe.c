@@ -735,6 +735,11 @@ mtk_foe_entry_commit_subflow(struct mtk_ppe *ppe, struct mtk_flow_entry *entry,
 	__mtk_foe_entry_commit(ppe, &foe, hash);
 }
 
+static bool mtk_uses_dsa_rcu(struct net_device *dev)
+{
+	return dsa_conduit_get_tag_proto_rcu(dev) == DSA_TAG_PROTO_MTK;
+}
+
 void __mtk_ppe_check_skb(struct mtk_ppe *ppe, struct sk_buff *skb, u16 hash)
 {
 	const struct mtk_soc_data *soc = ppe->eth->soc;
@@ -783,11 +788,15 @@ void __mtk_ppe_check_skb(struct mtk_ppe *ppe, struct sk_buff *skb, u16 hash)
 	tag = skb->data - 2;
 	key.vlan = 0;
 	switch (skb->protocol) {
-#if IS_ENABLED(CONFIG_NET_DSA)
 	case htons(ETH_P_XDSA):
-		if (!netdev_uses_dsa(skb->dev) ||
-		    skb->dev->dsa_ptr->tag_ops->proto != DSA_TAG_PROTO_MTK)
+		rcu_read_lock();
+
+		if (!mtk_uses_dsa_rcu(skb->dev)) {
+			rcu_read_unlock();
 			goto out;
+		}
+
+		rcu_read_unlock();
 
 		if (!skb_metadata_dst(skb))
 			tag += 4;
@@ -796,7 +805,6 @@ void __mtk_ppe_check_skb(struct mtk_ppe *ppe, struct sk_buff *skb, u16 hash)
 			break;
 
 		fallthrough;
-#endif
 	case htons(ETH_P_8021Q):
 		key.vlan = get_unaligned_be16(tag + 2) & VLAN_VID_MASK;
 		break;
