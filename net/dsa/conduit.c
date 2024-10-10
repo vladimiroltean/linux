@@ -300,16 +300,23 @@ static ssize_t tagging_store(struct device *d, struct device_attribute *attr,
 	if (!len)
 		return -ENOPROTOOPT;
 
+	if (!rtnl_trylock())
+		return restart_syscall();
+
 	name = kstrndup(buf, len, GFP_KERNEL);
-	if (!name)
+	if (!name) {
+		rtnl_unlock();
 		return -ENOMEM;
+	}
 
 	old_tag_ops = cpu_dp->tag_ops;
 	new_tag_ops = dsa_tag_driver_get_by_name(name);
 	kfree(name);
 	/* Bad tagger name? */
-	if (IS_ERR(new_tag_ops))
+	if (IS_ERR(new_tag_ops)) {
+		rtnl_unlock();
 		return PTR_ERR(new_tag_ops);
+	}
 
 	if (new_tag_ops == old_tag_ops)
 		/* Drop the temporarily held duplicate reference, since
@@ -324,6 +331,7 @@ static ssize_t tagging_store(struct device *d, struct device_attribute *attr,
 		 * driver for the new one.
 		 */
 		dsa_tag_driver_put(new_tag_ops);
+		rtnl_unlock();
 		return err;
 	}
 
@@ -331,6 +339,7 @@ static ssize_t tagging_store(struct device *d, struct device_attribute *attr,
 	 */
 out:
 	dsa_tag_driver_put(old_tag_ops);
+	rtnl_unlock();
 	return count;
 }
 static DEVICE_ATTR_RW(tagging);

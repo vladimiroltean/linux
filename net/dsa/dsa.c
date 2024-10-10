@@ -983,10 +983,7 @@ int dsa_tree_change_tag_proto(struct dsa_switch_tree *dst,
 {
 	struct dsa_notifier_tag_proto_info info;
 	struct dsa_port *dp;
-	int err = -EBUSY;
-
-	if (!rtnl_trylock())
-		return restart_syscall();
+	int err;
 
 	/* At the moment we don't allow changing the tag protocol under
 	 * traffic. The rtnl_mutex also happens to serialize concurrent
@@ -995,10 +992,10 @@ int dsa_tree_change_tag_proto(struct dsa_switch_tree *dst,
 	 */
 	dsa_tree_for_each_user_port(dp, dst) {
 		if (dsa_port_to_conduit(dp)->flags & IFF_UP)
-			goto out_unlock;
+			return -EBUSY;
 
 		if (dp->user->flags & IFF_UP)
-			goto out_unlock;
+			return -EBUSY;
 	}
 
 	/* Notify the tag protocol change */
@@ -1018,8 +1015,6 @@ int dsa_tree_change_tag_proto(struct dsa_switch_tree *dst,
 out_unwind_tagger:
 	info.tag_ops = old_tag_ops;
 	dsa_tree_notify(dst, DSA_NOTIFIER_TAG_PROTO, &info);
-out_unlock:
-	rtnl_unlock();
 	return err;
 }
 
