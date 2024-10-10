@@ -18,7 +18,7 @@
 
 static int dsa_conduit_get_regs_len(struct net_device *dev)
 {
-	struct dsa_port *cpu_dp = dev->dsa_ptr;
+	struct dsa_port *cpu_dp = dsa_conduit_to_cpu_port_rtnl(dev);
 	const struct ethtool_ops *ops = cpu_dp->orig_ethtool_ops;
 	struct dsa_switch *ds = cpu_dp->ds;
 	int port = cpu_dp->index;
@@ -48,7 +48,7 @@ static int dsa_conduit_get_regs_len(struct net_device *dev)
 static void dsa_conduit_get_regs(struct net_device *dev,
 				 struct ethtool_regs *regs, void *data)
 {
-	struct dsa_port *cpu_dp = dev->dsa_ptr;
+	struct dsa_port *cpu_dp = dsa_conduit_to_cpu_port_rtnl(dev);
 	const struct ethtool_ops *ops = cpu_dp->orig_ethtool_ops;
 	struct dsa_switch *ds = cpu_dp->ds;
 	struct ethtool_drvinfo *cpu_info;
@@ -84,7 +84,7 @@ static void dsa_conduit_get_ethtool_stats(struct net_device *dev,
 					  struct ethtool_stats *stats,
 					  uint64_t *data)
 {
-	struct dsa_port *cpu_dp = dev->dsa_ptr;
+	struct dsa_port *cpu_dp = dsa_conduit_to_cpu_port_rtnl(dev);
 	const struct ethtool_ops *ops = cpu_dp->orig_ethtool_ops;
 	struct dsa_switch *ds = cpu_dp->ds;
 	int port = cpu_dp->index;
@@ -103,7 +103,7 @@ static void dsa_conduit_get_ethtool_phy_stats(struct net_device *dev,
 					      struct ethtool_stats *stats,
 					      uint64_t *data)
 {
-	struct dsa_port *cpu_dp = dev->dsa_ptr;
+	struct dsa_port *cpu_dp = dsa_conduit_to_cpu_port_rtnl(dev);
 	const struct ethtool_ops *ops = cpu_dp->orig_ethtool_ops;
 	struct dsa_switch *ds = cpu_dp->ds;
 	int port = cpu_dp->index;
@@ -127,7 +127,7 @@ static void dsa_conduit_get_ethtool_phy_stats(struct net_device *dev,
 
 static int dsa_conduit_get_sset_count(struct net_device *dev, int sset)
 {
-	struct dsa_port *cpu_dp = dev->dsa_ptr;
+	struct dsa_port *cpu_dp = dsa_conduit_to_cpu_port_rtnl(dev);
 	const struct ethtool_ops *ops = cpu_dp->orig_ethtool_ops;
 	struct dsa_switch *ds = cpu_dp->ds;
 	int count = 0;
@@ -150,7 +150,7 @@ static int dsa_conduit_get_sset_count(struct net_device *dev, int sset)
 static void dsa_conduit_get_strings(struct net_device *dev, uint32_t stringset,
 				    uint8_t *data)
 {
-	struct dsa_port *cpu_dp = dev->dsa_ptr;
+	struct dsa_port *cpu_dp = dsa_conduit_to_cpu_port_rtnl(dev);
 	const struct ethtool_ops *ops = cpu_dp->orig_ethtool_ops;
 	struct dsa_switch *ds = cpu_dp->ds;
 	int port = cpu_dp->index;
@@ -202,7 +202,7 @@ int __dsa_conduit_hwtstamp_validate(struct net_device *dev,
 				    const struct kernel_hwtstamp_config *config,
 				    struct netlink_ext_ack *extack)
 {
-	struct dsa_port *cpu_dp = dev->dsa_ptr;
+	struct dsa_port *cpu_dp = dsa_conduit_to_cpu_port_rtnl(dev);
 	struct dsa_switch *ds = cpu_dp->ds;
 	struct dsa_switch_tree *dst;
 	struct dsa_port *dp;
@@ -222,7 +222,7 @@ int __dsa_conduit_hwtstamp_validate(struct net_device *dev,
 
 static int dsa_conduit_ethtool_setup(struct net_device *dev)
 {
-	struct dsa_port *cpu_dp = dev->dsa_ptr;
+	struct dsa_port *cpu_dp = dsa_conduit_to_cpu_port_rtnl(dev);
 	struct dsa_switch *ds = cpu_dp->ds;
 	struct ethtool_ops *ops;
 
@@ -251,7 +251,7 @@ static int dsa_conduit_ethtool_setup(struct net_device *dev)
 
 static void dsa_conduit_ethtool_teardown(struct net_device *dev)
 {
-	struct dsa_port *cpu_dp = dev->dsa_ptr;
+	struct dsa_port *cpu_dp = dsa_conduit_to_cpu_port_rtnl(dev);
 
 	if (netif_is_lag_master(dev))
 		return;
@@ -267,12 +267,11 @@ static void dsa_conduit_ethtool_teardown(struct net_device *dev)
  */
 static void dsa_conduit_set_promiscuity(struct net_device *dev, int inc)
 {
-	const struct dsa_device_ops *ops = dev->dsa_ptr->tag_ops;
+	const struct dsa_port *cpu_dp = dsa_conduit_to_cpu_port_rtnl(dev);
+	const struct dsa_device_ops *ops = cpu_dp->tag_ops;
 
 	if ((dev->priv_flags & IFF_UNICAST_FLT) && !ops->promisc_on_conduit)
 		return;
-
-	ASSERT_RTNL();
 
 	dev_set_promiscuity(dev, inc);
 }

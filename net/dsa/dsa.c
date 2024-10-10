@@ -1026,8 +1026,8 @@ out_unlock:
 static void dsa_tree_conduit_state_change(struct dsa_switch_tree *dst,
 					  struct net_device *conduit)
 {
+	struct dsa_port *cpu_dp = dsa_conduit_to_cpu_port_rtnl(conduit);
 	struct dsa_notifier_conduit_state_info info;
-	struct dsa_port *cpu_dp = conduit->dsa_ptr;
 
 	info.conduit = conduit;
 	info.operational = dsa_port_conduit_is_operational(cpu_dp);
@@ -1039,7 +1039,7 @@ void dsa_tree_conduit_admin_state_change(struct dsa_switch_tree *dst,
 					 struct net_device *conduit,
 					 bool up)
 {
-	struct dsa_port *cpu_dp = conduit->dsa_ptr;
+	struct dsa_port *cpu_dp = dsa_conduit_to_cpu_port_rtnl(conduit);
 	bool notify = false;
 
 	/* Don't keep track of admin state on LAG DSA conduits,
@@ -1062,7 +1062,7 @@ void dsa_tree_conduit_oper_state_change(struct dsa_switch_tree *dst,
 					struct net_device *conduit,
 					bool up)
 {
-	struct dsa_port *cpu_dp = conduit->dsa_ptr;
+	struct dsa_port *cpu_dp = dsa_conduit_to_cpu_port_rtnl(conduit);
 	bool notify = false;
 
 	/* Don't keep track of oper state on LAG DSA conduits,

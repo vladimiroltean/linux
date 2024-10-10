@@ -1414,7 +1414,7 @@ static int dsa_port_assign_conduit(struct dsa_port *dp,
 	if (err && fail_on_err)
 		return err;
 
-	dp->cpu_dp = conduit->dsa_ptr;
+	dp->cpu_dp = dsa_conduit_to_cpu_port_rtnl(conduit);
 	dp->cpu_port_in_lag = netif_is_lag_master(conduit);
 
 	return 0;

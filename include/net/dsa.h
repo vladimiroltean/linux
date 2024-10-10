@@ -1326,6 +1326,14 @@ dsa_conduit_to_cpu_port_rcu(const struct net_device *dev)
 	return dev->dsa_ptr;
 }
 
+static inline struct dsa_port *
+dsa_conduit_to_cpu_port_rtnl(const struct net_device *dev)
+{
+	ASSERT_RTNL();
+
+	return dev->dsa_ptr;
+}
+
 /* Keep inline for faster access in hot path */
 static inline bool netdev_uses_dsa(const struct net_device *dev)
 {
