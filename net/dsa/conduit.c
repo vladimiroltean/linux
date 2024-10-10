@@ -280,10 +280,16 @@ static ssize_t tagging_show(struct device *d, struct device_attribute *attr,
 			    char *buf)
 {
 	struct net_device *dev = to_net_dev(d);
-	struct dsa_port *cpu_dp = dev->dsa_ptr;
+	struct dsa_port *cpu_dp;
+	int err;
 
-	return sysfs_emit(buf, "%s\n",
-		       dsa_tag_protocol_to_str(cpu_dp->tag_ops));
+	rcu_read_lock();
+	cpu_dp = dsa_conduit_to_cpu_port_rcu(dev);
+	err = sysfs_emit(buf, "%s\n",
+			 dsa_tag_protocol_to_str(cpu_dp->tag_ops));
+	rcu_read_unlock();
+
+	return err;
 }
 
 static ssize_t tagging_store(struct device *d, struct device_attribute *attr,
@@ -292,7 +298,7 @@ static ssize_t tagging_store(struct device *d, struct device_attribute *attr,
 	const struct dsa_device_ops *new_tag_ops, *old_tag_ops;
 	const char *end = strchrnul(buf, '\n'), *name;
 	struct net_device *dev = to_net_dev(d);
-	struct dsa_port *cpu_dp = dev->dsa_ptr;
+	struct dsa_port *cpu_dp;
 	size_t len = end - buf;
 	int err;
 
@@ -309,6 +315,7 @@ static ssize_t tagging_store(struct device *d, struct device_attribute *attr,
 		return -ENOMEM;
 	}
 
+	cpu_dp = dsa_conduit_to_cpu_port_rtnl(dev);
 	old_tag_ops = cpu_dp->tag_ops;
 	new_tag_ops = dsa_tag_driver_get_by_name(name);
 	kfree(name);
