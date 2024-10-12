@@ -57,7 +57,7 @@ static int felix_cpu_port_for_conduit(struct dsa_switch *ds,
 		return lag;
 	}
 
-	cpu_dp = conduit->dsa_ptr;
+	cpu_dp = dsa_conduit_to_cpu_port_rtnl(conduit);
 	return cpu_dp->index;
 }
 
