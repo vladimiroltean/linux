@@ -1754,7 +1754,7 @@ static void
 qca8k_conduit_change(struct dsa_switch *ds, const struct net_device *conduit,
 		     bool operational)
 {
-	struct dsa_port *dp = conduit->dsa_ptr;
+	struct dsa_port *dp = dsa_conduit_to_cpu_port_rtnl(conduit);
 	struct qca8k_priv *priv = ds->priv;
 
 	/* Ethernet MIB/MDIO is only supported for CPU port 0 */
