@@ -3120,7 +3120,7 @@ mt753x_conduit_state_change(struct dsa_switch *ds,
 			    const struct net_device *conduit,
 			    bool operational)
 {
-	struct dsa_port *cpu_dp = conduit->dsa_ptr;
+	struct dsa_port *cpu_dp = dsa_conduit_to_cpu_port_rtnl(conduit);
 	struct mt7530_priv *priv = ds->priv;
 	int val = 0;
 	u8 mask;
