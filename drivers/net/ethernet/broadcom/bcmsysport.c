@@ -121,7 +121,7 @@ static void bcm_sysport_set_rx_csum(struct net_device *dev,
 	 * sure we tell the RXCHK hardware to expect a 4-bytes Broadcom
 	 * tag after the Ethernet MAC Source Address.
 	 */
-	if (netdev_uses_dsa(dev))
+	if (netdev_uses_dsa_rtnl(dev))
 		reg |= RXCHK_BRCM_TAG_EN;
 	else
 		reg &= ~RXCHK_BRCM_TAG_EN;
@@ -149,7 +149,7 @@ static void bcm_sysport_set_tx_csum(struct net_device *dev,
 	 * checksum to be computed correctly when using VLAN HW acceleration,
 	 * else it has no effect, so it can always be turned on.
 	 */
-	if (netdev_uses_dsa(dev))
+	if (netdev_uses_dsa_rtnl(dev))
 		reg |= tdma_control_bit(priv, SW_BRCM_TAG);
 	else
 		reg &= ~tdma_control_bit(priv, SW_BRCM_TAG);
@@ -1917,7 +1917,7 @@ static inline void gib_set_pad_extension(struct bcm_sysport_priv *priv)
 
 	reg = gib_readl(priv, GIB_CONTROL);
 	/* Include Broadcom tag in pad extension and fix up IPG_LENGTH */
-	if (netdev_uses_dsa(priv->netdev)) {
+	if (netdev_uses_dsa_rtnl(priv->netdev)) {
 		reg &= ~(GIB_PAD_EXTENSION_MASK << GIB_PAD_EXTENSION_SHIFT);
 		reg |= ENET_BRCM_TAG_LEN << GIB_PAD_EXTENSION_SHIFT;
 	}
@@ -2266,7 +2266,7 @@ static u16 bcm_sysport_select_queue(struct net_device *dev, struct sk_buff *skb,
 	struct bcm_sysport_tx_ring *tx_ring;
 	unsigned int q, port;
 
-	if (!netdev_uses_dsa(dev))
+	if (!netdev_uses_dsa_rcu_bh(dev))
 		return netdev_pick_tx(dev, skb, NULL);
 
 	/* DSA tagging layer will have configured the correct queue */

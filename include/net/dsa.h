@@ -1372,6 +1372,13 @@ static inline bool netdev_uses_dsa_rcu(const struct net_device *dev)
 	return netdev_uses_dsa(dev);
 }
 
+static inline bool netdev_uses_dsa_rcu_bh(const struct net_device *dev)
+{
+	lockdep_assert_in_rcu_read_lock_bh();
+
+	return netdev_uses_dsa(dev);
+}
+
 static inline bool netdev_uses_dsa_rtnl(const struct net_device *dev)
 {
 	ASSERT_RTNL();
