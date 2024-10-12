@@ -3304,7 +3304,7 @@ static void mtk_gdm_config(struct mtk_eth *eth, u32 id, u32 config)
 
 	val |= config;
 
-	if (eth->netdev[id] && netdev_uses_dsa(eth->netdev[id]))
+	if (eth->netdev[id] && netdev_uses_dsa_rtnl(eth->netdev[id]))
 		val |= MTK_GDMA_SPECIAL_TAG;
 
 	mtk_w32(eth, val, MTK_GDMA_FWD_CFG(id));
@@ -4474,7 +4474,7 @@ static u16 mtk_select_queue(struct net_device *dev, struct sk_buff *skb,
 	struct mtk_mac *mac = netdev_priv(dev);
 	unsigned int queue = 0;
 
-	if (netdev_uses_dsa(dev))
+	if (netdev_uses_dsa_rcu_bh(dev))
 		queue = skb_get_queue_mapping(skb) + 3;
 	else
 		queue = mac->id;
