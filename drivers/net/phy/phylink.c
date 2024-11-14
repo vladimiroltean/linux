@@ -2077,16 +2077,7 @@ int phylink_fwnode_phy_connect(struct phylink *pl,
 		pl->link_config.interface = pl->link_interface;
 	}
 
-	if (pl->phydev) {
-		phy_device_free(phy_dev);
-		return -EBUSY;
-	}
-
-	if (pl->config->mac_requires_rxc)
-		flags |= PHY_F_RXC_ALWAYS_ON;
-
-	ret = phy_attach_direct(pl->netdev, phy_dev, flags,
-				pl->link_interface);
+	ret = phylink_attach_phy(pl, phy_dev, pl->link_interface);
 	phy_device_free(phy_dev);
 	if (ret)
 		return ret;
