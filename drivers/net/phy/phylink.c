@@ -1960,6 +1960,7 @@ static int phylink_attach_phy(struct phylink *pl, struct phy_device *phy,
 			      phy_interface_t interface)
 {
 	u32 flags = 0;
+	int ret;
 
 	if (WARN_ON(pl->cfg_link_an_mode == MLO_AN_FIXED ||
 		    (pl->cfg_link_an_mode == MLO_AN_INBAND &&
@@ -1972,7 +1973,16 @@ static int phylink_attach_phy(struct phylink *pl, struct phy_device *phy,
 	if (pl->config->mac_requires_rxc)
 		flags |= PHY_F_RXC_ALWAYS_ON;
 
-	return phy_attach_direct(pl->netdev, phy, flags, interface);
+	ret = phy_attach_direct(pl->netdev, phy, flags, interface);
+	if (ret < 0)
+		return ret;
+
+	/* This will validate the configuration for us. */
+	ret = phylink_bringup_phy(pl, phy, interface);
+	if (ret)
+		phy_detach(phy);
+
+	return ret;
 }
 
 /**
@@ -1998,15 +2008,7 @@ int phylink_connect_phy(struct phylink *pl, struct phy_device *phy)
 	if (pl->link_config.interface == PHY_INTERFACE_MODE_NA)
 		pl->link_config.interface = phy->interface;
 
-	ret = phylink_attach_phy(pl, phy, pl->link_config.interface);
-	if (ret < 0)
-		return ret;
-
-	ret = phylink_bringup_phy(pl, phy, pl->link_config.interface);
-	if (ret)
-		phy_detach(phy);
-
-	return ret;
+	return phylink_attach_phy(pl, phy, pl->link_config.interface);
 }
 EXPORT_SYMBOL_GPL(phylink_connect_phy);
 
@@ -2073,12 +2075,6 @@ int phylink_fwnode_phy_connect(struct phylink *pl,
 
 	ret = phylink_attach_phy(pl, phy_dev, pl->link_config.interface);
 	phy_device_free(phy_dev);
-	if (ret)
-		return ret;
-
-	ret = phylink_bringup_phy(pl, phy_dev, pl->link_config.interface);
-	if (ret)
-		phy_detach(phy_dev);
 
 	return ret;
 }
@@ -3248,15 +3244,8 @@ static int phylink_sfp_config_phy(struct phylink *pl, u8 mode,
 	 * configuration step.
 	 */
 	ret = phylink_attach_phy(pl, phy, config.interface);
-	if (ret < 0)
+	if (ret)
 		return ret;
-
-	/* This will validate the configuration for us. */
-	ret = phylink_bringup_phy(pl, phy, config.interface);
-	if (ret < 0) {
-		phy_detach(phy);
-		return ret;
-	}
 
 	pl->link_port = pl->sfp_port;
 
