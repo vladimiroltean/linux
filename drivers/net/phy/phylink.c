@@ -2051,9 +2051,7 @@ int phylink_fwnode_phy_connect(struct phylink *pl,
 	int ret;
 
 	/* Fixed links and 802.3z are handled without needing a PHY */
-	if (pl->cfg_link_an_mode == MLO_AN_FIXED ||
-	    (pl->cfg_link_an_mode == MLO_AN_INBAND &&
-	     phy_interface_mode_is_8023z(pl->link_config.interface)))
+	if (!phylink_expects_phy(pl))
 		return 0;
 
 	phy_fwnode = fwnode_get_phy_node(fwnode);
