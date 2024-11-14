@@ -54,7 +54,6 @@ struct phylink {
 
 	unsigned long phylink_disable_state; /* bitmask of disables */
 	struct phy_device *phydev;
-	phy_interface_t link_interface;	/* PHY_INTERFACE_xxx */
 	u8 cfg_link_an_mode;		/* MLO_AN_xxx */
 	u8 cur_link_an_mode;
 	u8 link_port;			/* The current non-phy ethtool port */
@@ -1700,7 +1699,6 @@ struct phylink *phylink_create(struct phylink_config *config,
 	}
 
 	pl->phy_state.interface = iface;
-	pl->link_interface = iface;
 	if (iface == PHY_INTERFACE_MODE_MOCA)
 		pl->link_port = PORT_BNC;
 	else
@@ -1997,12 +1995,10 @@ int phylink_connect_phy(struct phylink *pl, struct phy_device *phy)
 	int ret;
 
 	/* Use PHY device/driver interface */
-	if (pl->link_interface == PHY_INTERFACE_MODE_NA) {
-		pl->link_interface = phy->interface;
-		pl->link_config.interface = pl->link_interface;
-	}
+	if (pl->link_config.interface == PHY_INTERFACE_MODE_NA)
+		pl->link_config.interface = phy->interface;
 
-	ret = phylink_attach_phy(pl, phy, pl->link_interface);
+	ret = phylink_attach_phy(pl, phy, pl->link_config.interface);
 	if (ret < 0)
 		return ret;
 
@@ -2055,7 +2051,7 @@ int phylink_fwnode_phy_connect(struct phylink *pl,
 	/* Fixed links and 802.3z are handled without needing a PHY */
 	if (pl->cfg_link_an_mode == MLO_AN_FIXED ||
 	    (pl->cfg_link_an_mode == MLO_AN_INBAND &&
-	     phy_interface_mode_is_8023z(pl->link_interface)))
+	     phy_interface_mode_is_8023z(pl->link_config.interface)))
 		return 0;
 
 	phy_fwnode = fwnode_get_phy_node(fwnode);
@@ -2072,12 +2068,10 @@ int phylink_fwnode_phy_connect(struct phylink *pl,
 		return -ENODEV;
 
 	/* Use PHY device/driver interface */
-	if (pl->link_interface == PHY_INTERFACE_MODE_NA) {
-		pl->link_interface = phy_dev->interface;
-		pl->link_config.interface = pl->link_interface;
-	}
+	if (pl->link_config.interface == PHY_INTERFACE_MODE_NA)
+		pl->link_config.interface = phy_dev->interface;
 
-	ret = phylink_attach_phy(pl, phy_dev, pl->link_interface);
+	ret = phylink_attach_phy(pl, phy_dev, pl->link_config.interface);
 	phy_device_free(phy_dev);
 	if (ret)
 		return ret;
