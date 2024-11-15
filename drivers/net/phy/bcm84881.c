@@ -16,6 +16,8 @@
 #include <linux/module.h>
 #include <linux/phy.h>
 
+#include "bcm84881_stubs.h"
+
 enum {
 	MDIO_AN_C22 = 0xffe0,
 };
@@ -251,11 +253,6 @@ static struct phy_driver bcm84881_drivers[] = {
 
 module_phy_driver(bcm84881_drivers);
 
-/* FIXME: module auto-loading for Clause 45 PHYs seems non-functional */
-static struct mdio_device_id __maybe_unused bcm84881_tbl[] = {
-	{ 0xae025150, 0xfffffff0 },
-	{ },
-};
 MODULE_AUTHOR("Russell King");
 MODULE_DESCRIPTION("Broadcom BCM84881 PHY driver");
 MODULE_DEVICE_TABLE(mdio, bcm84881_tbl);

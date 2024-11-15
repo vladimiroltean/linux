@@ -3220,8 +3220,17 @@ static int phylink_sfp_config_phy(struct phylink *pl, u8 mode,
 
 	linkmode_copy(support, phy->supported);
 	if (linkmode_empty(support)) {
-		phylink_err(pl, "PHY %s (id 0x%.8lx) supports no link modes. Maybe its specific PHY driver not loaded?\n",
-			    phydev_name(phy), (unsigned long)phy->phy_id);
+		const char *kconfig_name;
+
+		kconfig_name = phy_library_driver_kconfig_name(phy->phy_id);
+		if (kconfig_name) {
+			phylink_err(pl, "PHY %s supports no link modes. Its driver, %s, is %s.\n",
+				    phydev_name(phy), kconfig_name,
+				    phy_library_driver_kconfig_status(phy->phy_id));
+		} else {
+			phylink_err(pl, "PHY %s (id 0x%.8lx) supports no link modes, and appears to have no known driver\n",
+				    phydev_name(phy), (unsigned long)phy->phy_id);
+		}
 		return -EINVAL;
 	}
 

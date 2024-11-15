@@ -14,6 +14,9 @@ endif
 # dedicated loadable module, so we bundle them all together into libphy.ko
 ifdef CONFIG_PHYLIB
 libphy-y			+= $(mdio-bus-y)
+libphy-y			+= phy_driver_stubs.o
+libphy-y			+= bcm84881_stubs.o
+libphy-y			+= marvell_stubs.o
 # the stubs are built-in whenever PHYLIB is built-in or module
 obj-y				+= stubs.o
 else

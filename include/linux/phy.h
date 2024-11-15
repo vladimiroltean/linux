@@ -2214,5 +2214,7 @@ module_exit(phy_module_exit)
 
 bool phy_driver_is_genphy(struct phy_device *phydev);
 bool phy_driver_is_genphy_10g(struct phy_device *phydev);
+const char *phy_library_driver_kconfig_name(u32 phy_id);
+const char *phy_library_driver_kconfig_status(u32 phy_id);
 
 #endif /* __PHY_H */
