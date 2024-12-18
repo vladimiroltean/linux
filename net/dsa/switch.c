@@ -1056,6 +1056,9 @@ static int dsa_switch_event(struct notifier_block *nb,
 	case DSA_NOTIFIER_TAG_8021Q_VLAN_DEL:
 		err = dsa_switch_tag_8021q_vlan_del(ds, info);
 		break;
+	case DSA_NOTIFIER_TAG_8021Q_REPLAY:
+		err = dsa_switch_tag_8021q_replay(ds, info);
+		break;
 	case DSA_NOTIFIER_CONDUIT_STATE_CHANGE:
 		err = dsa_switch_conduit_state_change(ds, info);
 		break;

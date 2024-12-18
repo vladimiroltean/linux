@@ -266,6 +266,31 @@ int dsa_switch_tag_8021q_vlan_del(struct dsa_switch *ds,
 	return 0;
 }
 
+/* Let info->ds learn about all tag_8021q VLANs from our tag_8021q_ctx */
+int dsa_switch_tag_8021q_replay(struct dsa_switch *ds,
+				struct dsa_notifier_tag_8021q_replay_info *info)
+{
+	struct dsa_8021q_context *ctx = ds->tag_8021q_ctx;
+	struct dsa_tag_8021q_vlan *v;
+	int err;
+
+	if (!ctx || ds == info->ds)
+		return 0;
+
+	list_for_each_entry(v, &ctx->vlans, list) {
+		struct dsa_notifier_tag_8021q_vlan_info vlan_info = {
+			.dp = dsa_to_port(ds, v->port),
+			.vid = v->vid,
+		};
+
+		err = dsa_switch_tag_8021q_vlan_add(info->ds, &vlan_info);
+		if (err)
+			return err;
+	}
+
+	return 0;
+}
+
 /* There are 2 ways of offloading tag_8021q VLANs.
  *
  * One is to use a hardware TCAM to push the port's standalone VLAN into the
@@ -386,6 +411,15 @@ static void dsa_tag_8021q_port_teardown(struct dsa_switch *ds, int port)
 	vlan_vid_del(conduit, ctx->proto, vid);
 }
 
+static int dsa_tag_8021q_replay(struct dsa_switch *ds)
+{
+	struct dsa_notifier_tag_8021q_replay_info info = {
+		.ds = ds,
+	};
+
+	return dsa_tree_notify(ds->dst, DSA_NOTIFIER_TAG_8021Q_REPLAY, &info);
+}
+
 static int dsa_tag_8021q_setup(struct dsa_switch *ds)
 {
 	int err, port;
@@ -430,6 +464,10 @@ int dsa_tag_8021q_register(struct dsa_switch *ds, __be16 proto)
 	INIT_LIST_HEAD(&ctx->vlans);
 
 	ds->tag_8021q_ctx = ctx;
+
+	err = dsa_tag_8021q_replay(ds);
+	if (err)
+		goto err_free;
 
 	err = dsa_tag_8021q_setup(ds);
 	if (err)

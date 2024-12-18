@@ -24,5 +24,7 @@ int dsa_switch_tag_8021q_vlan_add(struct dsa_switch *ds,
 				  struct dsa_notifier_tag_8021q_vlan_info *info);
 int dsa_switch_tag_8021q_vlan_del(struct dsa_switch *ds,
 				  struct dsa_notifier_tag_8021q_vlan_info *info);
+int dsa_switch_tag_8021q_replay(struct dsa_switch *ds,
+				struct dsa_notifier_tag_8021q_replay_info *info);
 
 #endif
