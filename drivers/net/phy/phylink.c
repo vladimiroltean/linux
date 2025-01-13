@@ -1020,12 +1020,17 @@ static void phylink_mac_config(struct phylink *pl,
 	pl->mac_ops->mac_config(pl->config, pl->act_link_an_mode, &st);
 }
 
+static bool phylink_pcs_handles_an(phy_interface_t iface, unsigned int mode)
+{
+	return phy_interface_mode_is_8023z(iface) && phylink_autoneg_inband(mode);
+}
+
 static void phylink_pcs_an_restart(struct phylink *pl)
 {
 	if (pl->pcs && linkmode_test_bit(ETHTOOL_LINK_MODE_Autoneg_BIT,
 					 pl->link_config.advertising) &&
-	    phy_interface_mode_is_8023z(pl->link_config.interface) &&
-	    phylink_autoneg_inband(pl->act_link_an_mode))
+	    phylink_pcs_handles_an(pl->link_config.interface,
+				   pl->act_link_an_mode))
 		pl->pcs->ops->pcs_an_restart(pl->pcs);
 }
 
