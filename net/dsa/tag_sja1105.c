@@ -445,7 +445,8 @@ static struct sk_buff
 		 */
 		if (!stampable_skb) {
 			dev_err_ratelimited(ds->dev,
-					    "Unexpected meta frame\n");
+					    "Unexpected meta frame (tstamp 0x%llx, patched MAC DA %02llx:%02llx, source port %llu, switch id %llu)\n",
+					    meta->tstamp, meta->dmac_byte_3, meta->dmac_byte_4, meta->source_port, meta->switch_id);
 			spin_unlock(&priv->meta_lock);
 			return NULL;
 		}
