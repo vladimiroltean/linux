@@ -63,11 +63,11 @@ int sja1105_hwtstamp_set(struct dsa_switch *ds, int port,
 			 struct kernel_hwtstamp_config *config,
 			 struct netlink_ext_ack *extack)
 {
+	unsigned long hwts_tx_en, hwts_l2_rx_en;
 	struct sja1105_private *priv = ds->priv;
-	unsigned long hwts_tx_en, hwts_rx_en;
 
 	hwts_tx_en = priv->hwts_tx_en;
-	hwts_rx_en = priv->hwts_rx_en;
+	hwts_l2_rx_en = priv->hwts_l2_rx_en;
 
 	switch (config->tx_type) {
 	case HWTSTAMP_TX_OFF:
@@ -82,17 +82,17 @@ int sja1105_hwtstamp_set(struct dsa_switch *ds, int port,
 
 	switch (config->rx_filter) {
 	case HWTSTAMP_FILTER_NONE:
-		hwts_rx_en &= ~BIT(port);
+		hwts_l2_rx_en &= ~BIT(port);
 		break;
 	case HWTSTAMP_FILTER_PTP_V2_L2_EVENT:
-		hwts_rx_en |= BIT(port);
+		hwts_l2_rx_en |= BIT(port);
 		break;
 	default:
 		return -ERANGE;
 	}
 
 	priv->hwts_tx_en = hwts_tx_en;
-	priv->hwts_rx_en = hwts_rx_en;
+	priv->hwts_l2_rx_en = hwts_l2_rx_en;
 
 	return 0;
 }
@@ -107,7 +107,7 @@ int sja1105_hwtstamp_get(struct dsa_switch *ds, int port,
 		config->tx_type = HWTSTAMP_TX_ON;
 	else
 		config->tx_type = HWTSTAMP_TX_OFF;
-	if (priv->hwts_rx_en & BIT(port))
+	if (priv->hwts_l2_rx_en & BIT(port))
 		config->rx_filter = HWTSTAMP_FILTER_PTP_V2_L2_EVENT;
 	else
 		config->rx_filter = HWTSTAMP_FILTER_NONE;
@@ -385,7 +385,7 @@ bool sja1105_rxtstamp(struct dsa_switch *ds, int port, struct sk_buff *skb,
 
 	switch (type & PTP_CLASS_PMASK) {
 	case PTP_CLASS_L2:
-		if (!(priv->hwts_rx_en & BIT(port)))
+		if (!(priv->hwts_l2_rx_en & BIT(port)))
 			return false;
 		break;
 	}
