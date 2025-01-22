@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /* Copyright (c) 2019, Vladimir Oltean <olteanv@gmail.com>
  */
+#include <linux/ptp_classify.h>
 #include <linux/spi/spi.h>
 #include "sja1105.h"
 
@@ -376,13 +377,18 @@ static long sja1105_rxtstamp_work(struct ptp_clock_info *ptp)
 	return -1;
 }
 
-bool sja1105_rxtstamp(struct dsa_switch *ds, int port, struct sk_buff *skb)
+bool sja1105_rxtstamp(struct dsa_switch *ds, int port, struct sk_buff *skb,
+		      unsigned int type)
 {
 	struct sja1105_private *priv = ds->priv;
 	struct sja1105_ptp_data *ptp_data = &priv->ptp_data;
 
-	if (!(priv->hwts_rx_en & BIT(port)))
-		return false;
+	switch (type & PTP_CLASS_PMASK) {
+	case PTP_CLASS_L2:
+		if (!(priv->hwts_rx_en & BIT(port)))
+			return false;
+		break;
+	}
 
 	/* We need to read the full PTP clock to reconstruct the Rx
 	 * timestamp. For that we need a sleepable context.
@@ -392,7 +398,8 @@ bool sja1105_rxtstamp(struct dsa_switch *ds, int port, struct sk_buff *skb)
 	return true;
 }
 
-bool sja1110_rxtstamp(struct dsa_switch *ds, int port, struct sk_buff *skb)
+bool sja1110_rxtstamp(struct dsa_switch *ds, int port, struct sk_buff *skb,
+		      unsigned int type)
 {
 	struct skb_shared_hwtstamps *shwt = skb_hwtstamps(skb);
 	u64 ts = SJA1105_SKB_CB(skb)->tstamp;
@@ -411,7 +418,7 @@ bool sja1105_port_rxtstamp(struct dsa_switch *ds, int port,
 {
 	struct sja1105_private *priv = ds->priv;
 
-	return priv->info->rxtstamp(ds, port, skb);
+	return priv->info->rxtstamp(ds, port, skb, type);
 }
 
 void sja1110_process_meta_tstamp(struct dsa_switch *ds, int port, u8 ts_id,

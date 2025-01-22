@@ -149,7 +149,8 @@ struct sja1105_info {
 			   const unsigned char *addr, u16 vid);
 	void (*ptp_cmd_packing)(u8 *buf, struct sja1105_ptp_cmd *cmd,
 				enum packing_op op);
-	bool (*rxtstamp)(struct dsa_switch *ds, int port, struct sk_buff *skb);
+	bool (*rxtstamp)(struct dsa_switch *ds, int port, struct sk_buff *skb,
+			 unsigned int type);
 	void (*txtstamp)(struct dsa_switch *ds, int port, struct sk_buff *skb);
 	int (*clocking_setup)(struct sja1105_private *priv);
 	int (*pcs_mdio_read_c45)(struct mii_bus *bus, int phy, int mmd,
