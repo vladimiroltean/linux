@@ -400,10 +400,15 @@ static struct sk_buff
 		 * that we were expecting?
 		 */
 		if (priv->stampable_skb) {
+			unsigned char meta_dmac[ETH_ALEN];
+
+			u64_to_ether_addr(SJA1105_META_DMAC, meta_dmac);
 			dev_err_ratelimited(ds->dev,
-					    "Expected meta frame, is %12llx "
+					    "Had stampable skb %pM and received new skb %pM "
+					    "but was expecting meta frame - is %pM "
 					    "in the DSA conduit multicast filter?\n",
-					    SJA1105_META_DMAC);
+					    eth_hdr(priv->stampable_skb)->h_dest,
+					    eth_hdr(skb)->h_dest, meta_dmac);
 			kfree_skb(priv->stampable_skb);
 		}
 
