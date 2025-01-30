@@ -104,6 +104,22 @@ static bool sja1105_is_link_local(const struct sk_buff *skb)
 	return false;
 }
 
+/* Matches on TCAM entries with TAKETS=1 that were communicated to the tagger. */
+static bool sja1105_is_extended_l2_trap(struct dsa_switch *ds,
+					const struct sk_buff *skb)
+{
+	struct sja1105_tagger_data *tagger_data = sja1105_tagger_data(ds);
+	const unsigned char *addr = eth_hdr(skb)->h_dest;
+
+	if (!is_multicast_ether_addr(addr))
+		return false;
+
+	if (!tagger_data->skb_needs_extended_l2_tstamp)
+		return false;
+
+	return tagger_data->skb_needs_extended_l2_tstamp(ds, skb);
+}
+
 struct sja1105_meta {
 	u64 tstamp;
 	u64 dmac_byte_4;
@@ -157,7 +173,8 @@ static bool sja1105_is_meta_frame(const struct sk_buff *skb)
 
 /* Calls sja1105_port_deferred_xmit in sja1105_main.c */
 static struct sk_buff *sja1105_defer_xmit(struct dsa_port *dp,
-					  struct sk_buff *skb)
+					  struct sk_buff *skb, bool ext_trap,
+					  bool cloned)
 {
 	struct sja1105_tagger_data *tagger_data = sja1105_tagger_data(dp->ds);
 	struct sja1105_tagger_private *priv = sja1105_tagger_private(dp->ds);
@@ -165,7 +182,9 @@ static struct sk_buff *sja1105_defer_xmit(struct dsa_port *dp,
 	struct sja1105_deferred_xmit_work *xmit_work;
 	struct kthread_worker *xmit_worker;
 
-	if (SJA1105_SKB_CB(skb)->clone)
+	if (ext_trap)
+		SJA1105_SKB_CB(skb)->tstamp_type = SJA1105_TSTAMP_EXTENDED;
+	else if (cloned)
 		SJA1105_SKB_CB(skb)->tstamp_type = SJA1105_TSTAMP_L2;
 	else
 		SJA1105_SKB_CB(skb)->tstamp_type = SJA1105_TSTAMP_NONE;
@@ -294,20 +313,24 @@ static struct sk_buff *sja1105_xmit(struct sk_buff *skb,
 	u16 queue_mapping = skb_get_queue_mapping(skb);
 	u8 pcp = netdev_txq_to_tc(netdev, queue_mapping);
 	u16 tx_vid = dsa_tag_8021q_standalone_vid(dp);
+	bool ext_trap, cloned;
 
 	if (skb->offload_fwd_mark)
 		return sja1105_imprecise_xmit(skb, netdev);
+
+	ext_trap = sja1105_is_extended_l2_trap(dp->ds, skb);
+	cloned = SJA1105_SKB_CB(skb)->clone;
 
 	/* Transmitting management traffic does not rely upon switch tagging,
 	 * but instead SPI-installed management routes. Part 2 of this
 	 * is the .port_deferred_xmit driver callback.
 	 */
-	if (unlikely(sja1105_is_link_local(skb) || SJA1105_SKB_CB(skb)->clone)) {
+	if (unlikely(sja1105_is_link_local(skb) || ext_trap || cloned)) {
 		skb = sja1105_pvid_tag_control_pkt(dp, skb, pcp);
 		if (!skb)
 			return NULL;
 
-		return sja1105_defer_xmit(dp, skb);
+		return sja1105_defer_xmit(dp, skb, ext_trap, cloned);
 	}
 
 	return dsa_8021q_xmit(skb, netdev, sja1105_xmit_tpid(dp),
@@ -404,6 +427,14 @@ static struct sk_buff *sja1105_rcv_meta(struct sja1105_skb_stack *skb_stack,
 		    stampable_skb->dev != skb->dev)
 			continue;
 
+		/* For extended L2 timestamps, the INCL_SRCPT info is not
+		 * available, and we need to trust the matching strictly based
+		 * on ordering. Update the stampable_skb->dev based on precise
+		 * source port information from the meta frame.
+		 */
+		if (SJA1105_SKB_CB(stampable_skb)->tstamp_type == SJA1105_TSTAMP_EXTENDED)
+			stampable_skb->dev = skb->dev;
+
 		/* Free the meta frame and give DSA the buffered stampable_skb
 		 * for further processing up the network stack.
 		 */
@@ -499,10 +530,9 @@ static struct sk_buff *sja1105_rcv(struct sk_buff *skb,
 				   struct net_device *netdev)
 {
 	int source_port = -1, switch_id = -1, vbid = -1, vid = -1;
+	bool is_link_local, is_meta, is_ext_trap;
 	struct sja1105_meta meta = {0};
 	struct ethhdr *hdr;
-	bool is_link_local;
-	bool is_meta;
 
 	hdr = eth_hdr(skb);
 	is_link_local = sja1105_is_link_local(skb);
@@ -541,14 +571,17 @@ static struct sk_buff *sja1105_rcv(struct sk_buff *skb,
 
 	SJA1105_SKB_CB(skb)->rx_time = jiffies;
 
-	if (is_link_local)
+	is_ext_trap = sja1105_is_extended_l2_trap(dsa_user_to_port(skb->dev)->ds, skb);
+	if (is_ext_trap)
+		SJA1105_SKB_CB(skb)->tstamp_type = SJA1105_TSTAMP_EXTENDED;
+	else if (is_link_local)
 		SJA1105_SKB_CB(skb)->tstamp_type = SJA1105_TSTAMP_L2;
 	else if (is_meta)
 		SJA1105_SKB_CB(skb)->tstamp_type = SJA1105_TSTAMP_META;
 	else
 		SJA1105_SKB_CB(skb)->tstamp_type = SJA1105_TSTAMP_NONE;
 
-	if (!is_link_local)
+	if (!is_link_local && !is_ext_trap)
 		dsa_default_offload_fwd_mark(skb);
 
 	return sja1105_rcv_tstamp_state_machine(skb, &meta);

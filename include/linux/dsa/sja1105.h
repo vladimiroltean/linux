@@ -51,11 +51,14 @@ struct sja1105_tagger_data {
 	void (*xmit_work_fn)(struct kthread_work *work);
 	void (*meta_tstamp_handler)(struct dsa_switch *ds, int port, u8 ts_id,
 				    enum sja1110_meta_tstamp dir, u64 tstamp);
+	bool (*skb_needs_extended_l2_tstamp)(struct dsa_switch *ds,
+					     const struct sk_buff *skb);
 };
 
 enum sja1105_tstamp_type {
 	SJA1105_TSTAMP_NONE,
 	SJA1105_TSTAMP_L2,
+	SJA1105_TSTAMP_EXTENDED,
 	SJA1105_TSTAMP_META,
 };
 

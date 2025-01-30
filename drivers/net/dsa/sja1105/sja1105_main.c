@@ -2730,12 +2730,19 @@ static void sja1105_port_deferred_xmit(struct kthread_work *work)
 	struct dsa_switch *ds = xmit_work->dp->ds;
 	struct sja1105_private *priv = ds->priv;
 	int rc, port = xmit_work->dp->index;
+	bool ext_tstamp;
 
 	clone = SJA1105_SKB_CB(skb)->clone;
+	ext_tstamp = SJA1105_SKB_CB(skb)->tstamp_type == SJA1105_TSTAMP_EXTENDED;
 
 	mutex_lock(&priv->mgmt_tree->lock);
 
-	rc = sja1105_mgmt_xmit(ds, port, 0, skb, !!clone);
+	if (ext_tstamp) {
+		kfree_skb(skb);
+		rc = -EINVAL;
+	} else {
+		rc = sja1105_mgmt_xmit(ds, port, 0, skb, !!clone);
+	}
 
 	/* The clone, if there, was made by dsa_skb_tx_timestamp */
 	if (rc == 0 && clone)
