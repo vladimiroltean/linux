@@ -949,7 +949,8 @@ void sja1105_ptp_txtstamp_skb(struct dsa_switch *ds, int port,
 	u64 ticks, ts;
 	int rc;
 
-	skb_shinfo(skb)->tx_flags |= SKBTX_IN_PROGRESS;
+	if (skb)
+		skb_shinfo(skb)->tx_flags |= SKBTX_IN_PROGRESS;
 
 	mutex_lock(&ptp_data->lock);
 
@@ -959,6 +960,9 @@ void sja1105_ptp_txtstamp_skb(struct dsa_switch *ds, int port,
 		kfree_skb(skb);
 		goto out;
 	}
+
+	if (!skb)
+		goto out;
 
 	rc = sja1105_ptpclkval_read(priv, &ticks, NULL);
 	if (rc < 0) {
