@@ -2698,16 +2698,16 @@ static void sja1105_port_deferred_xmit(struct kthread_work *work)
 	struct sk_buff *clone, *skb = xmit_work->skb;
 	struct dsa_switch *ds = xmit_work->dp->ds;
 	struct sja1105_private *priv = ds->priv;
-	int port = xmit_work->dp->index;
+	int rc, port = xmit_work->dp->index;
 
 	clone = SJA1105_SKB_CB(skb)->clone;
 
 	mutex_lock(&priv->mgmt_tree->lock);
 
-	sja1105_mgmt_xmit(ds, port, 0, skb, !!clone);
+	rc = sja1105_mgmt_xmit(ds, port, 0, skb, !!clone);
 
 	/* The clone, if there, was made by dsa_skb_tx_timestamp */
-	if (clone)
+	if (rc == 0 && clone)
 		sja1105_ptp_txtstamp_skb(ds, port, clone);
 
 	mutex_unlock(&priv->mgmt_tree->lock);
