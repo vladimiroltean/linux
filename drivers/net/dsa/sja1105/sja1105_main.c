@@ -1407,7 +1407,8 @@ static void sja1105_phylink_get_caps(struct dsa_switch *ds, int port,
 }
 
 static int
-sja1105_find_static_fdb_entry(struct sja1105_private *priv, int port,
+sja1105_find_static_fdb_entry(struct sja1105_private *priv,
+			      unsigned long destports,
 			      const struct sja1105_l2_lookup_entry *requested)
 {
 	struct sja1105_l2_lookup_entry *l2_lookup;
@@ -1420,7 +1421,7 @@ sja1105_find_static_fdb_entry(struct sja1105_private *priv, int port,
 	for (i = 0; i < table->entry_count; i++)
 		if (l2_lookup[i].macaddr == requested->macaddr &&
 		    l2_lookup[i].vlanid == requested->vlanid &&
-		    l2_lookup[i].destports & BIT(port))
+		    (l2_lookup[i].destports & destports) == destports)
 			return i;
 
 	return -1;
@@ -1431,10 +1432,10 @@ sja1105_find_static_fdb_entry(struct sja1105_private *priv, int port,
  * operation. So we have to back them up in the static configuration tables
  * and hence apply them on next static config upload... yay!
  */
-static int
-sja1105_static_fdb_change(struct sja1105_private *priv, int port,
-			  const struct sja1105_l2_lookup_entry *requested,
-			  bool keep)
+static int sja1105_static_fdb_change(struct sja1105_private *priv,
+				     unsigned long destports,
+				     const struct sja1105_l2_lookup_entry *requested,
+				     bool keep)
 {
 	struct sja1105_l2_lookup_entry *l2_lookup;
 	struct sja1105_table *table;
@@ -1442,7 +1443,7 @@ sja1105_static_fdb_change(struct sja1105_private *priv, int port,
 
 	table = &priv->static_config.tables[BLK_IDX_L2_LOOKUP];
 
-	match = sja1105_find_static_fdb_entry(priv, port, requested);
+	match = sja1105_find_static_fdb_entry(priv, destports, requested);
 	if (match < 0) {
 		/* Can't delete a missing entry. */
 		if (!keep)
@@ -1602,7 +1603,7 @@ int sja1105et_fdb_add(struct dsa_switch *ds, int port,
 		break;
 	}
 
-	return sja1105_static_fdb_change(priv, port, &l2_lookup, true);
+	return sja1105_static_fdb_change(priv, BIT(port), &l2_lookup, true);
 }
 
 int sja1105et_fdb_del(struct dsa_switch *ds, int port,
@@ -1637,11 +1638,12 @@ int sja1105et_fdb_del(struct dsa_switch *ds, int port,
 	if (rc < 0)
 		return rc;
 
-	return sja1105_static_fdb_change(priv, port, &l2_lookup, keep);
+	return sja1105_static_fdb_change(priv, BIT(port), &l2_lookup, keep);
 }
 
-int sja1105pqrs_fdb_add(struct dsa_switch *ds, int port,
-			const unsigned char *addr, u16 vid)
+int __sja1105pqrs_fdb_add(struct dsa_switch *ds, unsigned long destports,
+			  const unsigned char *addr, u16 vid, u16 vid_mask,
+			  bool takets, int tsreg, size_t *index)
 {
 	struct sja1105_l2_lookup_entry l2_lookup = {0}, tmp;
 	struct sja1105_private *priv = ds->priv;
@@ -1651,8 +1653,10 @@ int sja1105pqrs_fdb_add(struct dsa_switch *ds, int port,
 	l2_lookup.macaddr = ether_addr_to_u64(addr);
 	l2_lookup.vlanid = vid;
 	l2_lookup.mask_macaddr = GENMASK_ULL(ETH_ALEN * 8 - 1, 0);
-	l2_lookup.mask_vlanid = VLAN_VID_MASK;
-	l2_lookup.destports = BIT(port);
+	l2_lookup.mask_vlanid = vid_mask;
+	l2_lookup.destports = destports;
+	l2_lookup.takets = takets;
+	l2_lookup.tsreg = tsreg;
 
 	tmp = l2_lookup;
 
@@ -1662,7 +1666,7 @@ int sja1105pqrs_fdb_add(struct dsa_switch *ds, int port,
 		/* Found a static entry and this port is already in the entry's
 		 * port mask => job done
 		 */
-		if ((tmp.destports & BIT(port)) && tmp.lockeds)
+		if ((tmp.destports & destports) && tmp.lockeds)
 			return 0;
 
 		l2_lookup = tmp;
@@ -1670,7 +1674,8 @@ int sja1105pqrs_fdb_add(struct dsa_switch *ds, int port,
 		/* l2_lookup.index is populated by the switch in case it
 		 * found something.
 		 */
-		l2_lookup.destports |= BIT(port);
+		if (!takets)
+			l2_lookup.destports |= destports;
 		goto skip_finding_an_index;
 	}
 
@@ -1716,8 +1721,8 @@ skip_finding_an_index:
 					 SJA1105_SEARCH, &tmp);
 	if (rc < 0) {
 		dev_err(ds->dev,
-			"port %d failed to read back entry for %pM vid %d: %pe\n",
-			port, addr, vid, ERR_PTR(rc));
+			"failed to read back entry for %pM vid %d destports 0x%lx: %pe\n",
+			addr, vid, destports, ERR_PTR(rc));
 		return rc;
 	}
 
@@ -1728,11 +1733,31 @@ skip_finding_an_index:
 			return rc;
 	}
 
-	return sja1105_static_fdb_change(priv, port, &l2_lookup, true);
+	rc = sja1105_static_fdb_change(priv, destports, &l2_lookup, true);
+	if (rc)
+		return rc;
+
+	if (index) {
+		/* This is the index in the FDB, not the index in
+		 * table->entries. It is supposed to remain constant, since the
+		 * switch does not move around static entries. We will use it
+		 * to look up the software copy of this FDB entry.
+		 */
+		*index = l2_lookup.index;
+	}
+
+	return 0;
 }
 
-int sja1105pqrs_fdb_del(struct dsa_switch *ds, int port,
+int sja1105pqrs_fdb_add(struct dsa_switch *ds, int port,
 			const unsigned char *addr, u16 vid)
+{
+	return __sja1105pqrs_fdb_add(ds, BIT(port), addr, vid, VLAN_VID_MASK,
+				     false, 0, NULL);
+}
+
+int __sja1105pqrs_fdb_del(struct dsa_switch *ds, unsigned long destports,
+			  const unsigned char *addr, u16 vid, u16 vid_mask)
 {
 	struct sja1105_l2_lookup_entry l2_lookup = {0};
 	struct sja1105_private *priv = ds->priv;
@@ -1742,15 +1767,15 @@ int sja1105pqrs_fdb_del(struct dsa_switch *ds, int port,
 	l2_lookup.macaddr = ether_addr_to_u64(addr);
 	l2_lookup.vlanid = vid;
 	l2_lookup.mask_macaddr = GENMASK_ULL(ETH_ALEN * 8 - 1, 0);
-	l2_lookup.mask_vlanid = VLAN_VID_MASK;
-	l2_lookup.destports = BIT(port);
+	l2_lookup.mask_vlanid = vid_mask;
+	l2_lookup.destports = destports;
 
 	rc = sja1105_dynamic_config_read(priv, BLK_IDX_L2_LOOKUP,
 					 SJA1105_SEARCH, &l2_lookup);
 	if (rc < 0)
 		return 0;
 
-	l2_lookup.destports &= ~BIT(port);
+	l2_lookup.destports &= ~destports;
 
 	/* Decide whether we remove just this port from the FDB entry,
 	 * or if we remove it completely.
@@ -1765,7 +1790,13 @@ int sja1105pqrs_fdb_del(struct dsa_switch *ds, int port,
 	if (rc < 0)
 		return rc;
 
-	return sja1105_static_fdb_change(priv, port, &l2_lookup, keep);
+	return sja1105_static_fdb_change(priv, destports, &l2_lookup, keep);
+}
+
+int sja1105pqrs_fdb_del(struct dsa_switch *ds, int port,
+			const unsigned char *addr, u16 vid)
+{
+	return __sja1105pqrs_fdb_del(ds, BIT(port), addr, vid, VLAN_VID_MASK);
 }
 
 static int sja1105_fdb_add(struct dsa_switch *ds, int port,

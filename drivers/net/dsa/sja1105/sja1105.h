@@ -454,6 +454,11 @@ int sja1105et_fdb_add(struct dsa_switch *ds, int port,
 		      const unsigned char *addr, u16 vid);
 int sja1105et_fdb_del(struct dsa_switch *ds, int port,
 		      const unsigned char *addr, u16 vid);
+int __sja1105pqrs_fdb_add(struct dsa_switch *ds, unsigned long destports,
+			  const unsigned char *addr, u16 vid, u16 vid_mask,
+			  bool takets, int tsreg, size_t *index);
+int __sja1105pqrs_fdb_del(struct dsa_switch *ds, unsigned long destports,
+			  const unsigned char *addr, u16 vid, u16 vid_mask);
 int sja1105pqrs_fdb_add(struct dsa_switch *ds, int port,
 			const unsigned char *addr, u16 vid);
 int sja1105pqrs_fdb_del(struct dsa_switch *ds, int port,
