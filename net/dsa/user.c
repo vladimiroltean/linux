@@ -360,7 +360,7 @@ static int dsa_user_phy_setup(struct net_device *user_dev)
 	struct device_node *port_dn = dp->dn;
 	struct dsa_switch *ds = dp->ds;
 	u32 phy_flags = 0;
-	int ret;
+	int err;
 
 	dp->pl_config.dev = &user_dev->dev;
 	dp->pl_config.type = PHYLINK_NETDEV;
@@ -374,28 +374,28 @@ static int dsa_user_phy_setup(struct net_device *user_dev)
 		dp->pl_config.poll_fixed_state = true;
 	}
 
-	ret = dsa_port_phylink_create(dp);
-	if (ret)
-		return ret;
+	err = dsa_port_phylink_create(dp);
+	if (err)
+		return err;
 
 	if (ds->ops->get_phy_flags)
 		phy_flags = ds->ops->get_phy_flags(ds, dp->index);
 
-	ret = phylink_of_phy_connect(dp->pl, port_dn, phy_flags);
-	if (ret == -ENODEV && ds->user_mii_bus) {
+	err = phylink_of_phy_connect(dp->pl, port_dn, phy_flags);
+	if (err == -ENODEV && ds->user_mii_bus) {
 		/* We could not connect to a designated PHY or SFP, so try to
 		 * use the switch internal MDIO bus instead
 		 */
-		ret = dsa_user_mii_bus_phy_connect(user_dev, dp->index,
+		err = dsa_user_mii_bus_phy_connect(user_dev, dp->index,
 						   phy_flags);
 	}
-	if (ret) {
+	if (err) {
 		netdev_err(user_dev, "failed to connect to PHY: %pe\n",
-			   ERR_PTR(ret));
+			   ERR_PTR(err));
 		dsa_port_phylink_destroy(dp);
 	}
 
-	return ret;
+	return err;
 }
 
 /* user mii_bus handling ***************************************************/
