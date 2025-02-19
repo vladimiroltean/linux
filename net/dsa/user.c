@@ -357,10 +357,7 @@ static void dsa_user_phylink_fixed_state(struct phylink_config *config,
 static int dsa_user_phy_setup(struct net_device *user_dev)
 {
 	struct dsa_port *dp = dsa_user_to_port(user_dev);
-	struct device_node *port_dn = dp->dn;
 	struct dsa_switch *ds = dp->ds;
-	u32 phy_flags = 0;
-	int err;
 
 	dp->pl_config.dev = &user_dev->dev;
 	dp->pl_config.type = PHYLINK_NETDEV;
@@ -374,9 +371,21 @@ static int dsa_user_phy_setup(struct net_device *user_dev)
 		dp->pl_config.poll_fixed_state = true;
 	}
 
-	err = dsa_port_phylink_create(dp);
-	if (err)
-		return err;
+	return dsa_port_phylink_create(dp);
+}
+
+static void dsa_user_phy_teardown(struct dsa_port *dp)
+{
+	return dsa_port_phylink_destroy(dp);
+}
+
+static int dsa_user_phy_connect(struct dsa_port *dp)
+{
+	struct device_node *port_dn = dp->dn;
+	struct net_device *user = dp->user;
+	struct dsa_switch *ds = dp->ds;
+	u32 phy_flags = 0;
+	int err;
 
 	if (ds->ops->get_phy_flags)
 		phy_flags = ds->ops->get_phy_flags(ds, dp->index);
@@ -386,16 +395,16 @@ static int dsa_user_phy_setup(struct net_device *user_dev)
 		/* We could not connect to a designated PHY or SFP, so try to
 		 * use the switch internal MDIO bus instead
 		 */
-		err = dsa_user_mii_bus_phy_connect(user_dev, dp->index,
+		err = dsa_user_mii_bus_phy_connect(user, dp->index,
 						   phy_flags);
-	}
-	if (err) {
-		netdev_err(user_dev, "failed to connect to PHY: %pe\n",
-			   ERR_PTR(err));
-		dsa_port_phylink_destroy(dp);
 	}
 
 	return err;
+}
+
+static void dsa_user_phy_disconnect(struct dsa_port *dp)
+{
+	phylink_disconnect_phy(dp->pl);
 }
 
 /* user mii_bus handling ***************************************************/
@@ -485,15 +494,21 @@ static int dsa_user_open(struct net_device *dev)
 	struct dsa_port *dp = dsa_user_to_port(dev);
 	int err;
 
+	err = dsa_user_phy_connect(dp);
+	if (err) {
+		netdev_err(dev, "Failed to connect to PHY: %pe\n", ERR_PTR(err));
+		goto out;
+	}
+
 	err = dev_open(conduit, NULL);
 	if (err < 0) {
 		netdev_err(dev, "failed to open conduit %s\n", conduit->name);
-		goto out;
+		goto phy_disconnect;
 	}
 
 	err = dsa_user_host_uc_install(dev, dev->dev_addr);
 	if (err)
-		goto out;
+		goto phy_disconnect;
 
 	err = dsa_port_enable_rt(dp, dev->phydev);
 	if (err)
@@ -503,6 +518,8 @@ static int dsa_user_open(struct net_device *dev)
 
 out_del_host_uc:
 	dsa_user_host_uc_uninstall(dev);
+phy_disconnect:
+	dsa_user_phy_disconnect(dp);
 out:
 	return err;
 }
@@ -514,6 +531,8 @@ static int dsa_user_close(struct net_device *dev)
 	dsa_port_disable_rt(dp);
 
 	dsa_user_host_uc_uninstall(dev);
+
+	dsa_user_phy_disconnect(dp);
 
 	return 0;
 }
@@ -2867,10 +2886,7 @@ int dsa_user_create(struct dsa_port *port)
 out_unregister:
 	unregister_netdev(user_dev);
 out_phy:
-	rtnl_lock();
-	phylink_disconnect_phy(p->dp->pl);
-	rtnl_unlock();
-	dsa_port_phylink_destroy(p->dp);
+	dsa_user_phy_teardown(port);
 out_gcells:
 	gro_cells_destroy(&p->gcells);
 out_free:
@@ -2885,14 +2901,12 @@ void dsa_user_destroy(struct net_device *user_dev)
 	struct dsa_port *dp = dsa_user_to_port(user_dev);
 	struct dsa_user_priv *p = netdev_priv(user_dev);
 
-	netif_carrier_off(user_dev);
 	rtnl_lock();
 	netdev_upper_dev_unlink(conduit, user_dev);
 	unregister_netdevice(user_dev);
-	phylink_disconnect_phy(dp->pl);
 	rtnl_unlock();
 
-	dsa_port_phylink_destroy(dp);
+	dsa_user_phy_teardown(dp);
 	gro_cells_destroy(&p->gcells);
 	free_netdev(user_dev);
 }
