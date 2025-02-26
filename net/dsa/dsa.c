@@ -798,7 +798,6 @@ static int dsa_switch_probe(struct dsa_switch *ds)
 		return err;
 
 	dst = ds->dst;
-	dsa_tree_get(dst);
 	err = dsa_tree_setup(dst);
 	if (err) {
 		dsa_switch_release_ports(ds);
@@ -814,7 +813,6 @@ int dsa_register_switch(struct dsa_switch *ds)
 
 	mutex_lock(&dsa2_mutex);
 	err = dsa_switch_probe(ds);
-	dsa_tree_put(ds->dst);
 	mutex_unlock(&dsa2_mutex);
 
 	return err;
