@@ -687,7 +687,7 @@ static struct dsa_link *dsa_link_touch(struct dsa_port *dp,
 	return dl;
 }
 
-static bool dsa_port_setup_routing_table(struct dsa_port *dp)
+static int dsa_port_setup_routing_table(struct dsa_port *dp)
 {
 	struct dsa_switch *ds = dp->ds;
 	struct dsa_switch_tree *dst = ds->dst;
@@ -701,33 +701,33 @@ static bool dsa_port_setup_routing_table(struct dsa_port *dp)
 		link_dp = dsa_tree_find_port_by_node(dst, it.node);
 		if (!link_dp) {
 			of_node_put(it.node);
-			return false;
+			return -ENODEV;
 		}
 
 		dl = dsa_link_touch(dp, link_dp);
 		if (!dl) {
 			of_node_put(it.node);
-			return false;
+			return -ENOMEM;
 		}
 	}
 
-	return true;
+	return 0;
 }
 
-static bool dsa_tree_setup_routing_table(struct dsa_switch_tree *dst)
+static int dsa_tree_setup_routing_table(struct dsa_switch_tree *dst)
 {
-	bool complete = true;
 	struct dsa_port *dp;
+	int err;
 
 	list_for_each_entry(dp, &dst->ports, list) {
 		if (dsa_port_is_dsa(dp)) {
-			complete = dsa_port_setup_routing_table(dp);
-			if (!complete)
-				break;
+			err = dsa_port_setup_routing_table(dp);
+			if (err)
+				return err;
 		}
 	}
 
-	return complete;
+	return 0;
 }
 
 static struct dsa_port *dsa_tree_find_first_cpu(struct dsa_switch_tree *dst)
@@ -997,9 +997,23 @@ static void dsa_tree_teardown_routing_table(struct dsa_switch_tree *dst)
 	}
 }
 
+static bool dsa_tree_complete(struct dsa_switch_tree *dst)
+{
+	struct dsa_tree_component *component;
+
+	/* pdata has a single switch, and we don't create components for it */
+	if (dst->probing_mode == DSA_TREE_PROBING_PDATA)
+		return true;
+
+	list_for_each_entry(component, &dst->components, list)
+		if (component->state == DSA_TREE_COMPONENT_UNBOUND)
+			return false;
+
+	return true;
+}
+
 int dsa_tree_setup(struct dsa_switch_tree *dst)
 {
-	bool complete;
 	int err;
 
 	if (dst->setup) {
@@ -1008,9 +1022,12 @@ int dsa_tree_setup(struct dsa_switch_tree *dst)
 		return -EEXIST;
 	}
 
-	complete = dsa_tree_setup_routing_table(dst);
-	if (!complete)
+	if (!dsa_tree_complete(dst))
 		return 0;
+
+	err = dsa_tree_setup_routing_table(dst);
+	if (err)
+		return err;
 
 	err = dsa_tree_setup_cpu_ports(dst);
 	if (err)
