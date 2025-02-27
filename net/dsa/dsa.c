@@ -296,14 +296,9 @@ void dsa_switch_teardown(struct dsa_switch *ds)
 	ds->setup = false;
 }
 
-static struct dsa_port *dsa_port_touch(struct dsa_switch *ds, int index)
+static void dsa_port_init(struct dsa_switch *ds, int index)
 {
-	struct dsa_switch_tree *dst = ds->dst;
-	struct dsa_port *dp;
-
-	dp = kzalloc_obj(*dp);
-	if (!dp)
-		return NULL;
+	struct dsa_port *dp = &ds->ports[index];
 
 	dp->ds = ds;
 	dp->index = index;
@@ -314,9 +309,6 @@ static struct dsa_port *dsa_port_touch(struct dsa_switch *ds, int index)
 	INIT_LIST_HEAD(&dp->mdbs);
 	INIT_LIST_HEAD(&dp->vlans); /* also initializes &dp->user_vlans */
 	INIT_LIST_HEAD(&dp->list);
-	list_add_tail(&dp->list, &dst->ports);
-
-	return dp;
 }
 
 static int dsa_port_parse_user(struct dsa_port *dp, const char *name)
@@ -530,20 +522,39 @@ out_put_node:
 	return err;
 }
 
-static int dsa_switch_touch_ports(struct dsa_switch *ds)
+static int dsa_switch_create_ports(struct dsa_switch *ds)
 {
-	struct dsa_port *dp;
 	int port;
 
-	for (port = 0; port < ds->num_ports; port++) {
-		dp = dsa_port_touch(ds, port);
-		if (!dp)
-			return -ENOMEM;
-	}
+	ds->ports = kcalloc(ds->num_ports, sizeof(struct dsa_port), GFP_KERNEL);
+	if (!ds->ports)
+		return -ENOMEM;
+
+	for (port = 0; port < ds->num_ports; port++)
+		dsa_port_init(ds, port);
 
 	return 0;
 }
 
+static void dsa_switch_destroy_ports(struct dsa_switch *ds)
+{
+	kfree(ds->ports);
+}
+
+/* Add this switch's ports to the tree's port list */
+static void dsa_switch_touch_ports(struct dsa_switch *ds)
+{
+	struct dsa_switch_tree *dst = ds->dst;
+	struct dsa_port *dp;
+	int port;
+
+	for (port = 0; port < ds->num_ports; port++) {
+		dp = &ds->ports[port];
+		list_add_tail(&dp->list, &dst->ports);
+	}
+}
+
+/* Remove this switch's ports from the tree's port list */
 static void dsa_switch_release_ports(struct dsa_switch *ds)
 {
 	struct dsa_mac_addr *a, *tmp;
@@ -588,7 +599,6 @@ static void dsa_switch_release_ports(struct dsa_switch *ds)
 		}
 
 		list_del(&dp->list);
-		kfree(dp);
 	}
 }
 
@@ -694,13 +704,17 @@ static int dsa_switch_probe(struct dsa_switch *ds)
 	if (pdata)
 		ds->cd = pdata;
 
-	ds->dst = dsa_switch_get_tree(ds);
-	if (IS_ERR(ds->dst))
-		return PTR_ERR(ds->dst);
-
-	err = dsa_switch_touch_ports(ds);
+	err = dsa_switch_create_ports(ds);
 	if (err)
-		goto out_put_tree;
+		return err;
+
+	ds->dst = dsa_switch_get_tree(ds);
+	if (IS_ERR(ds->dst)) {
+		err = PTR_ERR(ds->dst);
+		goto out_destroy_ports;
+	}
+
+	dsa_switch_touch_ports(ds);
 
 	if (np)
 		err = dsa_switch_parse_ports_of(ds, np);
@@ -717,8 +731,9 @@ static int dsa_switch_probe(struct dsa_switch *ds)
 
 out_release_ports:
 	dsa_switch_release_ports(ds);
-out_put_tree:
 	dsa_switch_put_tree(ds);
+out_destroy_ports:
+	dsa_switch_destroy_ports(ds);
 
 	return err;
 }
@@ -742,6 +757,7 @@ static void dsa_switch_remove(struct dsa_switch *ds)
 	dsa_tree_teardown(dst);
 	dsa_switch_release_ports(ds);
 	dsa_switch_put_tree(ds);
+	dsa_switch_destroy_ports(ds);
 }
 
 void dsa_unregister_switch(struct dsa_switch *ds)

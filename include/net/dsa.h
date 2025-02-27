@@ -487,6 +487,8 @@ struct dsa_switch {
 	 */
 	struct dsa_chip_data	*cd;
 
+	struct dsa_port *ports;
+
 	/*
 	 * The switch operations.
 	 */
