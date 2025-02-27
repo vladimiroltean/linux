@@ -36,8 +36,15 @@ properties:
       full routing information must be given, not just the one hop
       routes to neighbouring switches
     $ref: /schemas/types.yaml#/definitions/phandle-array
+    deprecated: true
     items:
       maxItems: 1
+
+  cascade:
+    description:
+      Should be a phandle to another switch's DSA port which is adjacent to
+      this one. If this property is present, 'link' must not be specified.
+    $ref: /schemas/types.yaml#/definitions/phandle
 
   ethernet:
     description:
@@ -64,6 +71,7 @@ if:
   oneOf:
     - required: [ ethernet ]
     - required: [ link ]
+    - required: [ cascade ]
 then:
   allOf:
     - required:
