@@ -301,10 +301,6 @@ static struct dsa_port *dsa_port_touch(struct dsa_switch *ds, int index)
 	struct dsa_switch_tree *dst = ds->dst;
 	struct dsa_port *dp;
 
-	dsa_switch_for_each_port(dp, ds)
-		if (dp->index == index)
-			return dp;
-
 	dp = kzalloc_obj(*dp);
 	if (!dp)
 		return NULL;
