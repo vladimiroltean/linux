@@ -481,7 +481,8 @@ static int dsa_tree_explore_switch_by_link(struct device_node *dn,
 		goto out_put_parents;
 
 	for_each_available_child_of_node(ports, port) {
-		if (!of_property_present(port, "link"))
+		if (!of_property_present(port, "link") &&
+		    !of_property_present(port, "cascade"))
 			continue;
 
 		if (dsa_bfs_elem_visited(switch_dn, to_explore, explored))
@@ -504,7 +505,8 @@ out_put_parents:
 static int dsa_tree_explore_switch_ports_phandle(struct dsa_switch_tree *dst,
 						 struct device_node *dn,
 						 struct list_head *to_explore,
-						 struct list_head *explored)
+						 struct list_head *explored,
+						 bool *has_link, bool *has_cascade)
 {
 	struct device_node *ports, *port;
 	struct of_phandle_iterator it;
@@ -522,7 +524,17 @@ static int dsa_tree_explore_switch_ports_phandle(struct dsa_switch_tree *dst,
 	}
 
 	for_each_available_child_of_node(ports, port) {
+		struct device_node *cascade;
+
 		of_for_each_phandle(&it, ret, port, "link", NULL, 0) {
+			if (*has_cascade) {
+				pr_err("DSA tree %d cannot combine \"link\" and \"cascade\" specifications\n",
+				       dst->index);
+				of_node_put(port);
+				err = -EINVAL;
+				goto out;
+			}
+
 			err = dsa_tree_explore_switch_by_link(it.node,
 							      to_explore,
 							      explored);
@@ -531,6 +543,33 @@ static int dsa_tree_explore_switch_ports_phandle(struct dsa_switch_tree *dst,
 				of_node_put(port);
 				goto out;
 			}
+
+			*has_link = true;
+		}
+
+		cascade = of_parse_phandle(port, "cascade", 0);
+		if (cascade) {
+			if (*has_link) {
+				pr_err("DSA tree %d cannot combine \"link\" and \"cascade\" specifications\n",
+				       dst->index);
+				of_node_put(cascade);
+				of_node_put(port);
+				err = -EINVAL;
+				goto out;
+			}
+
+			err = dsa_tree_explore_switch_by_link(cascade,
+							      to_explore,
+							      explored);
+			of_node_put(cascade);
+			if (err) {
+				pr_err("DSA tree %d failed to explore cascade %pOF\n",
+				       dst->index, cascade);
+				of_node_put(port);
+				goto out;
+			}
+
+			*has_cascade = true;
 		}
 	}
 
@@ -573,6 +612,8 @@ static int dsa_tree_explore_device_tree(struct dsa_switch_tree *dst,
 					struct device_node *dn)
 {
 	struct dsa_tree_bfs_elem *elem;
+	bool has_cascade = false;
+	bool has_link = false;
 	LIST_HEAD(to_explore);
 	LIST_HEAD(explored);
 	int err;
@@ -590,7 +631,9 @@ static int dsa_tree_explore_device_tree(struct dsa_switch_tree *dst,
 
 		err = dsa_tree_explore_switch_ports_phandle(dst, elem->dn,
 							    &to_explore,
-							    &explored);
+							    &explored,
+							    &has_link,
+							    &has_cascade);
 		if (err)
 			goto free_lists;
 	}
