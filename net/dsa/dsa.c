@@ -450,7 +450,6 @@ static int dsa_port_parse_of(struct dsa_port *dp, struct device_node *dn)
 {
 	struct device_node *ethernet = of_parse_phandle(dn, "ethernet", 0);
 	const char *name = of_get_property(dn, "label", NULL);
-	bool link = of_property_present(dn, "link");
 
 	dp->dn = dn;
 
@@ -476,7 +475,8 @@ static int dsa_port_parse_of(struct dsa_port *dp, struct device_node *dn)
 		return err;
 	}
 
-	if (link)
+	if (of_property_present(dn, "link") ||
+	    of_property_present(dn, "cascade"))
 		return dsa_port_parse_dsa(dp);
 
 	return dsa_port_parse_user(dp, name);
