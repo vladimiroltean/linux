@@ -169,9 +169,6 @@ struct dsa_switch_tree {
 	 */
 	enum dsa_tag_protocol default_proto;
 
-	/* Has this tree been applied to the hardware? */
-	bool setup;
-
 	/*
 	 * Configuration data for the platform device that owns
 	 * this dsa switch tree instance.
