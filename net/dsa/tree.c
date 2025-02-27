@@ -1016,15 +1016,6 @@ int dsa_tree_setup(struct dsa_switch_tree *dst)
 {
 	int err;
 
-	if (dst->setup) {
-		pr_err("DSA: tree %d already setup! Disjoint trees?\n",
-		       dst->index);
-		return -EEXIST;
-	}
-
-	if (!dsa_tree_complete(dst))
-		return 0;
-
 	err = dsa_tree_setup_routing_table(dst);
 	if (err)
 		return err;
@@ -1049,8 +1040,6 @@ int dsa_tree_setup(struct dsa_switch_tree *dst)
 	if (err)
 		goto teardown_conduit;
 
-	dst->setup = true;
-
 	pr_info("DSA: tree %d setup\n", dst->index);
 
 	return 0;
@@ -1071,9 +1060,6 @@ teardown_rtable:
 
 void dsa_tree_teardown(struct dsa_switch_tree *dst)
 {
-	if (!dst->setup)
-		return;
-
 	dsa_tree_teardown_lags(dst);
 
 	dsa_tree_teardown_conduit(dst);
@@ -1087,8 +1073,6 @@ void dsa_tree_teardown(struct dsa_switch_tree *dst)
 	dsa_tree_teardown_routing_table(dst);
 
 	pr_info("DSA: tree %d torn down\n", dst->index);
-
-	dst->setup = false;
 }
 
 static void dsa_tree_free(struct dsa_switch_tree *dst)
@@ -1366,9 +1350,11 @@ int dsa_switch_get_tree(struct dsa_switch *ds)
 	if (err)
 		goto out_put_tree;
 
-	err = dsa_tree_setup(dst);
-	if (err)
-		goto out_unbind_switch;
+	if (dsa_tree_complete(dst)) {
+		err = dsa_tree_setup(dst);
+		if (err)
+			goto out_unbind_switch;
+	}
 
 	return 0;
 
@@ -1383,7 +1369,8 @@ void dsa_switch_put_tree(struct dsa_switch *ds)
 {
 	struct dsa_switch_tree *dst = ds->dst;
 
-	dsa_tree_teardown(dst);
+	if (dsa_tree_complete(dst))
+		dsa_tree_teardown(dst);
 	dsa_tree_unbind_switch(dst, ds);
 	dsa_tree_put(dst);
 }
