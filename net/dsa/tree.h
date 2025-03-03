@@ -37,4 +37,7 @@ void dsa_tree_teardown(struct dsa_switch_tree *dst);
 struct dsa_switch_tree *dsa_switch_get_tree(struct dsa_switch *ds);
 void dsa_switch_put_tree(struct dsa_switch *ds);
 
+int dsa_tree_class_register(void);
+void dsa_tree_class_unregister(void);
+
 #endif

@@ -607,6 +607,26 @@ free_lists:
 	return err;
 }
 
+static struct class dsa_switch_tree_class = {
+	.name = "dsa_switch_tree",
+};
+
+static int dsa_tree_create_dev(struct dsa_switch_tree *dst,
+			       struct device_node *dn,
+			       struct dsa_chip_data *pdata)
+{
+	struct device *dev;
+
+	dev = device_create(&dsa_switch_tree_class, NULL, 0, NULL,
+			    "dsa_switch_tree.%d", dst->index);
+	if (!dev)
+		return -ENOMEM;
+
+	dst->dev = dev;
+
+	return 0;
+}
+
 static struct dsa_switch_tree *dsa_tree_alloc(int index)
 {
 	struct dsa_switch_tree *dst;
@@ -1062,6 +1082,7 @@ static void dsa_tree_free(struct dsa_switch_tree *dst)
 	/* No components created for pdata, the tree is always single-switch */
 	if (dst->probing_mode == DSA_TREE_PROBING_OF)
 		dsa_tree_components_free(dst);
+	device_unregister(dst->dev);
 	kfree(dst);
 }
 
@@ -1107,8 +1128,15 @@ static struct dsa_switch_tree *dsa_tree_get(int index, struct device_node *dn,
 			goto err_free_tree;
 	}
 
+	err = dsa_tree_create_dev(dst, dn, pdata);
+	if (err)
+		goto err_free_components;
+
 	return dst;
 
+err_free_components:
+	if (dst->probing_mode == DSA_TREE_PROBING_OF)
+		dsa_tree_components_free(dst);
 err_free_tree:
 	list_del(&dst->list);
 	kfree(dst);
@@ -1173,4 +1201,14 @@ struct dsa_switch_tree *dsa_switch_get_tree(struct dsa_switch *ds)
 void dsa_switch_put_tree(struct dsa_switch *ds)
 {
 	dsa_tree_put(ds->dst);
+}
+
+int dsa_tree_class_register(void)
+{
+	return class_register(&dsa_switch_tree_class);
+}
+
+void dsa_tree_class_unregister(void)
+{
+	class_unregister(&dsa_switch_tree_class);
 }

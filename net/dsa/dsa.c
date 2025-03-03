@@ -1006,10 +1006,16 @@ static int __init dsa_init_module(void)
 {
 	int rc;
 
+	rc = dsa_tree_class_register();
+	if (rc)
+		return rc;
+
 	dsa_owq = alloc_ordered_workqueue("dsa_ordered",
 					  WQ_MEM_RECLAIM);
-	if (!dsa_owq)
-		return -ENOMEM;
+	if (!dsa_owq) {
+		rc = -ENOMEM;
+		goto alloc_owq_fail;
+	}
 
 	rc = dsa_user_register_notifier();
 	if (rc)
@@ -1030,6 +1036,8 @@ netlink_register_fail:
 	dev_remove_pack(&dsa_pack_type);
 register_notifier_fail:
 	destroy_workqueue(dsa_owq);
+alloc_owq_fail:
+	dsa_tree_class_unregister();
 
 	return rc;
 }
@@ -1044,6 +1052,7 @@ static void __exit dsa_cleanup_module(void)
 	dsa_user_unregister_notifier();
 	dev_remove_pack(&dsa_pack_type);
 	destroy_workqueue(dsa_owq);
+	dsa_tree_class_unregister();
 }
 module_exit(dsa_cleanup_module);
 
