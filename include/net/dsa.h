@@ -124,6 +124,16 @@ struct dsa_lag {
 	refcount_t refcount;
 };
 
+enum dsa_tree_probing_mode {
+	DSA_TREE_PROBING_OF,
+	DSA_TREE_PROBING_PDATA,
+};
+
+struct dsa_tree_component {
+	struct device_node *switch_dn;
+	struct list_head list;
+};
+
 struct dsa_switch_tree {
 	struct list_head	list;
 
@@ -169,6 +179,11 @@ struct dsa_switch_tree {
 
 	/* Track the largest switch index within a tree */
 	unsigned int last_switch;
+
+	enum dsa_tree_probing_mode probing_mode;
+
+	/* List of struct dsa_tree_component elements */
+	struct list_head components;
 };
 
 /* LAG IDs are one-based, the dst->lags array is zero-based */
