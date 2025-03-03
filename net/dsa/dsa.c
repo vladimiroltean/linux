@@ -326,10 +326,10 @@ static int dsa_port_parse_dsa(struct dsa_port *dp)
 	return 0;
 }
 
-static enum dsa_tag_protocol dsa_get_tag_protocol(struct dsa_port *dp,
-						  struct net_device *conduit)
+static enum dsa_tag_protocol dsa_get_tag_protocol(struct dsa_port *dp)
 {
 	enum dsa_tag_protocol tag_protocol = DSA_TAG_PROTO_NONE;
+	struct net_device *conduit = dp->conduit;
 	struct dsa_switch *mds, *ds = dp->ds;
 	unsigned int mdp_upstream;
 	struct dsa_port *mdp;
@@ -352,16 +352,17 @@ static enum dsa_tag_protocol dsa_get_tag_protocol(struct dsa_port *dp,
 	return ds->ops->get_tag_protocol(ds, dp->index, tag_protocol);
 }
 
-static int dsa_port_parse_cpu(struct dsa_port *dp, struct net_device *conduit,
-			      const char *user_protocol)
+int dsa_port_resolve_tag_protocol(struct dsa_port *dp,
+				  struct dsa_switch_tree *dst)
 {
 	const struct dsa_device_ops *tag_ops = NULL;
-	struct dsa_switch *ds = dp->ds;
-	struct dsa_switch_tree *dst = ds->dst;
 	enum dsa_tag_protocol default_proto;
+	const char *user_protocol = NULL;
+	struct device_node *dn = dp->dn;
+	struct dsa_switch *ds = dp->ds;
 
 	/* Find out which protocol the switch would prefer. */
-	default_proto = dsa_get_tag_protocol(dp, conduit);
+	default_proto = dsa_get_tag_protocol(dp);
 	if (dst->default_proto) {
 		if (dst->default_proto != default_proto) {
 			dev_err(ds->dev,
@@ -373,6 +374,8 @@ static int dsa_port_parse_cpu(struct dsa_port *dp, struct net_device *conduit,
 	}
 
 	/* See if the user wants to override that preference. */
+	if (dn)
+		user_protocol = of_get_property(dn, "dsa-tag-protocol", NULL);
 	if (user_protocol) {
 		if (!ds->ops->change_tag_protocol) {
 			dev_err(ds->dev, "Tag protocol cannot be modified\n");
@@ -416,8 +419,6 @@ static int dsa_port_parse_cpu(struct dsa_port *dp, struct net_device *conduit,
 		dst->tag_ops = tag_ops;
 	}
 
-	dp->conduit = conduit;
-	dp->type = DSA_PORT_TYPE_CPU;
 	dsa_port_set_tag_protocol(dp, dst->tag_ops);
 	dp->dst = dst;
 
@@ -437,6 +438,14 @@ static int dsa_port_parse_cpu(struct dsa_port *dp, struct net_device *conduit,
 	return 0;
 }
 
+static int dsa_port_parse_cpu(struct dsa_port *dp, struct net_device *conduit)
+{
+	dp->conduit = conduit;
+	dp->type = DSA_PORT_TYPE_CPU;
+
+	return 0;
+}
+
 static int dsa_port_parse_of(struct dsa_port *dp, struct device_node *dn)
 {
 	struct device_node *ethernet = of_parse_phandle(dn, "ethernet", 0);
@@ -447,7 +456,6 @@ static int dsa_port_parse_of(struct dsa_port *dp, struct device_node *dn)
 
 	if (ethernet) {
 		struct net_device *conduit;
-		const char *user_protocol;
 		int err;
 
 		rtnl_lock();
@@ -462,8 +470,7 @@ static int dsa_port_parse_of(struct dsa_port *dp, struct device_node *dn)
 		put_device(&conduit->dev);
 		rtnl_unlock();
 
-		user_protocol = of_get_property(dn, "dsa-tag-protocol", NULL);
-		err = dsa_port_parse_cpu(dp, conduit, user_protocol);
+		err = dsa_port_parse_cpu(dp, conduit);
 		if (err)
 			netdev_put(conduit, &dp->conduit_tracker);
 		return err;
@@ -640,7 +647,7 @@ static int dsa_port_parse(struct dsa_port *dp, const char *name,
 		put_device(d);
 		rtnl_unlock();
 
-		err = dsa_port_parse_cpu(dp, conduit, NULL);
+		err = dsa_port_parse_cpu(dp, conduit);
 		if (err)
 			netdev_put(conduit, &dp->conduit_tracker);
 		return err;

@@ -8,6 +8,7 @@
 
 struct dsa_port;
 struct dsa_switch;
+struct dsa_switch_tree;
 struct dsa_db;
 struct work_struct;
 
@@ -17,6 +18,8 @@ bool dsa_schedule_work(struct work_struct *work);
 int dsa_port_setup(struct dsa_port *dp);
 int dsa_port_setup_as_unused(struct dsa_port *dp);
 void dsa_port_teardown(struct dsa_port *dp);
+int dsa_port_resolve_tag_protocol(struct dsa_port *dp,
+				  struct dsa_switch_tree *dst);
 
 int dsa_switch_setup(struct dsa_switch *ds);
 void dsa_switch_teardown(struct dsa_switch *ds);
