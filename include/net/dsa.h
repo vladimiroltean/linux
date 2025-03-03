@@ -182,6 +182,8 @@ struct dsa_switch_tree {
 
 	enum dsa_tree_probing_mode probing_mode;
 
+	struct device *dev;
+
 	/* List of struct dsa_tree_component elements */
 	struct list_head components;
 };
