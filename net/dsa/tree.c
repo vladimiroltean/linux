@@ -1158,6 +1158,10 @@ dsa_tree_find_component(struct dsa_switch_tree *dst, struct dsa_switch *ds)
 static int dsa_tree_bind_switch(struct dsa_switch_tree *dst,
 				struct dsa_switch *ds)
 {
+	const struct dsa_device_ops *old_tag_ops;
+	enum dsa_tag_protocol old_default_proto;
+	int err;
+
 	if (dsa_switch_find(dst->index, ds->index)) {
 		dev_err(ds->dev,
 			"A DSA switch with index %d already exists in tree %d\n",
@@ -1178,6 +1182,19 @@ static int dsa_tree_bind_switch(struct dsa_switch_tree *dst,
 		return -EINVAL;
 	}
 
+	old_default_proto = dst->default_proto;
+	old_tag_ops = dst->tag_ops;
+
+	for (int port = 0; port < ds->num_ports; port++) {
+		struct dsa_port *dp = &ds->ports[port];
+
+		if (dsa_port_is_cpu(dp)) {
+			err = dsa_port_resolve_tag_protocol(dp, dst);
+			if (err)
+				goto restore_tag_proto;
+		}
+	}
+
 	if (dst->probing_mode == DSA_TREE_PROBING_OF) {
 		struct dsa_tree_component *component;
 
@@ -1185,7 +1202,8 @@ static int dsa_tree_bind_switch(struct dsa_switch_tree *dst,
 		if (!component) {
 			dev_err(ds->dev, "OF node %pOF unrecognized by tree %s\n",
 				dev_of_node(ds->dev), dev_name(dst->dev));
-			return -ENODEV;
+			err = -ENODEV;
+			goto restore_tag_proto;
 		}
 
 		component->ds = ds;
@@ -1196,6 +1214,12 @@ static int dsa_tree_bind_switch(struct dsa_switch_tree *dst,
 		dst->last_switch = ds->index;
 
 	return 0;
+
+restore_tag_proto:
+	dst->default_proto = old_default_proto;
+	dst->tag_ops = old_tag_ops;
+
+	return err;
 }
 
 static void dsa_tree_unbind_switch(struct dsa_switch_tree *dst,
