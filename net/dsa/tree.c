@@ -1143,6 +1143,18 @@ err_free_tree:
 	return NULL;
 }
 
+static struct dsa_tree_component *
+dsa_tree_find_component(struct dsa_switch_tree *dst, struct dsa_switch *ds)
+{
+	struct dsa_tree_component *component;
+
+	list_for_each_entry(component, &dst->components, list)
+		if (component->switch_dn == dev_of_node(ds->dev))
+			return component;
+
+	return NULL;
+}
+
 static int dsa_tree_bind_switch(struct dsa_switch_tree *dst,
 				struct dsa_switch *ds)
 {
@@ -1153,10 +1165,63 @@ static int dsa_tree_bind_switch(struct dsa_switch_tree *dst,
 		return -EEXIST;
 	}
 
+	/* If this isn't the first switch bound to the tree, make sure that its
+	 * probing mode coincides with the way in which the tree was created
+	 */
+	if (dst->probing_mode == DSA_TREE_PROBING_OF && !dev_of_node(ds->dev)) {
+		dev_err(ds->dev, "Cannot bind OF-based switch to pdata-based tree\n");
+		return -EINVAL;
+	}
+
+	if (dst->probing_mode == DSA_TREE_PROBING_PDATA && !ds->cd) {
+		dev_err(ds->dev, "Cannot bind pdata-based switch to OF-based tree\n");
+		return -EINVAL;
+	}
+
+	if (dst->probing_mode == DSA_TREE_PROBING_OF) {
+		struct dsa_tree_component *component;
+
+		component = dsa_tree_find_component(dst, ds);
+		if (!component) {
+			dev_err(ds->dev, "OF node %pOF unrecognized by tree %s\n",
+				dev_of_node(ds->dev), dev_name(dst->dev));
+			return -ENODEV;
+		}
+
+		component->ds = ds;
+		component->state = DSA_TREE_COMPONENT_BOUND;
+	}
+
 	if (dst->last_switch < ds->index)
 		dst->last_switch = ds->index;
 
 	return 0;
+}
+
+static void dsa_tree_unbind_switch(struct dsa_switch_tree *dst,
+				   struct dsa_switch *ds)
+{
+	struct dsa_tree_component *component;
+	int last_switch = -1;
+
+	if (dst->probing_mode != DSA_TREE_PROBING_OF)
+		return;
+
+	component = dsa_tree_find_component(dst, ds);
+	if (WARN_ON(!component))
+		return;
+	if (WARN_ON(component->state == DSA_TREE_COMPONENT_UNBOUND))
+		return;
+
+	component->ds = NULL;
+	component->state = DSA_TREE_COMPONENT_UNBOUND;
+
+	/* Recalculate the index of the last switch, needed in other places */
+	list_for_each_entry(component, &dst->components, list)
+		if (component->ds && last_switch < component->ds->index)
+			last_switch = ds->index;
+
+	dst->last_switch = last_switch;
 }
 
 struct dsa_switch_tree *dsa_switch_get_tree(struct dsa_switch *ds)
@@ -1200,7 +1265,10 @@ struct dsa_switch_tree *dsa_switch_get_tree(struct dsa_switch *ds)
 
 void dsa_switch_put_tree(struct dsa_switch *ds)
 {
-	dsa_tree_put(ds->dst);
+	struct dsa_switch_tree *dst = ds->dst;
+
+	dsa_tree_unbind_switch(dst, ds);
+	dsa_tree_put(dst);
 }
 
 int dsa_tree_class_register(void)

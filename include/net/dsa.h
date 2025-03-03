@@ -129,8 +129,15 @@ enum dsa_tree_probing_mode {
 	DSA_TREE_PROBING_PDATA,
 };
 
+enum dsa_tree_component_state {
+	DSA_TREE_COMPONENT_UNBOUND,
+	DSA_TREE_COMPONENT_BOUND,
+};
+
 struct dsa_tree_component {
+	struct dsa_switch *ds;
 	struct device_node *switch_dn;
+	enum dsa_tree_component_state state;
 	struct list_head list;
 };
 
