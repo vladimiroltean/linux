@@ -22,6 +22,11 @@
 
 #define DSA_MAX_NUM_OFFLOADING_BRIDGES		BITS_PER_LONG
 
+struct dsa_tree_bfs_elem {
+	struct device_node *dn;
+	struct list_head list;
+};
+
 LIST_HEAD(dsa_tree_list);
 
 /* Track the bridges with forwarding offload enabled */
@@ -346,6 +351,262 @@ static struct dsa_switch_tree *dsa_tree_find(int index)
 	return NULL;
 }
 
+static int dsa_bfs_elem_queue(struct list_head *to_explore,
+			      struct device_node *dn)
+{
+	struct dsa_tree_bfs_elem *elem;
+
+	elem = kzalloc(sizeof(*elem), GFP_KERNEL);
+	if (!elem)
+		return -ENOMEM;
+
+	elem->dn = of_node_get(dn);
+	list_add_tail(&elem->list, to_explore);
+
+	return 0;
+}
+
+/* Caller is responsible for calling dsa_bfs_elem_free() when done */
+static struct dsa_tree_bfs_elem *
+dsa_bfs_elem_dequeue(struct list_head *to_explore, struct list_head *explored)
+{
+	struct dsa_tree_bfs_elem *elem;
+
+	elem = list_first_entry(to_explore, struct dsa_tree_bfs_elem, list);
+	list_del_init(&elem->list);
+	list_add_tail(&elem->list, explored);
+
+	return elem;
+}
+
+static bool dsa_bfs_elem_visited(struct device_node *dn,
+				 struct list_head *to_explore,
+				 struct list_head *explored)
+{
+	struct dsa_tree_bfs_elem *elem;
+
+	list_for_each_entry(elem, to_explore, list)
+		if (elem->dn == dn)
+			return true;
+
+	list_for_each_entry(elem, explored, list)
+		if (elem->dn == dn)
+			return true;
+
+	return false;
+}
+
+static void dsa_bfs_elem_free(struct dsa_tree_bfs_elem *elem)
+{
+	of_node_put(elem->dn);
+	kfree(elem);
+}
+
+static void dsa_bfs_queue_free(struct list_head *queue)
+{
+	struct dsa_tree_bfs_elem *elem, *next;
+
+	list_for_each_entry_safe(elem, next, queue, list) {
+		list_del(&elem->list);
+		dsa_bfs_elem_free(elem);
+	}
+}
+
+static int dsa_port_node_get_parents(struct device_node *port_dn,
+				     struct device_node **ports_dn,
+				     struct device_node **switch_dn)
+{
+	struct device_node *ports, *switch_node;
+	int err = 0;
+
+	/* port_dn should be a port node */
+	if (of_node_is_root(port_dn)) {
+		pr_err("DSA: port node %pOF should not be root\n", port_dn);
+		return -EINVAL;
+	}
+
+	ports = of_get_parent(port_dn);
+
+	/* ports should be the 'ports'/'ethernet-ports' container node */
+	if (of_node_is_root(ports)) {
+		pr_err("DSA: container node for port %pOF should not be root\n",
+		       port_dn);
+		err = -EINVAL;
+		goto out_put_ports;
+	}
+	if (!of_node_name_eq(ports, "ports") &&
+	    !of_node_name_eq(ports, "ethernet-ports")) {
+		pr_err("DSA: ports node %pOF should be named \"ports\" or \"ethernet-ports\"\n",
+		       ports);
+		err = -EINVAL;
+		goto out_put_ports;
+	}
+
+	/* switch_node should be the 'switch'/'ethernet-switch' container node */
+	switch_node = of_get_parent(ports);
+	if (of_node_is_root(switch_node)) {
+		pr_err("DSA: switch node %pOF should not be root\n", switch_node);
+		err = -EINVAL;
+		goto out_put_switch;
+	}
+
+	if (ports_dn)
+		*ports_dn = of_node_get(ports);
+	if (switch_dn)
+		*switch_dn = of_node_get(switch_node);
+
+out_put_switch:
+	of_node_put(switch_node);
+out_put_ports:
+	of_node_put(ports);
+
+	return err;
+}
+
+static int dsa_tree_explore_switch_by_link(struct device_node *dn,
+					   struct list_head *to_explore,
+					   struct list_head *explored)
+{
+	struct device_node *switch_dn, *ports, *port;
+	int err = 0;
+
+	if (!of_device_is_available(dn))
+		return 0;
+
+	err = dsa_port_node_get_parents(dn, &ports, &switch_dn);
+	if (err)
+		return err;
+
+	if (!of_device_is_available(switch_dn))
+		goto out_put_parents;
+
+	for_each_available_child_of_node(ports, port) {
+		if (!of_property_present(port, "link"))
+			continue;
+
+		if (dsa_bfs_elem_visited(switch_dn, to_explore, explored))
+			continue;
+
+		err = dsa_bfs_elem_queue(to_explore, switch_dn);
+		if (err) {
+			of_node_put(port);
+			goto out_put_parents;
+		}
+	}
+
+out_put_parents:
+	of_node_put(switch_dn);
+	of_node_put(ports);
+
+	return err;
+}
+
+static int dsa_tree_explore_switch_ports_phandle(struct dsa_switch_tree *dst,
+						 struct device_node *dn,
+						 struct list_head *to_explore,
+						 struct list_head *explored)
+{
+	struct device_node *ports, *port;
+	struct of_phandle_iterator it;
+	int err = 0;
+	int ret;
+
+	ports = of_get_child_by_name(dn, "ports");
+	if (!ports) {
+		/* The second possibility is "ethernet-ports" */
+		ports = of_get_child_by_name(dn, "ethernet-ports");
+		if (!ports) {
+			pr_err("no ports child node found for %pOF\n", dn);
+			return -EINVAL;
+		}
+	}
+
+	for_each_available_child_of_node(ports, port) {
+		of_for_each_phandle(&it, ret, port, "link", NULL, 0) {
+			err = dsa_tree_explore_switch_by_link(it.node,
+							      to_explore,
+							      explored);
+			if (err) {
+				pr_err("Failed to explore link %pOF\n", it.node);
+				of_node_put(port);
+				goto out;
+			}
+		}
+	}
+
+out:
+	of_node_put(ports);
+	return err;
+}
+
+static int dsa_tree_component_add(struct dsa_switch_tree *dst,
+				  struct device_node *switch_dn)
+{
+	struct dsa_tree_component *component;
+
+	component = kzalloc(sizeof(*component), GFP_KERNEL);
+	if (!component)
+		return -ENOMEM;
+
+	component->switch_dn = of_node_get(switch_dn);
+	list_add_tail(&component->list, &dst->components);
+	pr_info("Added component %pOF\n", switch_dn);
+
+	return 0;
+}
+
+static void dsa_tree_components_free(struct dsa_switch_tree *dst)
+{
+	struct dsa_tree_component *component, *next;
+
+	list_for_each_entry_safe(component, next, &dst->components, list) {
+		of_node_put(component->switch_dn);
+		list_del(&component->list);
+		kfree(component);
+	}
+}
+
+/* Breadth-first search starting from the OF node of any switch retrieves the
+ * skeleton of the entire tree, saved into the dst->components list.
+ */
+static int dsa_tree_explore_device_tree(struct dsa_switch_tree *dst,
+					struct device_node *dn)
+{
+	struct dsa_tree_bfs_elem *elem;
+	LIST_HEAD(to_explore);
+	LIST_HEAD(explored);
+	int err;
+
+	err = dsa_bfs_elem_queue(&to_explore, dn);
+	if (err)
+		return err;
+
+	while (!list_empty(&to_explore)) {
+		elem = dsa_bfs_elem_dequeue(&to_explore, &explored);
+
+		err = dsa_tree_component_add(dst, elem->dn);
+		if (err)
+			goto free_lists;
+
+		err = dsa_tree_explore_switch_ports_phandle(dst, elem->dn,
+							    &to_explore,
+							    &explored);
+		if (err)
+			goto free_lists;
+	}
+
+	dsa_bfs_queue_free(&explored);
+
+	return 0;
+
+free_lists:
+	dsa_bfs_queue_free(&explored);
+	dsa_bfs_queue_free(&to_explore);
+	dsa_tree_components_free(dst);
+
+	return err;
+}
+
 static struct dsa_switch_tree *dsa_tree_alloc(int index)
 {
 	struct dsa_switch_tree *dst;
@@ -357,7 +618,7 @@ static struct dsa_switch_tree *dsa_tree_alloc(int index)
 	dst->index = index;
 
 	INIT_LIST_HEAD(&dst->rtable);
-
+	INIT_LIST_HEAD(&dst->components);
 	INIT_LIST_HEAD(&dst->ports);
 
 	INIT_LIST_HEAD(&dst->list);
@@ -798,6 +1059,9 @@ static void dsa_tree_free(struct dsa_switch_tree *dst)
 	if (dst->tag_ops)
 		dsa_tag_driver_put(dst->tag_ops);
 	list_del(&dst->list);
+	/* No components created for pdata, the tree is always single-switch */
+	if (dst->probing_mode == DSA_TREE_PROBING_OF)
+		dsa_tree_components_free(dst);
 	kfree(dst);
 }
 
@@ -820,6 +1084,7 @@ static struct dsa_switch_tree *dsa_tree_get(int index, struct device_node *dn,
 					    struct dsa_chip_data *pdata)
 {
 	struct dsa_switch_tree *dst;
+	int err;
 
 	dst = dsa_tree_find(index);
 	if (dst) {
@@ -831,7 +1096,23 @@ static struct dsa_switch_tree *dsa_tree_get(int index, struct device_node *dn,
 	if (!dst)
 		return NULL;
 
+	if (dn)
+		dst->probing_mode = DSA_TREE_PROBING_OF;
+	else
+		dst->probing_mode = DSA_TREE_PROBING_PDATA;
+
+	if (dst->probing_mode == DSA_TREE_PROBING_OF) {
+		err = dsa_tree_explore_device_tree(dst, dn);
+		if (err)
+			goto err_free_tree;
+	}
+
 	return dst;
+
+err_free_tree:
+	list_del(&dst->list);
+	kfree(dst);
+	return NULL;
 }
 
 static int dsa_tree_bind_switch(struct dsa_switch_tree *dst,
