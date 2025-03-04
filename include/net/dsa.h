@@ -149,6 +149,7 @@ struct dsa_tree_cascade {
 
 struct dsa_tree_component {
 	struct dsa_switch *ds;
+	int index;
 	struct device_node *switch_dn;
 	enum dsa_tree_component_state state;
 	struct list_head list;
