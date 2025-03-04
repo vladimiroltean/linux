@@ -95,6 +95,13 @@ enum dsa_tag_protocol {
 	DSA_TAG_PROTO_MXL862		= DSA_TAG_PROTO_MXL862_VALUE,
 };
 
+enum dsa_port_type {
+	DSA_PORT_TYPE_UNUSED = 0,
+	DSA_PORT_TYPE_CPU,
+	DSA_PORT_TYPE_DSA,
+	DSA_PORT_TYPE_USER,
+};
+
 struct dsa_switch;
 
 struct dsa_device_ops {
@@ -134,10 +141,28 @@ enum dsa_tree_component_state {
 	DSA_TREE_COMPONENT_BOUND,
 };
 
+struct dsa_tree_cascade {
+	struct device_node *source_port_dn;
+	struct device_node *dest_port_dn;
+	struct list_head list;
+};
+
 struct dsa_tree_component {
 	struct dsa_switch *ds;
 	struct device_node *switch_dn;
 	enum dsa_tree_component_state state;
+	struct list_head list;
+	struct list_head ports;
+	/* A tree with adjacency has cascades, one without has links */
+	union {
+		struct list_head cascades;
+		struct list_head links;
+	};
+};
+
+struct dsa_tree_component_port {
+	enum dsa_port_type type;
+	struct device_node *dn;
 	struct list_head list;
 };
 
@@ -279,12 +304,7 @@ struct dsa_port {
 
 	unsigned int		index;
 
-	enum {
-		DSA_PORT_TYPE_UNUSED = 0,
-		DSA_PORT_TYPE_CPU,
-		DSA_PORT_TYPE_DSA,
-		DSA_PORT_TYPE_USER,
-	} type;
+	enum dsa_port_type	type;
 
 	const char		*name;
 	struct dsa_port		*cpu_dp;
@@ -364,6 +384,8 @@ dsa_phylink_to_port(struct phylink_config *config)
 struct dsa_link {
 	struct dsa_port *dp;
 	struct dsa_port *link_dp;
+	struct device_node *source_port_dn;
+	struct device_node *dest_port_dn;
 	struct list_head list;
 };
 
