@@ -746,12 +746,25 @@ static int dsa_tree_component_add(struct dsa_switch_tree *dst,
 				  struct device_node *switch_dn)
 {
 	struct dsa_tree_component *component;
+	int switch_index, tree_index;
 	int err;
+
+	err = dsa_switch_parse_member_of(switch_dn, &switch_index,
+					 &tree_index);
+	if (err)
+		return err;
+
+	if (tree_index != dst->index) {
+		pr_err("Tree %d identified link towards component %pOF of tree %d\n",
+		       dst->index, switch_dn, tree_index);
+		return -EINVAL;
+	}
 
 	component = kzalloc(sizeof(*component), GFP_KERNEL);
 	if (!component)
 		return -ENOMEM;
 
+	component->index = switch_index;
 	component->switch_dn = of_node_get(switch_dn);
 
 	err = dsa_tree_component_parse(component);
