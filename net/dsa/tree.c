@@ -1159,7 +1159,7 @@ static struct dsa_switch_tree *dsa_tree_get(int index, struct device_node *dn,
 
 	dst = dsa_tree_alloc(index);
 	if (!dst)
-		return NULL;
+		return ERR_PTR(-ENOMEM);
 
 	if (dn)
 		dst->probing_mode = DSA_TREE_PROBING_OF;
@@ -1184,7 +1184,7 @@ err_free_components:
 err_free_tree:
 	list_del(&dst->list);
 	kfree(dst);
-	return NULL;
+	return ERR_PTR(err);
 }
 
 /* Add this switch's ports to the tree's port list */
@@ -1386,8 +1386,8 @@ int dsa_switch_get_tree(struct dsa_switch *ds)
 	ds->index = switch_index;
 
 	dst = dsa_tree_get(tree_index, switch_dn, pdata);
-	if (!dst)
-		return -ENOMEM;
+	if (IS_ERR(dst))
+		return PTR_ERR(dst);
 
 	err = dsa_tree_bind_switch(dst, ds);
 	if (err)
