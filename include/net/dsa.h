@@ -691,85 +691,6 @@ static inline u32 dsa_cpu_ports(struct dsa_switch *ds)
 	return mask;
 }
 
-/* Return the local port used to reach an arbitrary switch device */
-static inline unsigned int dsa_routing_port(struct dsa_switch *ds, int device)
-{
-	struct dsa_switch_tree *dst = ds->dst;
-	struct dsa_link *dl;
-
-	list_for_each_entry(dl, &dst->rtable, list)
-		if (dl->dp->ds == ds && dl->link_dp->ds->index == device)
-			return dl->dp->index;
-
-	return ds->num_ports;
-}
-
-/* Return the local port used to reach an arbitrary switch port */
-static inline unsigned int dsa_towards_port(struct dsa_switch *ds, int device,
-					    int port)
-{
-	if (device == ds->index)
-		return port;
-	else
-		return dsa_routing_port(ds, device);
-}
-
-/* Return the local port used to reach the dedicated CPU port */
-static inline unsigned int dsa_upstream_port(struct dsa_switch *ds, int port)
-{
-	const struct dsa_port *dp = dsa_to_port(ds, port);
-	const struct dsa_port *cpu_dp = dp->cpu_dp;
-
-	if (!cpu_dp)
-		return port;
-
-	return dsa_towards_port(ds, cpu_dp->ds->index, cpu_dp->index);
-}
-
-/* Return true if this is the local port used to reach the CPU port */
-static inline bool dsa_is_upstream_port(struct dsa_switch *ds, int port)
-{
-	if (dsa_is_unused_port(ds, port))
-		return false;
-
-	return port == dsa_upstream_port(ds, port);
-}
-
-/* Return true if this is a DSA port leading away from the CPU */
-static inline bool dsa_is_downstream_port(struct dsa_switch *ds, int port)
-{
-	return dsa_is_dsa_port(ds, port) && !dsa_is_upstream_port(ds, port);
-}
-
-/* Return the local port used to reach the CPU port */
-static inline unsigned int dsa_switch_upstream_port(struct dsa_switch *ds)
-{
-	struct dsa_port *dp;
-
-	dsa_switch_for_each_available_port(dp, ds) {
-		return dsa_upstream_port(ds, dp->index);
-	}
-
-	return ds->num_ports;
-}
-
-/* Return true if @upstream_ds is an upstream switch of @downstream_ds, meaning
- * that the routing port from @downstream_ds to @upstream_ds is also the port
- * which @downstream_ds uses to reach its dedicated CPU.
- */
-static inline bool dsa_switch_is_upstream_of(struct dsa_switch *upstream_ds,
-					     struct dsa_switch *downstream_ds)
-{
-	int routing_port;
-
-	if (upstream_ds == downstream_ds)
-		return true;
-
-	routing_port = dsa_routing_port(downstream_ds, upstream_ds->index);
-
-	return dsa_is_upstream_port(downstream_ds, routing_port);
-}
-
 static inline bool dsa_port_is_vlan_filtering(const struct dsa_port *dp)
 {
 	const struct dsa_switch *ds = dp->ds;
@@ -1468,5 +1389,11 @@ static inline bool dsa_user_dev_check(const struct net_device *dev)
 netdev_tx_t dsa_enqueue_skb(struct sk_buff *skb, struct net_device *dev);
 void dsa_port_phylink_mac_change(struct dsa_switch *ds, int port, bool up);
 bool dsa_supports_eee(struct dsa_switch *ds, int port);
+unsigned int dsa_routing_port(struct dsa_switch *ds, int device);
+unsigned int dsa_towards_port(struct dsa_switch *ds, int device, int port);
+unsigned int dsa_upstream_port(struct dsa_switch *ds, int port);
+bool dsa_is_upstream_port(struct dsa_switch *ds, int port);
+bool dsa_is_downstream_port(struct dsa_switch *ds, int port);
+unsigned int dsa_switch_upstream_port(struct dsa_switch *ds);
 
 #endif

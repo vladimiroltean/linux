@@ -1728,6 +1728,90 @@ void dsa_switch_put_tree(struct dsa_switch *ds)
 	dsa_tree_put(dst);
 }
 
+/* Return the local port used to reach an arbitrary switch device */
+unsigned int dsa_routing_port(struct dsa_switch *ds, int device)
+{
+	struct dsa_switch_tree *dst = ds->dst;
+	struct dsa_link *dl;
+
+	list_for_each_entry(dl, &dst->rtable, list)
+		if (dl->dp->ds == ds && dl->link_dp->ds->index == device)
+			return dl->dp->index;
+
+	return ds->num_ports;
+}
+EXPORT_SYMBOL_GPL(dsa_routing_port);
+
+/* Return the local port used to reach an arbitrary switch port */
+unsigned int dsa_towards_port(struct dsa_switch *ds, int device, int port)
+{
+	if (device == ds->index)
+		return port;
+	else
+		return dsa_routing_port(ds, device);
+}
+EXPORT_SYMBOL_GPL(dsa_towards_port);
+
+/* Return the local port used to reach the dedicated CPU port */
+unsigned int dsa_upstream_port(struct dsa_switch *ds, int port)
+{
+	const struct dsa_port *dp = dsa_to_port(ds, port);
+	const struct dsa_port *cpu_dp = dp->cpu_dp;
+
+	if (!cpu_dp)
+		return port;
+
+	return dsa_towards_port(ds, cpu_dp->ds->index, cpu_dp->index);
+}
+EXPORT_SYMBOL_GPL(dsa_upstream_port);
+
+/* Return true if this is the local port used to reach the CPU port */
+bool dsa_is_upstream_port(struct dsa_switch *ds, int port)
+{
+	if (dsa_is_unused_port(ds, port))
+		return false;
+
+	return port == dsa_upstream_port(ds, port);
+}
+EXPORT_SYMBOL_GPL(dsa_is_upstream_port);
+
+/* Return true if this is a DSA port leading away from the CPU */
+bool dsa_is_downstream_port(struct dsa_switch *ds, int port)
+{
+	return dsa_is_dsa_port(ds, port) && !dsa_is_upstream_port(ds, port);
+}
+EXPORT_SYMBOL_GPL(dsa_is_downstream_port);
+
+/* Return the local port used to reach the CPU port */
+unsigned int dsa_switch_upstream_port(struct dsa_switch *ds)
+{
+	struct dsa_port *dp;
+
+	dsa_switch_for_each_available_port(dp, ds) {
+		return dsa_upstream_port(ds, dp->index);
+	}
+
+	return ds->num_ports;
+}
+EXPORT_SYMBOL_GPL(dsa_switch_upstream_port);
+
+/* Return true if @upstream_ds is an upstream switch of @downstream_ds, meaning
+ * that the routing port from @downstream_ds to @upstream_ds is also the port
+ * which @downstream_ds uses to reach its dedicated CPU.
+ */
+bool dsa_switch_is_upstream_of(struct dsa_switch *upstream_ds,
+			       struct dsa_switch *downstream_ds)
+{
+	int routing_port;
+
+	if (upstream_ds == downstream_ds)
+		return true;
+
+	routing_port = dsa_routing_port(downstream_ds, upstream_ds->index);
+
+	return dsa_is_upstream_port(downstream_ds, routing_port);
+}
+
 int dsa_tree_class_register(void)
 {
 	return class_register(&dsa_switch_tree_class);
