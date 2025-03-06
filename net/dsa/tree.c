@@ -1881,6 +1881,21 @@ dsa_component_towards_port(struct dsa_switch_tree *dst,
 	return dsa_component_routing_port(dst, component, device);
 }
 
+static inline struct dsa_tree_component_port *
+dsa_component_upstream_port(struct dsa_switch_tree *dst,
+			    struct dsa_tree_component_port *component_port)
+{
+	struct dsa_tree_component_port *cpu_port = component_port->cpu_port;
+	struct dsa_tree_component *component = component_port->parent;
+
+	if (!cpu_port)
+		return component_port;
+
+	return dsa_component_towards_port(dst, component,
+					  cpu_port->parent->index,
+					  cpu_port->index);
+}
+
 /* Return the local port used to reach an arbitrary switch device */
 unsigned int dsa_routing_port(struct dsa_switch *ds, int device)
 {
@@ -1918,13 +1933,17 @@ EXPORT_SYMBOL_GPL(dsa_towards_port);
 /* Return the local port used to reach the dedicated CPU port */
 unsigned int dsa_upstream_port(struct dsa_switch *ds, int port)
 {
-	const struct dsa_port *dp = dsa_to_port(ds, port);
-	const struct dsa_port *cpu_dp = dp->cpu_dp;
+	struct dsa_tree_component_port *component_port, *upstream_port;
+	struct dsa_switch_tree *dst = ds->dst;
+	struct dsa_tree_component *component;
 
-	if (!cpu_dp)
-		return port;
+	component = dsa_tree_find_component(dst, ds);
+	component_port = dsa_tree_component_find_port_by_index(component, port);
+	upstream_port = dsa_component_upstream_port(dst, component_port);
+	if (upstream_port)
+		return upstream_port->index;
 
-	return dsa_towards_port(ds, cpu_dp->ds->index, cpu_dp->index);
+	return ds->num_ports;
 }
 EXPORT_SYMBOL_GPL(dsa_upstream_port);
 
