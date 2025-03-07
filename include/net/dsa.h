@@ -1395,5 +1395,8 @@ unsigned int dsa_upstream_port(struct dsa_switch *ds, int port);
 bool dsa_is_upstream_port(struct dsa_switch *ds, int port);
 bool dsa_is_downstream_port(struct dsa_switch *ds, int port);
 unsigned int dsa_switch_upstream_port(struct dsa_switch *ds);
+int dsa_switch_for_each_routing_port_towards_switch_with_own_cpu_port(struct dsa_switch *ds,
+								      int (*cb)(struct dsa_port *dp, void *priv),
+								      void *priv);
 
 #endif

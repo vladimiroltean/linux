@@ -1812,6 +1812,36 @@ bool dsa_switch_is_upstream_of(struct dsa_switch *upstream_ds,
 	return dsa_is_upstream_port(downstream_ds, routing_port);
 }
 
+/* In odd topologies ("H" connections where there is a DSA link to another
+ * switch which also has its own CPU port), TX packets can loop back into the
+ * system (they are flooded from CPU port 1 to the DSA link, and from there to
+ * CPU port 2). Prevent this from happening by cutting RX from DSA links
+ * towards our CPU port, if the remote switch has its own CPU port and
+ * therefore doesn't need ours for network stack termination. Refer to commit
+ * 0f9b762c097c ("net: dsa: sja1105: suppress TX packets from looping back in
+ * "H" topologies").
+ */
+int dsa_switch_for_each_routing_port_towards_switch_with_own_cpu_port(struct dsa_switch *ds,
+								      int (*cb)(struct dsa_port *dp, void *priv),
+								      void *priv)
+{
+	struct dsa_switch_tree *dst = ds->dst;
+	struct dsa_link *dl;
+	int err;
+
+	list_for_each_entry(dl, &dst->rtable, list) {
+		if (dl->dp->ds != ds || dl->link_dp->cpu_dp == dl->dp->cpu_dp)
+			continue;
+
+		err = cb(dl->dp, priv);
+		if (err)
+			return err;
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(dsa_switch_for_each_routing_port_towards_switch_with_own_cpu_port);
+
 int dsa_tree_class_register(void)
 {
 	return class_register(&dsa_switch_tree_class);
