@@ -2008,12 +2008,15 @@ int dsa_switch_for_each_routing_port_towards_switch_with_own_cpu_port(struct dsa
 								      void *priv)
 {
 	struct dsa_switch_tree *dst = ds->dst;
+	struct dsa_tree_component *component;
 	struct dsa_link *dl;
 	int err;
 
+	component = dsa_tree_find_component(dst, ds);
+
 	list_for_each_entry(dl, &dst->rtable, list) {
-		if (dl->source_port->dp->ds != ds ||
-		    dl->dest_port->dp->cpu_dp == dl->source_port->dp->cpu_dp)
+		if (dl->source_port->parent != component ||
+		    dl->dest_port->cpu_port == dl->source_port->cpu_port)
 			continue;
 
 		err = cb(dl->source_port->dp, priv);
