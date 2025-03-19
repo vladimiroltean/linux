@@ -347,11 +347,11 @@ DECLARE_EVENT_CLASS(dsa_vlan_op_hw,
 		__entry->err = err;
 	),
 
-	TP_printk("%s %s port %d vid %u%s%s%s",
+	TP_printk("%s %s port %d vid %u%s%s%s err %d",
 		  __get_str(dev), __get_str(kind), __entry->port, __entry->vid,
 		  __entry->flags & BRIDGE_VLAN_INFO_PVID ? " pvid" : "",
 		  __entry->flags & BRIDGE_VLAN_INFO_UNTAGGED ? " untagged" : "",
-		  __entry->changed ? " (changed)" : "")
+		  __entry->changed ? " (changed)" : "", __entry->err)
 );
 
 DEFINE_EVENT(dsa_vlan_op_hw, dsa_vlan_add_hw,
