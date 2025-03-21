@@ -569,14 +569,7 @@ struct dsa_switch {
 
 static inline struct dsa_port *dsa_to_port(struct dsa_switch *ds, int p)
 {
-	struct dsa_switch_tree *dst = ds->dst;
-	struct dsa_port *dp;
-
-	list_for_each_entry(dp, &dst->ports, list)
-		if (dp->ds == ds && dp->index == p)
-			return dp;
-
-	return NULL;
+	return &ds->ports[p];
 }
 
 static inline bool dsa_port_is_dsa(struct dsa_port *port)
