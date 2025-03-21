@@ -436,6 +436,116 @@ TRACE_EVENT(dsa_vlan_del_not_found,
 		  __get_str(dev), __get_str(kind), __entry->port, __entry->vid)
 );
 
+DECLARE_EVENT_CLASS(dsa_tag_8021q_vlan_op_hw,
+
+	TP_PROTO(const struct dsa_port *dp,
+		 u16 vid, u16 flags, int err),
+
+	TP_ARGS(dp, vid, flags, err),
+
+	TP_STRUCT__entry(
+		__string(dev, dev_name(dp->ds->dev))
+		__string(kind, dsa_port_kind(dp))
+		__field(int, port)
+		__field(u16, vid)
+		__field(u16, flags)
+		__field(int, err)
+	),
+
+	TP_fast_assign(
+		__assign_str(dev, dev_name(dp->ds->dev));
+		__assign_str(kind, dsa_port_kind(dp));
+		__entry->port = dp->index;
+		__entry->vid = vid;
+		__entry->flags = flags;
+		__entry->err = err;
+	),
+
+	TP_printk("%s %s port %d vid %u%s%s err %d",
+		  __get_str(dev), __get_str(kind), __entry->port, __entry->vid,
+		  __entry->flags & BRIDGE_VLAN_INFO_PVID ? " pvid" : "",
+		  __entry->flags & BRIDGE_VLAN_INFO_UNTAGGED ? " untagged" : "",
+		  __entry->err)
+);
+
+DEFINE_EVENT(dsa_tag_8021q_vlan_op_hw, dsa_tag_8021q_vlan_add_hw,
+	     TP_PROTO(const struct dsa_port *dp,
+		      u16 vid, u16 flags, int err),
+	     TP_ARGS(dp, vid, flags, err));
+
+DEFINE_EVENT(dsa_tag_8021q_vlan_op_hw, dsa_tag_8021q_vlan_del_hw,
+	     TP_PROTO(const struct dsa_port *dp, u16 vid,
+		      u16 flags, int err),
+	     TP_ARGS(dp, vid, flags, err));
+
+DECLARE_EVENT_CLASS(dsa_tag_8021q_vlan_op_refcount,
+
+	TP_PROTO(const struct dsa_port *dp,
+		 u16 vid, u16 flags,
+		 const refcount_t *refcount),
+
+	TP_ARGS(dp, vid, flags, refcount),
+
+	TP_STRUCT__entry(
+		__string(dev, dev_name(dp->ds->dev))
+		__string(kind, dsa_port_kind(dp))
+		__field(int, port)
+		__field(u16, vid)
+		__field(u16, flags)
+		__field(unsigned int, refcount)
+	),
+
+	TP_fast_assign(
+		__assign_str(dev, dev_name(dp->ds->dev));
+		__assign_str(kind, dsa_port_kind(dp));
+		__entry->port = dp->index;
+		__entry->vid = vid;
+		__entry->flags = flags;
+		__entry->refcount = refcount_read(refcount);
+	),
+
+	TP_printk("%s %s port %d vid %u%s%s refcount %u",
+		  __get_str(dev), __get_str(kind), __entry->port, __entry->vid,
+		  __entry->flags & BRIDGE_VLAN_INFO_PVID ? " pvid" : "",
+		  __entry->flags & BRIDGE_VLAN_INFO_UNTAGGED ? " untagged" : "",
+		  __entry->refcount)
+);
+
+DEFINE_EVENT(dsa_tag_8021q_vlan_op_refcount, dsa_tag_8021q_vlan_add_bump,
+	     TP_PROTO(const struct dsa_port *dp,
+		      u16 vid, u16 flags,
+		      const refcount_t *refcount),
+	     TP_ARGS(dp, vid, flags, refcount));
+
+DEFINE_EVENT(dsa_tag_8021q_vlan_op_refcount, dsa_tag_8021q_vlan_del_drop,
+	     TP_PROTO(const struct dsa_port *dp, u16 vid,
+		      u16 flags, const refcount_t *refcount),
+	     TP_ARGS(dp, vid, flags, refcount));
+
+TRACE_EVENT(dsa_tag_8021q_vlan_del_not_found,
+
+	TP_PROTO(const struct dsa_port *dp, u16 vid, u16 flags),
+
+	TP_ARGS(dp, vid, flags),
+
+	TP_STRUCT__entry(
+		__string(dev, dev_name(dp->ds->dev))
+		__string(kind, dsa_port_kind(dp))
+		__field(int, port)
+		__field(u16, vid)
+	),
+
+	TP_fast_assign(
+		__assign_str(dev, dev_name(dp->ds->dev));
+		__assign_str(kind, dsa_port_kind(dp));
+		__entry->port = dp->index;
+		__entry->vid = vid;
+	),
+
+	TP_printk("%s %s port %d vid %u",
+		  __get_str(dev), __get_str(kind), __entry->port, __entry->vid)
+);
+
 #endif /* _NET_DSA_TRACE_H */
 
 /* We don't want to use include/trace/events */

@@ -11,6 +11,7 @@
 #include "switch.h"
 #include "tag.h"
 #include "tag_8021q.h"
+#include "trace.h"
 
 /* Binary structure of the fake 12-bit VID field (when the TPID is
  * ETH_P_DSA_8021Q):
@@ -149,12 +150,17 @@ static int dsa_port_do_tag_8021q_vlan_add(struct dsa_port *dp, u16 vid,
 	int err;
 
 	/* No need to bother with refcounting for user ports */
-	if (!(dsa_port_is_cpu(dp) || dsa_port_is_dsa(dp)))
-		return ds->ops->tag_8021q_vlan_add(ds, port, vid, flags);
+	if (!(dsa_port_is_cpu(dp) || dsa_port_is_dsa(dp))) {
+		err = ds->ops->tag_8021q_vlan_add(ds, port, vid, flags);
+		trace_dsa_tag_8021q_vlan_add_hw(dp, vid, flags, err);
+
+		return err;
+	}
 
 	v = dsa_tag_8021q_vlan_find(ctx, port, vid);
 	if (v) {
 		refcount_inc(&v->refcount);
+		trace_dsa_tag_8021q_vlan_add_bump(dp, vid, flags, &v->refcount);
 		return 0;
 	}
 
@@ -163,6 +169,7 @@ static int dsa_port_do_tag_8021q_vlan_add(struct dsa_port *dp, u16 vid,
 		return -ENOMEM;
 
 	err = ds->ops->tag_8021q_vlan_add(ds, port, vid, flags);
+	trace_dsa_tag_8021q_vlan_add_hw(dp, vid, flags, err);
 	if (err) {
 		kfree(v);
 		return err;
@@ -185,17 +192,26 @@ static int dsa_port_do_tag_8021q_vlan_del(struct dsa_port *dp, u16 vid)
 	int err;
 
 	/* No need to bother with refcounting for user ports */
-	if (!(dsa_port_is_cpu(dp) || dsa_port_is_dsa(dp)))
-		return ds->ops->tag_8021q_vlan_del(ds, port, vid);
+	if (!(dsa_port_is_cpu(dp) || dsa_port_is_dsa(dp))) {
+		err = ds->ops->tag_8021q_vlan_del(ds, port, vid);
+		trace_dsa_tag_8021q_vlan_del_hw(dp, vid, 0, err);
+
+		return err;
+	}
 
 	v = dsa_tag_8021q_vlan_find(ctx, port, vid);
-	if (!v)
+	if (!v) {
+		trace_dsa_tag_8021q_vlan_del_not_found(dp, vid, 0);
 		return -ENOENT;
+	}
 
-	if (!refcount_dec_and_test(&v->refcount))
+	if (!refcount_dec_and_test(&v->refcount)) {
+		trace_dsa_tag_8021q_vlan_del_drop(dp, vid, 0, &v->refcount);
 		return 0;
+	}
 
 	err = ds->ops->tag_8021q_vlan_del(ds, port, vid);
+	trace_dsa_tag_8021q_vlan_del_hw(dp, vid, 0, err);
 	if (err) {
 		refcount_set(&v->refcount, 1);
 		return err;
