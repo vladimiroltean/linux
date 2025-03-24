@@ -33,9 +33,12 @@ static int sja1105_hw_reset(struct device *dev, unsigned int pulse_len,
 {
 	struct gpio_desc *gpio;
 
-	gpio = gpiod_get_optional(dev, "reset", GPIOD_OUT_HIGH);
-	if (IS_ERR(gpio))
+	gpio = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_HIGH);
+	if (IS_ERR(gpio)) {
+		dev_err_probe(dev, PTR_ERR(gpio),
+			      "Failed to exclusively acquire reset GPIO\n");
 		return PTR_ERR(gpio);
+	}
 
 	if (!gpio)
 		return 0;
@@ -46,8 +49,6 @@ static int sja1105_hw_reset(struct device *dev, unsigned int pulse_len,
 	gpiod_set_value_cansleep(gpio, 0);
 	/* Wait until chip is ready after reset */
 	msleep(startup_delay);
-
-	gpiod_put(gpio);
 
 	return 0;
 }
