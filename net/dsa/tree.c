@@ -667,6 +667,31 @@ static void dsa_tree_component_free_cascades(struct dsa_tree_component *componen
 	}
 }
 
+/* Keep the component port list sorted, and avoid duplicates */
+static int dsa_tree_component_insert_port(struct dsa_tree_component *component,
+					  struct dsa_tree_component_port *port)
+{
+	struct dsa_tree_component_port *tmp;
+
+	list_for_each_entry(tmp, &component->ports, list) {
+		if (tmp->index == port->index) {
+			pr_err("DSA: ports %pOF and %pOF have duplicated indices\n",
+			       tmp->dn, port->dn);
+			return -EINVAL;
+		}
+
+		if (tmp->index > port->index) {
+			list_add_tail(&port->list, &tmp->list);
+			return 0;
+		}
+	}
+
+	/* List is empty */
+	list_add_tail(&port->list, &component->ports);
+
+	return 0;
+}
+
 static int dsa_tree_component_add_port(struct dsa_tree_component *component,
 				       struct device_node *port)
 {
@@ -695,9 +720,13 @@ static int dsa_tree_component_add_port(struct dsa_tree_component *component,
 	component_port->dn = of_node_get(port);
 	component_port->parent = component;
 	component_port->index = reg;
-	list_add_tail(&component_port->list, &component->ports);
+	err = dsa_tree_component_insert_port(component, component_port);
+	if (err) {
+		of_node_put(component_port->dn);
+		kfree(component_port);
+	}
 
-	return 0;
+	return err;
 }
 
 static void dsa_tree_component_free_ports(struct dsa_tree_component *component)
