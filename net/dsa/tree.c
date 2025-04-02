@@ -671,6 +671,12 @@ static int dsa_tree_component_add_port(struct dsa_tree_component *component,
 				       struct device_node *port)
 {
 	struct dsa_tree_component_port *component_port;
+	u32 reg;
+	int err;
+
+	err = of_property_read_u32(port, "reg", &reg);
+	if (err)
+		return err;
 
 	component_port = kzalloc(sizeof(*component_port), GFP_KERNEL);
 	if (!component_port)
@@ -687,6 +693,8 @@ static int dsa_tree_component_add_port(struct dsa_tree_component *component,
 		component_port->type = DSA_PORT_TYPE_USER;
 
 	component_port->dn = of_node_get(port);
+	component_port->parent = component;
+	component_port->index = reg;
 	list_add_tail(&component_port->list, &component->ports);
 
 	return 0;
@@ -809,6 +817,33 @@ static struct dsa_tree_component *
 dsa_tree_find_component(struct dsa_switch_tree *dst, struct dsa_switch *ds)
 {
 	return dsa_tree_find_component_by_node(dst, dev_of_node(ds->dev));
+}
+
+static struct dsa_tree_component_port *
+dsa_tree_find_component_port_by_node(struct dsa_switch_tree *dst,
+				     struct device_node *port_dn)
+{
+	struct dsa_tree_component_port *component_port;
+	struct dsa_tree_component *component;
+
+	list_for_each_entry(component, &dst->components, list)
+		list_for_each_entry(component_port, &component->ports, list)
+			if (component_port->dn == port_dn)
+				return component_port;
+
+	return NULL;
+}
+
+static struct dsa_tree_component_port *
+dsa_tree_component_find_port_by_index(struct dsa_tree_component *component, int port)
+{
+	struct dsa_tree_component_port *component_port;
+
+	list_for_each_entry(component_port, &component->ports, list)
+		if (component_port->index == port)
+			return component_port;
+
+	return NULL;
 }
 
 /* Breadth-first search starting from the OF node of any switch retrieves the
@@ -1281,14 +1316,23 @@ static int dsa_link_create(struct dsa_switch_tree *dst,
 			   struct device_node *source_port_dn,
 			   struct device_node *dest_port_dn)
 {
+	struct dsa_tree_component_port *source_port, *dest_port;
 	struct dsa_link *dl;
+
+	source_port = dsa_tree_find_component_port_by_node(dst, source_port_dn);
+	if (!source_port)
+		return -ENODEV;
+
+	dest_port = dsa_tree_find_component_port_by_node(dst, dest_port_dn);
+	if (!dest_port)
+		return -ENODEV;
 
 	dl = kzalloc(sizeof(*dl), GFP_KERNEL);
 	if (!dl)
 		return -ENOMEM;
 
-	dl->source_port_dn = of_node_get(source_port_dn);
-	dl->dest_port_dn = of_node_get(dest_port_dn);
+	dl->source_port = source_port;
+	dl->dest_port = dest_port;
 	list_add_tail(&dl->list, &dst->rtable);
 
 	return 0;
@@ -1296,8 +1340,6 @@ static int dsa_link_create(struct dsa_switch_tree *dst,
 
 static void dsa_link_free(struct dsa_link *dl)
 {
-	of_node_put(dl->source_port_dn);
-	of_node_put(dl->dest_port_dn);
 	kfree(dl);
 }
 
@@ -1472,14 +1514,14 @@ err_free_tree:
 	return ERR_PTR(err);
 }
 
-static void dsa_tree_update_rtable(struct dsa_switch_tree *dst)
+static void dsa_tree_update_component_ports(struct dsa_switch_tree *dst,
+					    struct dsa_switch *ds)
 {
-	struct dsa_link *dl;
+	struct dsa_tree_component *component = dsa_tree_find_component(dst, ds);
+	struct dsa_tree_component_port *component_port;
 
-	list_for_each_entry(dl, &dst->rtable, list) {
-		dl->dp = dsa_tree_find_port_by_node(dst, dl->source_port_dn);
-		dl->link_dp = dsa_tree_find_port_by_node(dst, dl->dest_port_dn);
-	}
+	list_for_each_entry(component_port, &component->ports, list)
+		component_port->dp = dsa_tree_find_port_by_node(dst, component_port->dn);
 }
 
 static void dsa_tree_update_adjacency(struct dsa_switch_tree *dst)
@@ -1514,7 +1556,7 @@ static void dsa_switch_touch_ports(struct dsa_switch *ds)
 		list_add_tail(&dp->list, &dst->ports);
 	}
 
-	dsa_tree_update_rtable(dst);
+	dsa_tree_update_component_ports(dst, ds);
 	dsa_tree_update_adjacency(dst);
 }
 
@@ -1566,7 +1608,7 @@ static void dsa_switch_release_ports(struct dsa_switch *ds)
 		list_del(&dp->list);
 	}
 
-	dsa_tree_update_rtable(dst);
+	dsa_tree_update_component_ports(dst, ds);
 	dsa_tree_update_adjacency(dst);
 }
 
@@ -1728,15 +1770,43 @@ void dsa_switch_put_tree(struct dsa_switch *ds)
 	dsa_tree_put(dst);
 }
 
-/* Return the local port used to reach an arbitrary switch device */
-unsigned int dsa_routing_port(struct dsa_switch *ds, int device)
+static inline struct dsa_tree_component_port *
+dsa_component_routing_port(struct dsa_switch_tree *dst,
+			   struct dsa_tree_component *component,
+			   int device)
 {
-	struct dsa_switch_tree *dst = ds->dst;
 	struct dsa_link *dl;
 
 	list_for_each_entry(dl, &dst->rtable, list)
-		if (dl->dp->ds == ds && dl->link_dp->ds->index == device)
-			return dl->dp->index;
+		if (dl->source_port->parent == component &&
+		    dl->dest_port->parent->index == device)
+			return dl->source_port;
+
+	return NULL;
+}
+
+static inline struct dsa_tree_component_port *
+dsa_component_towards_port(struct dsa_switch_tree *dst,
+			   struct dsa_tree_component *component,
+			   int device, int port)
+{
+	if (device == component->index)
+		return dsa_tree_component_find_port_by_index(component, port);
+
+	return dsa_component_routing_port(dst, component, device);
+}
+
+/* Return the local port used to reach an arbitrary switch device */
+unsigned int dsa_routing_port(struct dsa_switch *ds, int device)
+{
+	struct dsa_tree_component_port *component_port;
+	struct dsa_switch_tree *dst = ds->dst;
+	struct dsa_tree_component *component;
+
+	component = dsa_tree_find_component(dst, ds);
+	component_port = dsa_component_routing_port(dst, component, device);
+	if (component_port)
+		return component_port->index;
 
 	return ds->num_ports;
 }
@@ -1745,10 +1815,18 @@ EXPORT_SYMBOL_GPL(dsa_routing_port);
 /* Return the local port used to reach an arbitrary switch port */
 unsigned int dsa_towards_port(struct dsa_switch *ds, int device, int port)
 {
-	if (device == ds->index)
-		return port;
-	else
-		return dsa_routing_port(ds, device);
+	struct dsa_tree_component_port *component_port;
+	struct dsa_switch_tree *dst = ds->dst;
+	struct dsa_tree_component *component;
+
+	component = dsa_tree_find_component(dst, ds);
+
+	component_port = dsa_component_towards_port(dst, component, device,
+						    port);
+	if (component_port)
+		return component_port->index;
+
+	return ds->num_ports;
 }
 EXPORT_SYMBOL_GPL(dsa_towards_port);
 
@@ -1830,10 +1908,11 @@ int dsa_switch_for_each_routing_port_towards_switch_with_own_cpu_port(struct dsa
 	int err;
 
 	list_for_each_entry(dl, &dst->rtable, list) {
-		if (dl->dp->ds != ds || dl->link_dp->cpu_dp == dl->dp->cpu_dp)
+		if (dl->source_port->dp->ds != ds ||
+		    dl->dest_port->dp->cpu_dp == dl->source_port->dp->cpu_dp)
 			continue;
 
-		err = cb(dl->dp, priv);
+		err = cb(dl->source_port->dp, priv);
 		if (err)
 			return err;
 	}

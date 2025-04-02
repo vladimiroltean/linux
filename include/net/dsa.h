@@ -163,7 +163,10 @@ struct dsa_tree_component {
 
 struct dsa_tree_component_port {
 	enum dsa_port_type type;
+	int index;
 	struct device_node *dn;
+	struct dsa_port *dp;
+	struct dsa_tree_component *parent;
 	struct list_head list;
 };
 
@@ -390,10 +393,8 @@ dsa_phylink_to_port(struct phylink_config *config)
  * available. So keep it stupid at the moment and list them all.
  */
 struct dsa_link {
-	struct dsa_port *dp;
-	struct dsa_port *link_dp;
-	struct device_node *source_port_dn;
-	struct device_node *dest_port_dn;
+	struct dsa_tree_component_port *source_port;
+	struct dsa_tree_component_port *dest_port;
 	struct list_head list;
 };
 
