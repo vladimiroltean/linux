@@ -1704,9 +1704,9 @@ static void dsa_link_free(struct dsa_link *dl)
 static int dsa_tree_create_rtable_for_cascade(struct dsa_switch_tree *dst,
 					      struct dsa_tree_cascade *cascade)
 {
-	struct device_node *dest_switch_dn, *dest_ports_dn;
 	struct dsa_tree_component *other_component;
 	struct dsa_tree_cascade *other_cascade;
+	struct device_node *dest_switch_dn;
 	struct dsa_tree_bfs_elem *elem;
 	LIST_HEAD(to_explore);
 	LIST_HEAD(explored);
@@ -1723,9 +1723,12 @@ static int dsa_tree_create_rtable_for_cascade(struct dsa_switch_tree *dst,
 		if (err)
 			goto free_lists;
 
-		dest_ports_dn = of_get_parent(elem->dn);
-		dest_switch_dn = of_get_parent(dest_ports_dn);
-		of_node_put(dest_ports_dn);
+		err = dsa_port_node_get_parents(elem->dn, NULL, &dest_switch_dn);
+		if (err) {
+			of_node_put(dest_switch_dn);
+			goto free_lists;
+		}
+
 		other_component = dsa_tree_find_component_by_node(dst, dest_switch_dn);
 		of_node_put(dest_switch_dn);
 
