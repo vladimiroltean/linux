@@ -102,7 +102,13 @@ struct sja1105_meta {
 static void sja1105_meta_unpack(const struct sk_buff *skb,
 				struct sja1105_meta *meta)
 {
-	u8 *buf = skb_mac_header(skb) + ETH_HLEN;
+	u16 tpid = ntohs(eth_hdr(skb)->h_proto);
+	u8 *buf;
+
+	if (tpid == ETH_P_SJA1105 || tpid == ETH_P_8021Q)
+		buf = skb_mac_header(skb) + VLAN_ETH_HLEN;
+	else
+		buf = skb_mac_header(skb) + ETH_HLEN;
 
 	/* UM10944.pdf section 4.2.17 AVB Parameters:
 	 * Structure of the meta-data follow-up frame.
