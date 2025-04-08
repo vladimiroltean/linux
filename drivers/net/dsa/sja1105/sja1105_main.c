@@ -3012,6 +3012,84 @@ static int sja1105_port_bridge_flags(struct dsa_switch *ds, int port,
 	return 0;
 }
 
+static int sja1105_stats_setup(struct dsa_switch *ds)
+{
+	struct sja1105_private *priv = ds->priv;
+	char queue_name[32];
+
+	snprintf(queue_name, sizeof(queue_name), "%s-stats",
+		 dev_name(ds->dev));
+
+	priv->stats_queue = create_singlethread_workqueue(queue_name);
+	if (!priv->stats_queue)
+		return -ENOMEM;
+
+	return 0;
+}
+
+static void sja1105_stats_teardown(struct dsa_switch *ds)
+{
+	struct sja1105_private *priv = ds->priv;
+
+	destroy_workqueue(priv->stats_queue);
+}
+
+static int sja1105_port_setup(struct dsa_switch *ds, int port)
+{
+	struct sja1105_private *priv = ds->priv;
+	struct sja1105_stats_work *stats_work;
+
+	stats_work = kzalloc(sizeof(*stats_work), GFP_KERNEL);
+	if (!stats_work)
+		return -ENOMEM;
+
+	INIT_DELAYED_WORK(&stats_work->dw, sja1105_port_stats_work);
+	spin_lock_init(&stats_work->lock);
+	stats_work->priv = priv;
+	stats_work->port = port;
+
+	priv->stats_work[port] = stats_work;
+
+	return 0;
+}
+
+static void sja1105_port_teardown(struct dsa_switch *ds, int port)
+{
+	struct sja1105_private *priv = ds->priv;
+
+	kfree(priv->stats_work[port]);
+	priv->stats_work[port] = NULL;
+}
+
+static int sja1105_port_enable(struct dsa_switch *ds, int port,
+			       struct phy_device *phydev)
+{
+	struct sja1105_private *priv = ds->priv;
+
+	queue_delayed_work(priv->stats_queue, &priv->stats_work[port]->dw,
+			   SJA1105_PORT_STATS_INTERVAL);
+
+	return 0;
+}
+
+static void sja1105_port_disable(struct dsa_switch *ds, int port)
+{
+	struct sja1105_private *priv = ds->priv;
+
+	cancel_delayed_work_sync(&priv->stats_work[port]->dw);
+}
+
+static void sja1105_port_get_stats64(struct dsa_switch *ds, int port,
+				     struct rtnl_link_stats64 *s)
+{
+	struct sja1105_private *priv = ds->priv;
+	struct sja1105_stats_work *stats_work = priv->stats_work[port];
+
+	spin_lock(&stats_work->lock);
+	memcpy(s, &stats_work->stats64, sizeof(*s));
+	spin_unlock(&stats_work->lock);
+}
+
 /* The programming model for the SJA1105 switch is "all-at-once" via static
  * configuration tables. Some of these can be dynamically modified at runtime,
  * but not the xMII mode parameters table.
@@ -3077,11 +3155,15 @@ static int sja1105_setup(struct dsa_switch *ds)
 	if (rc < 0)
 		goto out_mdiobus_unregister;
 
+	rc = sja1105_stats_setup(ds);
+	if (rc)
+		goto out_devlink_teardown;
+
 	rtnl_lock();
 	rc = dsa_tag_8021q_register(ds, htons(ETH_P_8021Q));
 	rtnl_unlock();
 	if (rc)
-		goto out_devlink_teardown;
+		goto out_stats_teardown;
 
 	/* On SJA1105, VLAN filtering per se is always enabled in hardware.
 	 * The only thing we can do to disable it is lie about what the 802.1Q
@@ -3103,6 +3185,8 @@ static int sja1105_setup(struct dsa_switch *ds)
 
 	return 0;
 
+out_stats_teardown:
+	sja1105_stats_teardown(ds);
 out_devlink_teardown:
 	sja1105_devlink_teardown(ds);
 out_mdiobus_unregister:
@@ -3126,6 +3210,7 @@ static void sja1105_teardown(struct dsa_switch *ds)
 	dsa_tag_8021q_unregister(ds);
 	rtnl_unlock();
 
+	sja1105_stats_teardown(ds);
 	sja1105_devlink_teardown(ds);
 	sja1105_mdiobus_unregister(ds);
 	sja1105_ptp_clock_unregister(ds);
@@ -3184,6 +3269,11 @@ static const struct dsa_switch_ops sja1105_switch_ops = {
 	.tag_8021q_vlan_add	= sja1105_dsa_8021q_vlan_add,
 	.tag_8021q_vlan_del	= sja1105_dsa_8021q_vlan_del,
 	.port_prechangeupper	= sja1105_prechangeupper,
+	.port_setup		= sja1105_port_setup,
+	.port_teardown		= sja1105_port_teardown,
+	.port_enable		= sja1105_port_enable,
+	.port_disable		= sja1105_port_disable,
+	.get_stats64		= sja1105_port_get_stats64,
 };
 
 static const struct of_device_id sja1105_dt_ids[];

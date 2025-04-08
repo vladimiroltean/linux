@@ -13,6 +13,7 @@
 #include <linux/mutex.h>
 #include "sja1105_static_config.h"
 
+#define SJA1105_PORT_STATS_INTERVAL	(2 * HZ)
 #define SJA1105ET_FDB_BIN_SIZE		4
 /* The hardware value is in multiples of 10 ms.
  * The passed parameter is in multiples of 1 ms.
@@ -245,6 +246,14 @@ struct sja1105_flow_block {
 	int num_virtual_links;
 };
 
+struct sja1105_stats_work {
+	struct delayed_work dw;
+	struct sja1105_private *priv;
+	int port;
+	struct rtnl_link_stats64 stats64;
+	spinlock_t lock;
+};
+
 struct sja1105_private {
 	struct sja1105_static_config static_config;
 	int rgmii_rx_delay_ps[SJA1105_MAX_NUM_PORTS];
@@ -261,6 +270,8 @@ struct sja1105_private {
 	struct dsa_switch *ds;
 	u16 bridge_pvid[SJA1105_MAX_NUM_PORTS];
 	u16 tag_8021q_pvid[SJA1105_MAX_NUM_PORTS];
+	struct workqueue_struct *stats_queue;
+	struct sja1105_stats_work *stats_work[SJA1105_MAX_NUM_PORTS];
 	struct sja1105_flow_block flow_block;
 	/* Serializes transmission of management frames so that
 	 * the switch doesn't confuse them with one another.
@@ -371,6 +382,7 @@ int sja1105_clocking_setup(struct sja1105_private *priv);
 int sja1110_disable_microcontroller(struct sja1105_private *priv);
 
 /* From sja1105_ethtool.c */
+void sja1105_port_stats_work(struct work_struct *work);
 void sja1105_get_ethtool_stats(struct dsa_switch *ds, int port, u64 *data);
 void sja1105_get_strings(struct dsa_switch *ds, int port,
 			 u32 stringset, u8 *data);

@@ -558,6 +558,107 @@ static int sja1105_port_counter_read(struct sja1105_private *priv, int port,
 	return 0;
 }
 
+static const struct sja1105_stats64_counter {
+	enum sja1105_counter_index idx;
+	size_t stats64_offset;
+} sja1105_stats64_counters[] = {
+	{ N_RXFRM, offsetof(struct rtnl_link_stats64, rx_packets) },
+	{ N_TXFRM, offsetof(struct rtnl_link_stats64, tx_packets) },
+	{ N_RXBYTE, offsetof(struct rtnl_link_stats64, rx_bytes) },
+	{ N_TXBYTE, offsetof(struct rtnl_link_stats64, tx_bytes) },
+	{ N_CRCERR, offsetof(struct rtnl_link_stats64, rx_crc_errors) },
+	{ N_SIZEERR, offsetof(struct rtnl_link_stats64, rx_length_errors) },
+	{ N_PART_DROP, offsetof(struct rtnl_link_stats64, rx_missed_errors) },
+};
+
+static const enum sja1105_counter_index sja1105_rx_frame_errors_sources[] = {
+	N_RUNT, N_SOFERR, N_ALIGNERR, N_MIIERR,
+};
+
+static const enum sja1105_counter_index sja1105_rx_dropped_sources[] = {
+	N_N664ERR, N_VLANERR, N_UNRELEASED, N_DROPS_NOLEARN,
+	N_DROPS_NOROUTE, N_DROPS_ILL_DTAG, N_DROPS_DTAG, N_DROPS_SOTAG,
+	N_DROPS_SITAG, N_DROPS_UTAG,
+};
+
+static const enum sja1105_counter_index sja1105_tx_dropped_sources[] = {
+	N_NOT_REACH, N_EGR_DISABLED, N_QFULL,
+};
+
+#define SJA1105_AGGREGATE_STATS64(name) \
+	{ sja1105_ ## name ## _sources, \
+	  ARRAY_SIZE(sja1105_ ## name ## _sources), \
+	  offsetof(struct rtnl_link_stats64, name), }
+
+static const struct sja1105_aggregate_stats64_counter {
+	const enum sja1105_counter_index *sources;
+	size_t num_sources;
+	size_t stats64_offset;
+} sja1105_aggregate_stats64_counters[] = {
+	SJA1105_AGGREGATE_STATS64(rx_frame_errors),
+	SJA1105_AGGREGATE_STATS64(rx_dropped),
+	SJA1105_AGGREGATE_STATS64(tx_dropped),
+};
+
+void sja1105_port_stats_work(struct work_struct *work)
+{
+	struct delayed_work *dw = to_delayed_work(work);
+	struct sja1105_stats_work *stats_work;
+	struct rtnl_link_stats64 s = {};
+	struct sja1105_private *priv;
+	int port, rc;
+	u64 tmp;
+
+	stats_work = container_of(dw, struct sja1105_stats_work, dw);
+	priv = stats_work->priv;
+	port = stats_work->port;
+
+	for (int i = 0; i < ARRAY_SIZE(sja1105_stats64_counters); i++) {
+		const struct sja1105_stats64_counter *c = &sja1105_stats64_counters[i];
+
+		rc = sja1105_port_counter_read(priv, port, c->idx,
+					       (void *)&s + c->stats64_offset);
+		if (rc)
+			goto out;
+	}
+
+	for (int i = 0; i < ARRAY_SIZE(sja1105_aggregate_stats64_counters); i++) {
+		const struct sja1105_aggregate_stats64_counter *c;
+
+		c = &sja1105_aggregate_stats64_counters[i];
+
+		for (int j = 0; j < c->num_sources; j++) {
+			rc = sja1105_port_counter_read(priv, port,
+						       c->sources[j], &tmp);
+			if (rc)
+				goto out;
+
+			*(u64 *)((void *)&s + c->stats64_offset) += tmp;
+		}
+	}
+
+	s.rx_errors = s.rx_length_errors + s.rx_crc_errors + s.rx_frame_errors;
+
+	rc = sja1105_port_counter_read(priv, port, N_POLERR, &tmp);
+	if (rc)
+		goto out;
+
+	s.rx_errors += tmp;
+
+	spin_lock(&stats_work->lock);
+	memcpy(&stats_work->stats64, &s, sizeof(s));
+	spin_unlock(&stats_work->lock);
+
+out:
+	if (rc) {
+		dev_err_ratelimited(priv->ds->dev,
+				    "Failed to update statistics: %pe",
+				    ERR_PTR(rc));
+	}
+
+	queue_delayed_work(priv->stats_queue, dw, SJA1105_PORT_STATS_INTERVAL);
+}
+
 void sja1105_get_ethtool_stats(struct dsa_switch *ds, int port, u64 *data)
 {
 	struct sja1105_private *priv = ds->priv;
