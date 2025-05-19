@@ -34,7 +34,7 @@ struct dsa_bridge *dsa_tree_bridge_find(struct dsa_switch_tree *dst,
 int dsa_tree_setup(struct dsa_switch_tree *dst);
 void dsa_tree_teardown(struct dsa_switch_tree *dst);
 
-struct dsa_switch_tree *dsa_switch_get_tree(struct dsa_switch *ds);
+int dsa_switch_get_tree(struct dsa_switch *ds);
 void dsa_switch_put_tree(struct dsa_switch *ds);
 
 int dsa_tree_class_register(void);

@@ -1143,6 +1143,67 @@ err_free_tree:
 	return NULL;
 }
 
+/* Add this switch's ports to the tree's port list */
+static void dsa_switch_touch_ports(struct dsa_switch *ds)
+{
+	struct dsa_switch_tree *dst = ds->dst;
+	struct dsa_port *dp;
+	int port;
+
+	for (port = 0; port < ds->num_ports; port++) {
+		dp = &ds->ports[port];
+		list_add_tail(&dp->list, &dst->ports);
+	}
+}
+
+/* Remove this switch's ports from the tree's port list */
+static void dsa_switch_release_ports(struct dsa_switch *ds)
+{
+	struct dsa_mac_addr *a, *tmp;
+	struct dsa_port *dp, *next;
+	struct dsa_vlan *v, *n;
+
+	dsa_switch_for_each_port_safe(dp, next, ds) {
+		if (dsa_port_is_cpu(dp) && dp->conduit)
+			netdev_put(dp->conduit, &dp->conduit_tracker);
+
+		/* These are either entries that upper layers lost track of
+		 * (probably due to bugs), or installed through interfaces
+		 * where one does not necessarily have to remove them, like
+		 * ndo_dflt_fdb_add().
+		 */
+		list_for_each_entry_safe(a, tmp, &dp->fdbs, list) {
+			dev_info(ds->dev,
+				 "Cleaning up unicast address %pM vid %u from port %d\n",
+				 a->addr, a->vid, dp->index);
+			list_del(&a->list);
+			kfree(a);
+		}
+
+		list_for_each_entry_safe(a, tmp, &dp->mdbs, list) {
+			dev_info(ds->dev,
+				 "Cleaning up multicast address %pM vid %u from port %d\n",
+				 a->addr, a->vid, dp->index);
+			list_del(&a->list);
+			kfree(a);
+		}
+
+		/* These are entries that upper layers have lost track of,
+		 * probably due to bugs, but also due to dsa_port_do_vlan_del()
+		 * having failed and the VLAN entry still lingering on.
+		 */
+		list_for_each_entry_safe(v, n, &dp->vlans, list) {
+			dev_info(ds->dev,
+				 "Cleaning up vid %u from port %d\n",
+				 v->vid, dp->index);
+			list_del(&v->list);
+			kfree(v);
+		}
+
+		list_del(&dp->list);
+	}
+}
+
 static struct dsa_tree_component *
 dsa_tree_find_component(struct dsa_switch_tree *dst, struct dsa_switch *ds)
 {
@@ -1213,6 +1274,10 @@ static int dsa_tree_bind_switch(struct dsa_switch_tree *dst,
 	if (dst->last_switch < ds->index)
 		dst->last_switch = ds->index;
 
+	ds->dst = dst;
+
+	dsa_switch_touch_ports(ds);
+
 	return 0;
 
 restore_tag_proto:
@@ -1227,6 +1292,8 @@ static void dsa_tree_unbind_switch(struct dsa_switch_tree *dst,
 {
 	struct dsa_tree_component *component;
 	int last_switch = -1;
+
+	dsa_switch_release_ports(ds);
 
 	if (dst->probing_mode != DSA_TREE_PROBING_OF)
 		return;
@@ -1248,7 +1315,7 @@ static void dsa_tree_unbind_switch(struct dsa_switch_tree *dst,
 	dst->last_switch = last_switch;
 }
 
-struct dsa_switch_tree *dsa_switch_get_tree(struct dsa_switch *ds)
+int dsa_switch_get_tree(struct dsa_switch *ds)
 {
 	struct device_node *switch_dn;
 	int tree_index, switch_index;
@@ -1263,7 +1330,7 @@ struct dsa_switch_tree *dsa_switch_get_tree(struct dsa_switch *ds)
 		err = dsa_switch_parse_member_of(switch_dn, &switch_index,
 						 &tree_index);
 		if (err)
-			return ERR_PTR(err);
+			return err;
 	} else {
 		/* We don't support interconnected switches nor multiple trees
 		 * via platform data, so this is the unique switch of the tree.
@@ -1276,21 +1343,30 @@ struct dsa_switch_tree *dsa_switch_get_tree(struct dsa_switch *ds)
 
 	dst = dsa_tree_get(tree_index, switch_dn, pdata);
 	if (!dst)
-		return ERR_PTR(-ENOMEM);
+		return -ENOMEM;
 
 	err = dsa_tree_bind_switch(dst, ds);
-	if (err) {
-		dsa_tree_put(dst);
-		return ERR_PTR(err);
-	}
+	if (err)
+		goto out_put_tree;
 
-	return dst;
+	err = dsa_tree_setup(dst);
+	if (err)
+		goto out_unbind_switch;
+
+	return 0;
+
+out_unbind_switch:
+	dsa_tree_unbind_switch(dst, ds);
+out_put_tree:
+	dsa_tree_put(dst);
+	return err;
 }
 
 void dsa_switch_put_tree(struct dsa_switch *ds)
 {
 	struct dsa_switch_tree *dst = ds->dst;
 
+	dsa_tree_teardown(dst);
 	dsa_tree_unbind_switch(dst, ds);
 	dsa_tree_put(dst);
 }
