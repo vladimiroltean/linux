@@ -351,6 +351,16 @@ static struct dsa_switch_tree *dsa_tree_find(int index)
 	return NULL;
 }
 
+/* Returns true if the switch tree can adapt to the disappearance of this
+ * switch from the device table, allowing traffic to pass to/from the remaining
+ * switches. It requires adjacency information in the firmware description, for
+ * device links to ensure orderly teardown.
+ */
+static bool dsa_switch_supports_dynamic_tree_reconfig(struct dsa_switch *ds)
+{
+	return ds->dst->has_adjacency;
+}
+
 static int dsa_bfs_elem_queue(struct list_head *to_explore,
 			      struct device_node *dn)
 {
@@ -1307,6 +1317,192 @@ static bool dsa_tree_complete(struct dsa_switch_tree *dst)
 	return true;
 }
 
+static int dsa_switch_add_uplink_device_link(struct dsa_switch *ds)
+{
+	struct dsa_switch *upstream_ds;
+	struct dsa_port *dp = NULL;
+	int port;
+
+	for (port = 0; port < ds->num_ports; port++) {
+		if (dsa_is_upstream_port(ds, port) &&
+		    dsa_is_dsa_port(ds, port)) {
+			dp = &ds->ports[port];
+			break;
+		}
+	}
+
+	if (!dp)
+		return 0;
+
+	if (!dp->link_dp)
+		return -EPROBE_DEFER;
+
+	upstream_ds = dp->link_dp->ds;
+	if (!device_link_add(ds->dev, upstream_ds->dev,
+			     DL_FLAG_AUTOREMOVE_CONSUMER)) {
+		dev_err(dp->ds->dev,
+			"Failed to create a device link to DSA switch %s\n",
+			dev_name(upstream_ds->dev));
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static void dsa_switch_teardown_ports(struct dsa_switch *ds)
+{
+	struct dsa_port *dp;
+	int port;
+
+	for (port = 0; port < ds->num_ports; port++) {
+		dp = &ds->ports[port];
+		if (dsa_port_is_user(dp) || dsa_port_is_unused(dp))
+			dsa_port_teardown(dp);
+	}
+
+	dsa_flush_workqueue();
+
+	for (port = 0; port < ds->num_ports; port++) {
+		dp = &ds->ports[port];
+		if (dsa_port_is_dsa(dp) || dsa_port_is_cpu(dp))
+			dsa_port_teardown(dp);
+	}
+}
+
+static int dsa_switch_setup_ports(struct dsa_switch *ds)
+{
+	struct dsa_port *dp;
+	int port, err = 0;
+
+	for (port = 0; port < ds->num_ports; port++) {
+		dp = &ds->ports[port];
+		if (dsa_port_is_dsa(dp) || dsa_port_is_cpu(dp)) {
+			err = dsa_port_setup(dp);
+			if (err)
+				goto teardown;
+		}
+	}
+
+	for (port = 0; port < ds->num_ports; port++) {
+		dp = &ds->ports[port];
+		if (dsa_port_is_user(dp) || dsa_port_is_unused(dp)) {
+			err = dsa_port_setup(dp);
+			if (err) {
+				err = dsa_port_setup_as_unused(dp);
+				if (err)
+					goto teardown;
+			}
+		}
+	}
+
+	return 0;
+
+teardown:
+	dsa_switch_teardown_ports(ds);
+
+	return err;
+}
+
+static int dsa_switch_setup_conduit(struct dsa_switch *ds)
+{
+	struct dsa_switch_tree *dst = ds->dst;
+	int port, err = 0;
+
+	rtnl_lock();
+
+	for (port = 0; port < ds->num_ports; port++) {
+		struct net_device *conduit;
+		struct dsa_port *cpu_dp;
+		bool admin_up;
+
+		cpu_dp = &ds->ports[port];
+		if (!dsa_port_is_cpu(cpu_dp))
+			continue;
+
+		conduit = cpu_dp->conduit;
+
+		err = dsa_conduit_setup(conduit, cpu_dp);
+		if (err)
+			break;
+
+		admin_up = (conduit->flags & IFF_UP) &&
+			   !qdisc_tx_is_noop(conduit);
+
+		/* Replay conduit state event */
+		dsa_tree_conduit_admin_state_change(dst, conduit, admin_up);
+		dsa_tree_conduit_oper_state_change(dst, conduit,
+						   netif_oper_up(conduit));
+	}
+
+	rtnl_unlock();
+
+	return err;
+}
+
+static void dsa_switch_teardown_conduit(struct dsa_switch *ds)
+{
+	struct dsa_switch_tree *dst = ds->dst;
+	int port;
+
+	rtnl_lock();
+
+	for (port = 0; port < ds->num_ports; port++) {
+		struct dsa_port *cpu_dp = &ds->ports[port];
+		struct net_device *conduit;
+
+		if (!dsa_port_is_cpu(cpu_dp))
+			continue;
+
+		conduit = cpu_dp->conduit;
+
+		/* Synthesizing an "admin down" state is sufficient for
+		 * the switches to get a notification if the conduit is
+		 * currently up and running.
+		 */
+		dsa_tree_conduit_admin_state_change(dst, conduit, false);
+
+		dsa_conduit_teardown(conduit);
+	}
+
+	rtnl_unlock();
+}
+
+int dsa_switch_init(struct dsa_switch *ds)
+{
+	int err;
+
+	err = dsa_switch_add_uplink_device_link(ds);
+	if (err)
+		return err;
+
+	err = dsa_switch_setup(ds);
+	if (err)
+		return err;
+
+	err = dsa_switch_setup_ports(ds);
+	if (err)
+		goto teardown_switch;
+
+	err = dsa_switch_setup_conduit(ds);
+	if (err)
+		goto teardown_ports;
+
+	return 0;
+
+teardown_ports:
+	dsa_switch_teardown_ports(ds);
+teardown_switch:
+	dsa_switch_teardown(ds);
+	return err;
+}
+
+void dsa_switch_deinit(struct dsa_switch *ds)
+{
+	dsa_switch_teardown_conduit(ds);
+	dsa_switch_teardown_ports(ds);
+	dsa_switch_teardown(ds);
+}
+
 int dsa_tree_setup(struct dsa_switch_tree *dst)
 {
 	int err;
@@ -1830,11 +2026,17 @@ int dsa_switch_get_tree(struct dsa_switch *ds)
 	if (err)
 		goto out_put_tree;
 
-	if (dsa_tree_complete(dst)) {
+	/* If the switch supports dynamic tree reconfig, go through the code
+	 * path that initializes only this switch's portion of the tree.
+	 * Otherwise, go through the classic code path once all switches have
+	 * reached this point.
+	 */
+	if (dsa_switch_supports_dynamic_tree_reconfig(ds))
+		err = dsa_switch_init(ds);
+	else if (dsa_tree_complete(dst))
 		err = dsa_tree_setup(dst);
-		if (err)
-			goto out_unbind_switch;
-	}
+	if (err)
+		goto out_unbind_switch;
 
 	return 0;
 
@@ -1849,7 +2051,9 @@ void dsa_switch_put_tree(struct dsa_switch *ds)
 {
 	struct dsa_switch_tree *dst = ds->dst;
 
-	if (dsa_tree_complete(dst))
+	if (dsa_switch_supports_dynamic_tree_reconfig(ds))
+		dsa_switch_deinit(ds);
+	else if (dsa_tree_complete(dst))
 		dsa_tree_teardown(dst);
 	dsa_tree_unbind_switch(dst, ds);
 	dsa_tree_put(dst);
