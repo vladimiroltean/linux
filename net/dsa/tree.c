@@ -949,8 +949,100 @@ free_lists:
 	return err;
 }
 
+static ssize_t adjacency_show(struct device *dev, struct device_attribute *attr,
+			      char *buf)
+{
+	struct dsa_switch_tree *dst = dev_get_drvdata(dev);
+
+	return sysfs_emit(buf, "%d\n", dst->has_adjacency);
+}
+static DEVICE_ATTR_RO(adjacency);
+
+static ssize_t components_show(struct device *dev, struct device_attribute *attr,
+			       char *buf)
+{
+	struct dsa_switch_tree *dst = dev_get_drvdata(dev);
+	struct dsa_tree_component_port *component_port;
+	struct dsa_tree_component *component;
+	int err, len = 0;
+
+	list_for_each_entry(component, &dst->components, list) {
+		if (component->state == DSA_TREE_COMPONENT_BOUND) {
+			err = sysfs_emit_at(buf, len, "%pOF index %d bound %s\n",
+					    component->switch_dn, component->index,
+					    dev_name(component->ds->dev));
+		} else {
+			err = sysfs_emit_at(buf, len, "%pOF index %d unbound\n",
+					    component->switch_dn, component->index);
+		}
+		if (err < 0)
+			return err;
+
+		len += err;
+
+		list_for_each_entry(component_port, &component->ports, list) {
+			err = sysfs_emit_at(buf, len, "  port %pOF index %d type %s\n",
+					    component_port->dn, component_port->index,
+					    component_port->type == DSA_PORT_TYPE_CPU ? "cpu" :
+					    component_port->type == DSA_PORT_TYPE_USER ? "user" :
+					    component_port->type == DSA_PORT_TYPE_DSA ? "dsa" :
+					    component_port->type == DSA_PORT_TYPE_UNUSED ? "unused" :
+					    "unknown");
+			if (err < 0)
+				return err;
+
+			len += err;
+		}
+	}
+
+	return len;
+}
+static DEVICE_ATTR_RO(components);
+
+static ssize_t rtable_show(struct device *dev, struct device_attribute *attr,
+			   char *buf)
+{
+	struct dsa_tree_component_port *source_port, *dest_port;
+	struct dsa_switch_tree *dst = dev_get_drvdata(dev);
+	struct dsa_link *dl;
+	int err, len = 0;
+
+	list_for_each_entry(dl, &dst->rtable, list) {
+		source_port = dl->source_port;
+		dest_port = dl->dest_port;
+
+		err = sysfs_emit_at(buf, len, "%pOF %pOF (%s)\n",
+				    source_port->dn, dest_port->dn,
+				    source_port->dp && dest_port->dp ? "live" : "shadow");
+		if (err < 0)
+			return err;
+
+		len += err;
+	}
+
+	return len;
+}
+static DEVICE_ATTR_RO(rtable);
+
+static struct attribute *dsa_switch_tree_attrs[] = {
+	&dev_attr_adjacency.attr,
+	&dev_attr_components.attr,
+	&dev_attr_rtable.attr,
+	NULL,
+};
+
+static const struct attribute_group dsa_switch_tree_attr_group = {
+	.attrs = dsa_switch_tree_attrs,
+};
+
+static const struct attribute_group *dsa_switch_tree_attr_groups[] = {
+	&dsa_switch_tree_attr_group,
+	NULL,
+};
+
 static struct class dsa_switch_tree_class = {
 	.name = "dsa_switch_tree",
+	.dev_groups = dsa_switch_tree_attr_groups,
 };
 
 static int dsa_tree_create_dev(struct dsa_switch_tree *dst,
@@ -959,7 +1051,7 @@ static int dsa_tree_create_dev(struct dsa_switch_tree *dst,
 {
 	struct device *dev;
 
-	dev = device_create(&dsa_switch_tree_class, NULL, 0, NULL,
+	dev = device_create(&dsa_switch_tree_class, NULL, 0, dst,
 			    "dsa_switch_tree.%d", dst->index);
 	if (!dev)
 		return -ENOMEM;
