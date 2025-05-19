@@ -625,6 +625,14 @@ static inline bool dsa_is_user_port(struct dsa_switch *ds, int p)
 	return dsa_to_port(ds, p)->type == DSA_PORT_TYPE_USER;
 }
 
+#define dsa_tree_for_each_switch(_ds, _component, _dst) \
+	for (_component = list_first_entry(&(_dst)->components, typeof(*_component), list), \
+	     _ds = _component->ds; \
+	     !list_entry_is_head(_component, &(_dst)->components, list); \
+	     _component = list_next_entry(_component, list), \
+	     _ds = _component->ds) \
+		if (_component->state == DSA_TREE_COMPONENT_BOUND)
+
 #define dsa_tree_for_each_user_port(_dp, _dst) \
 	list_for_each_entry((_dp), &(_dst)->ports, list) \
 		if (dsa_port_is_user((_dp)))
