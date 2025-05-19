@@ -53,11 +53,19 @@ struct sja1105_tagger_data {
 				    enum sja1110_meta_tstamp dir, u64 tstamp);
 };
 
+enum sja1105_tstamp_type {
+	SJA1105_TSTAMP_NONE,
+	SJA1105_TSTAMP_L2,
+	SJA1105_TSTAMP_META,
+};
+
 struct sja1105_skb_cb {
 	struct sk_buff *clone;
 	u64 tstamp;
 	/* Only valid for packets cloned for 2-step TX timestamping */
 	u8 ts_id;
+	unsigned long rx_time;
+	enum sja1105_tstamp_type tstamp_type;
 };
 
 #define SJA1105_SKB_CB(skb) \

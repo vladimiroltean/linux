@@ -58,13 +58,26 @@
 #define SJA1110_TX_TRAILER_LEN			4
 #define SJA1110_MAX_PADDING_LEN			15
 
+/* Meta frames should normally follow up after timestampable frames really
+ * quickly. If a timestampable skb sits in the stack for more than 5 ms, that
+ * is abnormally long, just drop it to reduce the chance of matching against
+ * the wrong meta frame in extended L2 timestamping mode.
+ */
+#define SJA1105_RX_TSTAMP_TIMEOUT		msecs_to_jiffies(5)
+
+/**
+ * sja1105_skb_stack: DSA switch tree-level structure for timestampable skbs
+ * @skbs: List of timestampable socket buffers waiting for their RX timestamps.
+ * @refcount: Reference count held by each switch in the tree.
+ */
+struct sja1105_skb_stack {
+	struct sk_buff_head skbs;
+	refcount_t refcount;
+};
+
 struct sja1105_tagger_private {
 	struct sja1105_tagger_data data; /* Must be first */
-	/* Protects concurrent access to the meta state machine
-	 * from taggers running on multiple ports on SMP systems
-	 */
-	spinlock_t meta_lock;
-	struct sk_buff *stampable_skb;
+	struct sja1105_skb_stack *skb_stack;
 	struct kthread_worker *xmit_worker;
 };
 
@@ -151,6 +164,11 @@ static struct sk_buff *sja1105_defer_xmit(struct dsa_port *dp,
 	void (*xmit_work_fn)(struct kthread_work *work);
 	struct sja1105_deferred_xmit_work *xmit_work;
 	struct kthread_worker *xmit_worker;
+
+	if (SJA1105_SKB_CB(skb)->clone)
+		SJA1105_SKB_CB(skb)->tstamp_type = SJA1105_TSTAMP_L2;
+	else
+		SJA1105_SKB_CB(skb)->tstamp_type = SJA1105_TSTAMP_NONE;
 
 	xmit_work_fn = tagger_data->xmit_work_fn;
 	xmit_worker = priv->xmit_worker;
@@ -284,7 +302,7 @@ static struct sk_buff *sja1105_xmit(struct sk_buff *skb,
 	 * but instead SPI-installed management routes. Part 2 of this
 	 * is the .port_deferred_xmit driver callback.
 	 */
-	if (unlikely(sja1105_is_link_local(skb))) {
+	if (unlikely(sja1105_is_link_local(skb) || SJA1105_SKB_CB(skb)->clone)) {
 		skb = sja1105_pvid_tag_control_pkt(dp, skb, pcp);
 		if (!skb)
 			return NULL;
@@ -359,8 +377,54 @@ static void sja1105_transfer_meta(struct sk_buff *skb,
 	SJA1105_SKB_CB(skb)->tstamp = meta->tstamp;
 }
 
-/* This is a simple state machine which follows the hardware mechanism of
- * generating RX timestamps:
+static struct sk_buff *sja1105_rcv_tstamp(struct sja1105_skb_stack *skb_stack,
+					  struct sk_buff *skb)
+{
+	/* Hold a reference to avoid dsa_switch_rcv() from freeing the skb.
+	 */
+	__skb_queue_tail(&skb_stack->skbs, skb_get(skb));
+
+	/* Tell DSA we got nothing */
+	return NULL;
+}
+
+static struct sk_buff *sja1105_rcv_meta(struct sja1105_skb_stack *skb_stack,
+					struct sk_buff *skb,
+					struct sja1105_meta *meta)
+{
+	struct dsa_port *dp = dsa_user_to_port(skb->dev);
+	struct sk_buff *stampable_skb, *skb_tmp;
+
+	skb_queue_reverse_walk_safe(&skb_stack->skbs, stampable_skb, skb_tmp) {
+		/* For normal L2 timestampable skbs, the source port and switch
+		 * ID inserted through INCL_SRCPT need to match the info from
+		 * the meta frame.
+		 */
+		if (SJA1105_SKB_CB(stampable_skb)->tstamp_type == SJA1105_TSTAMP_L2 &&
+		    stampable_skb->dev != skb->dev)
+			continue;
+
+		/* Free the meta frame and give DSA the buffered stampable_skb
+		 * for further processing up the network stack.
+		 */
+		consume_skb(skb);
+		__skb_unlink(stampable_skb, &skb_stack->skbs);
+		skb = stampable_skb;
+		sja1105_transfer_meta(skb, meta);
+
+		return skb;
+	}
+
+	dev_warn_ratelimited(dp->ds->dev,
+			     "Unexpected meta frame (tstamp 0x%llx, patched MAC DA %02llx:%02llx, source port %llu, switch id %llu)\n",
+			     meta->tstamp, meta->dmac_byte_3, meta->dmac_byte_4,
+			     meta->source_port, meta->switch_id);
+
+	return NULL;
+}
+
+/* This is a state machine which follows the hardware mechanism of generating
+ * RX timestamps:
  *
  * After each timestampable skb (all traffic for which send_meta1 and
  * send_meta0 is true, aka all MAC-filtered link-local traffic) a meta frame
@@ -372,101 +436,48 @@ static void sja1105_transfer_meta(struct sk_buff *skb,
  * Instead, the switch has internal logic that ensures no frames are sent on
  * the CPU port between a link-local timestampable frame and its corresponding
  * meta follow-up. It also ensures strict ordering between ports (lower ports
- * have higher priority towards the CPU port). For this reason, a per-port
- * data structure is not needed/desirable.
+ * have higher priority towards the CPU port). But these guarantees only apply
+ * to a single switch and do not extend to a multi-switch tree. When
+ * transporting a downstream switch's timestampable frames and/or meta frames,
+ * the SJA1105 might remove them from one another by inserting a pair comprised
+ * of a timestampable packet and its meta frame, received concurrently on a
+ * user port.
  *
- * This function pairs the link-local frame with its partial timestamp from the
- * meta follow-up frame. The full timestamp will be reconstructed later in a
- * work queue.
+ * This function queues up timestampable frames and matches them to the partial
+ * timestamps from the meta follow-up frames. The full timestamp will be
+ * reconstructed later in a work queue.
  */
-static struct sk_buff
-*sja1105_rcv_meta_state_machine(struct sk_buff *skb,
-				struct sja1105_meta *meta,
-				bool is_link_local,
-				bool is_meta)
+static struct sk_buff *sja1105_rcv_tstamp_state_machine(struct sk_buff *skb,
+							struct sja1105_meta *meta)
 {
-	/* Step 1: A timestampable frame was received.
-	 * Buffer it until we get its meta frame.
-	 */
-	if (is_link_local) {
-		struct dsa_port *dp = dsa_user_to_port(skb->dev);
-		struct sja1105_tagger_private *priv;
-		struct dsa_switch *ds = dp->ds;
+	struct dsa_port *dp = dsa_user_to_port(skb->dev);
+	struct sja1105_tagger_private *priv = sja1105_tagger_private(dp->ds);
+	struct sja1105_skb_stack *skb_stack = priv->skb_stack;
+	struct sk_buff *stampable_skb, *skb_tmp;
 
-		priv = sja1105_tagger_private(ds);
+	if (SJA1105_SKB_CB(skb)->tstamp_type == SJA1105_TSTAMP_NONE)
+		return skb;
 
-		spin_lock(&priv->meta_lock);
-		/* Was this a link-local frame instead of the meta
-		 * that we were expecting?
-		 */
-		if (priv->stampable_skb) {
-			unsigned char meta_dmac[ETH_ALEN];
+	spin_lock(&skb_stack->skbs.lock);
 
-			u64_to_ether_addr(SJA1105_META_DMAC, meta_dmac);
-			dev_err_ratelimited(ds->dev,
-					    "Had stampable skb %pM and received new skb %pM "
-					    "but was expecting meta frame - is %pM "
-					    "in the DSA conduit multicast filter?\n",
-					    eth_hdr(priv->stampable_skb)->h_dest,
-					    eth_hdr(skb)->h_dest, meta_dmac);
-			kfree_skb(priv->stampable_skb);
+	skb_queue_walk_safe(&skb_stack->skbs, stampable_skb, skb_tmp) {
+		if (time_before(SJA1105_SKB_CB(stampable_skb)->rx_time +
+				SJA1105_RX_TSTAMP_TIMEOUT, jiffies)) {
+			dev_warn_ratelimited(dp->ds->dev,
+					     "port %d invalidating stale RX timestampable skb (MAC DA %pM, tstamp %llu)\n",
+					     dp->index, eth_hdr(stampable_skb)->h_dest,
+					     SJA1105_SKB_CB(stampable_skb)->tstamp);
+			__skb_unlink(stampable_skb, &skb_stack->skbs);
+			kfree_skb(stampable_skb);
 		}
-
-		/* Hold a reference to avoid dsa_switch_rcv
-		 * from freeing the skb.
-		 */
-		priv->stampable_skb = skb_get(skb);
-		spin_unlock(&priv->meta_lock);
-
-		/* Tell DSA we got nothing */
-		return NULL;
-
-	/* Step 2: The meta frame arrived.
-	 * Time to take the stampable skb out of the closet, annotate it
-	 * with the partial timestamp, and pretend that we received it
-	 * just now (basically masquerade the buffered frame as the meta
-	 * frame, which serves no further purpose).
-	 */
-	} else if (is_meta) {
-		struct dsa_port *dp = dsa_user_to_port(skb->dev);
-		struct sja1105_tagger_private *priv;
-		struct dsa_switch *ds = dp->ds;
-		struct sk_buff *stampable_skb;
-
-		priv = sja1105_tagger_private(ds);
-
-		spin_lock(&priv->meta_lock);
-
-		stampable_skb = priv->stampable_skb;
-		priv->stampable_skb = NULL;
-
-		/* Was this a meta frame instead of the link-local
-		 * that we were expecting?
-		 */
-		if (!stampable_skb) {
-			dev_err_ratelimited(ds->dev,
-					    "Unexpected meta frame (tstamp 0x%llx, patched MAC DA %02llx:%02llx, source port %llu, switch id %llu)\n",
-					    meta->tstamp, meta->dmac_byte_3, meta->dmac_byte_4, meta->source_port, meta->switch_id);
-			spin_unlock(&priv->meta_lock);
-			return NULL;
-		}
-
-		if (stampable_skb->dev != skb->dev) {
-			dev_err_ratelimited(ds->dev,
-					    "Meta frame on wrong port\n");
-			spin_unlock(&priv->meta_lock);
-			return NULL;
-		}
-
-		/* Free the meta frame and give DSA the buffered stampable_skb
-		 * for further processing up the network stack.
-		 */
-		kfree_skb(skb);
-		skb = stampable_skb;
-		sja1105_transfer_meta(skb, meta);
-
-		spin_unlock(&priv->meta_lock);
 	}
+
+	if (SJA1105_SKB_CB(skb)->tstamp_type == SJA1105_TSTAMP_META)
+		skb = sja1105_rcv_meta(skb_stack, skb, meta);
+	else
+		skb = sja1105_rcv_tstamp(skb_stack, skb);
+
+	spin_unlock(&skb_stack->skbs.lock);
 
 	return skb;
 }
@@ -528,11 +539,19 @@ static struct sk_buff *sja1105_rcv(struct sk_buff *skb,
 		return NULL;
 	}
 
+	SJA1105_SKB_CB(skb)->rx_time = jiffies;
+
+	if (is_link_local)
+		SJA1105_SKB_CB(skb)->tstamp_type = SJA1105_TSTAMP_L2;
+	else if (is_meta)
+		SJA1105_SKB_CB(skb)->tstamp_type = SJA1105_TSTAMP_META;
+	else
+		SJA1105_SKB_CB(skb)->tstamp_type = SJA1105_TSTAMP_NONE;
+
 	if (!is_link_local)
 		dsa_default_offload_fwd_mark(skb);
 
-	return sja1105_rcv_meta_state_machine(skb, &meta, is_link_local,
-					      is_meta);
+	return sja1105_rcv_tstamp_state_machine(skb, &meta);
 }
 
 static struct sk_buff *sja1110_rcv_meta(struct sk_buff *skb, u16 rx_header)
@@ -698,10 +717,60 @@ static void sja1110_flow_dissect(const struct sk_buff *skb, __be16 *proto,
 	*proto = ((__be16 *)skb->data)[(VLAN_HLEN / 2) - 1];
 }
 
+static struct sja1105_skb_stack *sja1105_skb_stack_find(struct dsa_switch *ds)
+{
+	struct dsa_switch_tree *dst = ds->dst;
+	struct sja1105_tagger_private *priv;
+	struct dsa_port *dp;
+
+	list_for_each_entry(dp, &dst->ports, list) {
+		priv = sja1105_tagger_private(dp->ds);
+		/* Switch present in tree, but not connected yet
+		 * to the tagger
+		 */
+		if (!priv)
+			continue;
+
+		if (priv->skb_stack)
+			return priv->skb_stack;
+	}
+
+	return NULL;
+}
+
+static struct sja1105_skb_stack *sja1105_skb_stack_get(struct dsa_switch *ds)
+{
+	struct sja1105_skb_stack *skb_stack = sja1105_skb_stack_find(ds);
+
+	if (skb_stack) {
+		refcount_inc(&skb_stack->refcount);
+		return skb_stack;
+	}
+
+	skb_stack = kzalloc(sizeof(*skb_stack), GFP_KERNEL);
+	if (!skb_stack)
+		return NULL;
+
+	skb_queue_head_init(&skb_stack->skbs);
+	refcount_set(&skb_stack->refcount, 1);
+
+	return skb_stack;
+}
+
+static void sja1105_skb_stack_put(struct sja1105_skb_stack *skb_stack)
+{
+	if (!refcount_dec_and_test(&skb_stack->refcount))
+		return;
+
+	skb_queue_purge(&skb_stack->skbs);
+	kfree(skb_stack);
+}
+
 static void sja1105_disconnect(struct dsa_switch *ds)
 {
-	struct sja1105_tagger_private *priv = ds->tagger_data;
+	struct sja1105_tagger_private *priv = sja1105_tagger_private(ds);
 
+	sja1105_skb_stack_put(priv->skb_stack);
 	kthread_destroy_worker(priv->xmit_worker);
 	kfree(priv);
 	ds->tagger_data = NULL;
@@ -717,20 +786,28 @@ static int sja1105_connect(struct dsa_switch *ds)
 	if (!priv)
 		return -ENOMEM;
 
-	spin_lock_init(&priv->meta_lock);
-
 	xmit_worker = kthread_run_worker(0, "dsa%d:%d_xmit",
 					    ds->dst->index, ds->index);
 	if (IS_ERR(xmit_worker)) {
 		err = PTR_ERR(xmit_worker);
-		kfree(priv);
-		return err;
+		goto free_tagger_data;
 	}
 
 	priv->xmit_worker = xmit_worker;
 	ds->tagger_data = priv;
 
+	priv->skb_stack = sja1105_skb_stack_get(ds);
+	if (!priv->skb_stack)
+		goto destroy_xmit_worker;
+
 	return 0;
+
+destroy_xmit_worker:
+	kthread_destroy_worker(priv->xmit_worker);
+free_tagger_data:
+	kfree(priv);
+	ds->tagger_data = NULL;
+	return err;
 }
 
 static const struct dsa_device_ops sja1105_netdev_ops = {
