@@ -515,8 +515,10 @@ static int dsa_switch_parse_ports_of(struct dsa_switch *ds,
 			goto out_put_node;
 		}
 
-		dp = dsa_to_port(ds, reg);
-
+		/* Can't use dsa_to_port() because dst->ports hasn't yet
+		 * been constructed.
+		 */
+		dp = &ds->ports[reg];
 		err = dsa_port_parse_of(dp, port);
 		if (err) {
 			of_node_put(port);
@@ -546,67 +548,6 @@ static int dsa_switch_create_ports(struct dsa_switch *ds)
 static void dsa_switch_destroy_ports(struct dsa_switch *ds)
 {
 	kfree(ds->ports);
-}
-
-/* Add this switch's ports to the tree's port list */
-static void dsa_switch_touch_ports(struct dsa_switch *ds)
-{
-	struct dsa_switch_tree *dst = ds->dst;
-	struct dsa_port *dp;
-	int port;
-
-	for (port = 0; port < ds->num_ports; port++) {
-		dp = &ds->ports[port];
-		list_add_tail(&dp->list, &dst->ports);
-	}
-}
-
-/* Remove this switch's ports from the tree's port list */
-static void dsa_switch_release_ports(struct dsa_switch *ds)
-{
-	struct dsa_mac_addr *a, *tmp;
-	struct dsa_port *dp, *next;
-	struct dsa_vlan *v, *n;
-
-	dsa_switch_for_each_port_safe(dp, next, ds) {
-		if (dsa_port_is_cpu(dp) && dp->conduit)
-			netdev_put(dp->conduit, &dp->conduit_tracker);
-
-		/* These are either entries that upper layers lost track of
-		 * (probably due to bugs), or installed through interfaces
-		 * where one does not necessarily have to remove them, like
-		 * ndo_dflt_fdb_add().
-		 */
-		list_for_each_entry_safe(a, tmp, &dp->fdbs, list) {
-			dev_info(ds->dev,
-				 "Cleaning up unicast address %pM vid %u from port %d\n",
-				 a->addr, a->vid, dp->index);
-			list_del(&a->list);
-			kfree(a);
-		}
-
-		list_for_each_entry_safe(a, tmp, &dp->mdbs, list) {
-			dev_info(ds->dev,
-				 "Cleaning up multicast address %pM vid %u from port %d\n",
-				 a->addr, a->vid, dp->index);
-			list_del(&a->list);
-			kfree(a);
-		}
-
-		/* These are entries that upper layers have lost track of,
-		 * probably due to bugs, but also due to dsa_port_do_vlan_del()
-		 * having failed and the VLAN entry still lingering on.
-		 */
-		list_for_each_entry_safe(v, n, &dp->vlans, list) {
-			dev_info(ds->dev,
-				 "Cleaning up vid %u from port %d\n",
-				 v->vid, dp->index);
-			list_del(&v->list);
-			kfree(v);
-		}
-
-		list_del(&dp->list);
-	}
 }
 
 static int dev_is_class(struct device *dev, const void *class)
@@ -672,7 +613,10 @@ static int dsa_switch_parse_ports(struct dsa_switch *ds,
 	for (i = 0; i < DSA_MAX_PORTS; i++) {
 		name = cd->port_names[i];
 		dev = cd->netdev[i];
-		dp = dsa_to_port(ds, i);
+		/* Can't use dsa_to_port() because dst->ports hasn't yet
+		 * been constructed.
+		 */
+		dp = &ds->ports[i];
 
 		if (!name)
 			continue;
@@ -715,30 +659,19 @@ static int dsa_switch_probe(struct dsa_switch *ds)
 	if (err)
 		return err;
 
-	ds->dst = dsa_switch_get_tree(ds);
-	if (IS_ERR(ds->dst)) {
-		err = PTR_ERR(ds->dst);
-		goto out_destroy_ports;
-	}
-
-	dsa_switch_touch_ports(ds);
-
 	if (np)
 		err = dsa_switch_parse_ports_of(ds, np);
 	else
 		err = dsa_switch_parse_ports(ds, pdata);
 	if (err)
-		goto out_release_ports;
+		goto out_destroy_ports;
 
-	err = dsa_tree_setup(ds->dst);
+	err = dsa_switch_get_tree(ds);
 	if (err)
-		goto out_release_ports;
+		goto out_destroy_ports;
 
 	return 0;
 
-out_release_ports:
-	dsa_switch_release_ports(ds);
-	dsa_switch_put_tree(ds);
 out_destroy_ports:
 	dsa_switch_destroy_ports(ds);
 
@@ -759,10 +692,6 @@ EXPORT_SYMBOL_GPL(dsa_register_switch);
 
 static void dsa_switch_remove(struct dsa_switch *ds)
 {
-	struct dsa_switch_tree *dst = ds->dst;
-
-	dsa_tree_teardown(dst);
-	dsa_switch_release_ports(ds);
 	dsa_switch_put_tree(ds);
 	dsa_switch_destroy_ports(ds);
 }
