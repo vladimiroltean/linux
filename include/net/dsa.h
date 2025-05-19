@@ -161,12 +161,15 @@ struct dsa_tree_component {
 	};
 };
 
+struct dsa_tree_component_port;
+
 struct dsa_tree_component_port {
 	enum dsa_port_type type;
 	int index;
 	struct device_node *dn;
 	struct dsa_port *dp;
 	struct dsa_tree_component *parent;
+	struct dsa_tree_component_port *cpu_port;
 	struct list_head list;
 };
 

@@ -864,6 +864,12 @@ dsa_tree_find_component_port_by_node(struct dsa_switch_tree *dst,
 }
 
 static struct dsa_tree_component_port *
+dsa_tree_find_component_port(struct dsa_switch_tree *dst, struct dsa_port *dp)
+{
+	return dsa_tree_find_component_port_by_node(dst, dp->dn);
+}
+
+static struct dsa_tree_component_port *
 dsa_tree_component_find_port_by_index(struct dsa_tree_component *component, int port)
 {
 	struct dsa_tree_component_port *component_port;
@@ -987,13 +993,27 @@ static struct dsa_port *dsa_tree_find_port_by_node(struct dsa_switch_tree *dst,
 	return NULL;
 }
 
+static struct dsa_tree_component_port *
+dsa_tree_find_first_cpu_component(struct dsa_switch_tree *dst)
+{
+	struct dsa_tree_component_port *component_port;
+	struct dsa_tree_component *component;
+
+	list_for_each_entry(component, &dst->components, list)
+		list_for_each_entry(component_port, &component->ports, list)
+			if (component_port->type == DSA_PORT_TYPE_CPU)
+				return component_port;
+
+	return NULL;
+}
+
 static struct dsa_port *dsa_tree_find_first_cpu(struct dsa_switch_tree *dst)
 {
-	struct dsa_port *dp;
+	struct dsa_tree_component_port *component_port;
 
-	list_for_each_entry(dp, &dst->ports, list)
-		if (dsa_port_is_cpu(dp))
-			return dp;
+	component_port = dsa_tree_find_first_cpu_component(dst);
+	if (component_port)
+		return component_port->dp;
 
 	return NULL;
 }
@@ -1017,20 +1037,24 @@ struct net_device *dsa_tree_find_first_conduit(struct dsa_switch_tree *dst)
  */
 static int dsa_tree_setup_default_cpu(struct dsa_switch_tree *dst)
 {
-	struct dsa_port *cpu_dp, *dp;
+	struct dsa_tree_component_port *cpu_port, *component_port;
+	struct dsa_tree_component *component;
 
-	cpu_dp = dsa_tree_find_first_cpu(dst);
-	if (!cpu_dp) {
+	cpu_port = dsa_tree_find_first_cpu_component(dst);
+	if (!cpu_port) {
 		pr_err("DSA: tree %d has no CPU port\n", dst->index);
 		return -EINVAL;
 	}
 
-	list_for_each_entry(dp, &dst->ports, list) {
-		if (dp->cpu_dp)
-			continue;
+	list_for_each_entry(component, &dst->components, list) {
+		list_for_each_entry(component_port, &component->ports, list) {
+			if (component_port->cpu_port)
+				continue;
 
-		if (dsa_port_is_user(dp) || dsa_port_is_dsa(dp))
-			dp->cpu_dp = cpu_dp;
+			if (component_port->type == DSA_PORT_TYPE_USER ||
+			    component_port->type == DSA_PORT_TYPE_DSA)
+				component_port->cpu_port = cpu_port;
+		}
 	}
 
 	return 0;
@@ -1054,6 +1078,39 @@ dsa_switch_preferred_default_local_cpu_port(struct dsa_switch *ds)
 	return cpu_dp;
 }
 
+static int dsa_tree_assign_switch_cpu_ports(struct dsa_switch_tree *dst,
+					    struct dsa_switch *ds)
+{
+	struct dsa_tree_component_port *component_port, *preferred_component_port;
+	struct dsa_tree_component *component = dsa_tree_find_component(dst, ds);
+	struct dsa_port *cpu_dp, *preferred_cpu_dp;
+
+	preferred_cpu_dp = dsa_switch_preferred_default_local_cpu_port(ds);
+
+	list_for_each_entry(component_port, &component->ports, list) {
+		if (component_port->type != DSA_PORT_TYPE_USER &&
+		    component_port->type != DSA_PORT_TYPE_DSA)
+			continue;
+
+		if (preferred_cpu_dp) {
+			cpu_dp = preferred_cpu_dp;
+			/* Fix up the default CPU port assignments in the
+			 * component data structures.
+			 */
+			preferred_component_port = dsa_tree_find_component_port(dst, cpu_dp);
+			component_port->cpu_port = preferred_component_port;
+		} else {
+			cpu_dp = dsa_tree_find_port_by_node(dst, component_port->cpu_port->dn);
+			if (!cpu_dp)
+				return -EPROBE_DEFER;
+		}
+
+		component_port->dp->cpu_dp = cpu_dp;
+	}
+
+	return 0;
+}
+
 /* Perform initial assignment of CPU ports to user ports and DSA links in the
  * fabric, giving preference to CPU ports local to each switch. Default to
  * using the first CPU port in the switch tree if the port does not have a CPU
@@ -1061,37 +1118,28 @@ dsa_switch_preferred_default_local_cpu_port(struct dsa_switch *ds)
  */
 static int dsa_tree_setup_cpu_ports(struct dsa_switch_tree *dst)
 {
-	struct dsa_port *preferred_cpu_dp, *cpu_dp, *dp;
+	struct dsa_tree_component_port *cpu_port, *component_port;
+	struct dsa_tree_component *component;
 
-	list_for_each_entry(cpu_dp, &dst->ports, list) {
-		if (!dsa_port_is_cpu(cpu_dp))
-			continue;
-
-		preferred_cpu_dp = dsa_switch_preferred_default_local_cpu_port(cpu_dp->ds);
-		if (preferred_cpu_dp && preferred_cpu_dp != cpu_dp)
-			continue;
-
-		/* Prefer a local CPU port */
-		dsa_switch_for_each_port(dp, cpu_dp->ds) {
-			/* Prefer the first local CPU port found */
-			if (dp->cpu_dp)
+	list_for_each_entry(component, &dst->components, list) {
+		list_for_each_entry(cpu_port, &component->ports, list) {
+			if (cpu_port->type != DSA_PORT_TYPE_CPU)
 				continue;
 
-			if (dsa_port_is_user(dp) || dsa_port_is_dsa(dp))
-				dp->cpu_dp = cpu_dp;
+			/* Prefer a local CPU port */
+			list_for_each_entry(component_port, &component->ports, list) {
+				/* Prefer the first local CPU port found */
+				if (component_port->cpu_port)
+					continue;
+
+				if (component_port->type == DSA_PORT_TYPE_USER ||
+				    component_port->type == DSA_PORT_TYPE_DSA)
+					component_port->cpu_port = cpu_port;
+			}
 		}
 	}
 
 	return dsa_tree_setup_default_cpu(dst);
-}
-
-static void dsa_tree_teardown_cpu_ports(struct dsa_switch_tree *dst)
-{
-	struct dsa_port *dp;
-
-	list_for_each_entry(dp, &dst->ports, list)
-		if (dsa_port_is_user(dp) || dsa_port_is_dsa(dp))
-			dp->cpu_dp = NULL;
 }
 
 /* First tear down the non-shared, then the shared ports. This ensures that
@@ -1263,13 +1311,9 @@ int dsa_tree_setup(struct dsa_switch_tree *dst)
 {
 	int err;
 
-	err = dsa_tree_setup_cpu_ports(dst);
-	if (err)
-		return err;
-
 	err = dsa_tree_setup_switches(dst);
 	if (err)
-		goto teardown_cpu_ports;
+		return err;
 
 	err = dsa_tree_setup_ports(dst);
 	if (err)
@@ -1293,8 +1337,6 @@ teardown_ports:
 	dsa_tree_teardown_ports(dst);
 teardown_switches:
 	dsa_tree_teardown_switches(dst);
-teardown_cpu_ports:
-	dsa_tree_teardown_cpu_ports(dst);
 
 	return err;
 }
@@ -1308,8 +1350,6 @@ void dsa_tree_teardown(struct dsa_switch_tree *dst)
 	dsa_tree_teardown_ports(dst);
 
 	dsa_tree_teardown_switches(dst);
-
-	dsa_tree_teardown_cpu_ports(dst);
 
 	pr_info("DSA: tree %d torn down\n", dst->index);
 }
@@ -1520,6 +1560,10 @@ static struct dsa_switch_tree *dsa_tree_get(int index, struct device_node *dn,
 						   &has_cascade);
 		if (err)
 			goto err_free_tree;
+
+		err = dsa_tree_setup_cpu_ports(dst);
+		if (err)
+			goto err_free_components;
 	}
 
 	err = dsa_tree_create_rtable(dst, has_link, has_cascade);
@@ -1644,8 +1688,10 @@ static void dsa_switch_release_ports(struct dsa_switch *ds)
 static int dsa_tree_bind_switch(struct dsa_switch_tree *dst,
 				struct dsa_switch *ds)
 {
+	struct dsa_tree_component *component = NULL;
 	const struct dsa_device_ops *old_tag_ops;
 	enum dsa_tag_protocol old_default_proto;
+	int old_last_switch;
 	int err;
 
 	if (dsa_switch_find(dst->index, ds->index)) {
@@ -1682,8 +1728,6 @@ static int dsa_tree_bind_switch(struct dsa_switch_tree *dst,
 	}
 
 	if (dst->probing_mode == DSA_TREE_PROBING_OF) {
-		struct dsa_tree_component *component;
-
 		component = dsa_tree_find_component(dst, ds);
 		if (!component) {
 			dev_err(ds->dev, "OF node %pOF unrecognized by tree %s\n",
@@ -1696,6 +1740,7 @@ static int dsa_tree_bind_switch(struct dsa_switch_tree *dst,
 		component->state = DSA_TREE_COMPONENT_BOUND;
 	}
 
+	old_last_switch = dst->last_switch;
 	if (dst->last_switch < ds->index)
 		dst->last_switch = ds->index;
 
@@ -1703,8 +1748,19 @@ static int dsa_tree_bind_switch(struct dsa_switch_tree *dst,
 
 	dsa_switch_touch_ports(ds);
 
+	err = dsa_tree_assign_switch_cpu_ports(dst, ds);
+	if (err)
+		goto release_ports;
+
 	return 0;
 
+release_ports:
+	dsa_switch_release_ports(ds);
+	dst->last_switch = old_last_switch;
+	if (component) {
+		component->state = DSA_TREE_COMPONENT_UNBOUND;
+		component->ds = NULL;
+	}
 restore_tag_proto:
 	dst->default_proto = old_default_proto;
 	dst->tag_ops = old_tag_ops;
