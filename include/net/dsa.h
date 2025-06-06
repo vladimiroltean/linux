@@ -195,6 +195,11 @@ struct dsa_switch_tree {
 	 */
 	enum dsa_tag_protocol default_proto;
 
+	/* Specifies whether switches in this tree were linked using the
+	 * modern "cascade" property
+	 */
+	bool has_adjacency;
+
 	/*
 	 * Configuration data for the platform device that owns
 	 * this dsa switch tree instance.
@@ -309,6 +314,7 @@ struct dsa_port {
 
 	const char		*name;
 	struct dsa_port		*cpu_dp;
+	struct dsa_port		*link_dp;
 	u8			mac[ETH_ALEN];
 
 	u8			stp_state;
@@ -377,10 +383,11 @@ dsa_phylink_to_port(struct phylink_config *config)
 	return container_of(config, struct dsa_port, pl_config);
 }
 
-/* TODO: ideally DSA ports would have a single dp->link_dp member,
- * and no dst->rtable nor this struct dsa_link would be needed,
- * but this would require some more complex tree walking,
- * so keep it stupid at the moment and list them all.
+/* DSA ports may have a dp->link_dp member which represents their direct
+ * connection, if the tree is specified with full adjacency information.
+ * However, dsa_routing_port() requires full routing information, which
+ * _could_ be deduced based on just the adjacency, and that is not always
+ * available. So keep it stupid at the moment and list them all.
  */
 struct dsa_link {
 	struct dsa_port *dp;
@@ -621,6 +628,10 @@ static inline bool dsa_is_user_port(struct dsa_switch *ds, int p)
 #define dsa_tree_for_each_user_port_continue_reverse(_dp, _dst) \
 	list_for_each_entry_continue_reverse((_dp), &(_dst)->ports, list) \
 		if (dsa_port_is_user((_dp)))
+
+#define dsa_tree_for_each_dsa_port(_dp, _dst) \
+	list_for_each_entry((_dp), &(_dst)->ports, list) \
+		if (dsa_port_is_dsa((_dp)))
 
 #define dsa_tree_for_each_cpu_port(_dp, _dst) \
 	list_for_each_entry((_dp), &(_dst)->ports, list) \
