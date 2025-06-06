@@ -819,9 +819,9 @@ static int dsa_tree_explore_device_tree(struct dsa_switch_tree *dst,
 					bool *has_cascade)
 {
 	struct dsa_tree_bfs_elem *elem;
+	int err, num_components = 0;
 	LIST_HEAD(to_explore);
 	LIST_HEAD(explored);
-	int err;
 
 	err = dsa_bfs_elem_queue(&to_explore, dn);
 	if (err)
@@ -834,6 +834,8 @@ static int dsa_tree_explore_device_tree(struct dsa_switch_tree *dst,
 		if (err)
 			goto free_lists;
 
+		num_components++;
+
 		err = dsa_tree_explore_switch_ports_phandle(dst, elem->dn,
 							    &to_explore,
 							    &explored,
@@ -844,6 +846,18 @@ static int dsa_tree_explore_device_tree(struct dsa_switch_tree *dst,
 	}
 
 	dsa_bfs_queue_free(&explored);
+
+	/* Only trees with more than 2 switches need to use "cascade" to
+	 * undoubtebly contain adjacency information. With 2 switches or less,
+	 * adjacency is implicit even with "link".
+	 *
+	 * NOTE: Because they are in a union, anything added to
+	 * &component->links (by dsa_tree_component_add_links()) is
+	 * also visible in &component->cascades (as if it were added by
+	 * dsa_tree_component_add_cascade()).
+	 */
+	if (has_cascade || num_components <= 2)
+		dst->has_adjacency = true;
 
 	return 0;
 
@@ -1468,6 +1482,26 @@ static void dsa_tree_update_rtable(struct dsa_switch_tree *dst)
 	}
 }
 
+static void dsa_tree_update_adjacency(struct dsa_switch_tree *dst)
+{
+	struct dsa_tree_component *component;
+	struct dsa_tree_cascade *cascade;
+	struct dsa_port *dp;
+
+	if (!dst->has_adjacency)
+		return;
+
+	list_for_each_entry(component, &dst->components, list) {
+		list_for_each_entry(cascade, &component->cascades, list) {
+			dp = dsa_tree_find_port_by_node(dst, cascade->source_port_dn);
+			if (!dp)
+				continue;
+
+			dp->link_dp = dsa_tree_find_port_by_node(dst, cascade->dest_port_dn);
+		}
+	}
+}
+
 /* Add this switch's ports to the tree's port list */
 static void dsa_switch_touch_ports(struct dsa_switch *ds)
 {
@@ -1481,11 +1515,13 @@ static void dsa_switch_touch_ports(struct dsa_switch *ds)
 	}
 
 	dsa_tree_update_rtable(dst);
+	dsa_tree_update_adjacency(dst);
 }
 
 /* Remove this switch's ports from the tree's port list */
 static void dsa_switch_release_ports(struct dsa_switch *ds)
 {
+	struct dsa_switch_tree *dst = ds->dst;
 	struct dsa_mac_addr *a, *tmp;
 	struct dsa_port *dp, *next;
 	struct dsa_vlan *v, *n;
@@ -1530,7 +1566,8 @@ static void dsa_switch_release_ports(struct dsa_switch *ds)
 		list_del(&dp->list);
 	}
 
-	dsa_tree_update_rtable(ds->dst);
+	dsa_tree_update_rtable(dst);
+	dsa_tree_update_adjacency(dst);
 }
 
 static int dsa_tree_bind_switch(struct dsa_switch_tree *dst,
