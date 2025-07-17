@@ -12,7 +12,7 @@
 /dts-v1/;
 /plugin/;
 
-&mdio_slot1 {
+&mdio_slot3 {
 	#address-cells = <1>;
 	#size-cells = <0>;
 
