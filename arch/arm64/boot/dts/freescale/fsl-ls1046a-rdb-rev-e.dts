@@ -1,0 +1,44 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * Device Tree Include file for Freescale Layerscape-1046A family SoC.
+ *
+ * Copyright 2025 NXP
+ */
+
+#include "fsl-ls1046a-rdb.dts"
+
+&fman0 {
+	mdio@fc000 {
+		/delete-node/ ethernet-phy@3;
+	};
+
+	mdio@fd000 {
+		aqr115_phy: ethernet-phy@3 {
+			compatible = "ethernet-phy-ieee802.3-c45";
+			reg = <0x3>;
+		};
+
+		aqr113c_phy: ethernet-phy@8 {
+			compatible = "ethernet-phy-ieee802.3-c45";
+			reg = <0x8>;
+			interrupts = <GIC_SPI 131 IRQ_TYPE_LEVEL_HIGH>;
+		};
+	};
+};
+
+&mac5 {
+	phy-handle = <&aqr115_phy>;
+	managed = "auto";
+	phys = <&serdes1_lane_b>;
+	phy-names = "serdes";
+};
+
+&mac10 {
+	phy-handle = <&aqr113c_phy>;
+	phys = <&serdes1_lane_c>;
+	phy-names = "serdes";
+};
+
+&serdes1 {
+	status = "okay";
+};
