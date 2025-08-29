@@ -195,61 +195,6 @@ static int aqr_set_mdix(struct phy_device *phydev, int mdix)
 				      MDIO_AN_RESVD_VEND_PROV_MDIX_MASK, val);
 }
 
-static int aqr_config_aneg(struct phy_device *phydev)
-{
-	bool changed = false;
-	u16 reg;
-	int ret;
-
-	ret = aqr_set_mdix(phydev, phydev->mdix_ctrl);
-	if (ret < 0)
-		return ret;
-	if (ret > 0)
-		changed = true;
-
-	if (phydev->autoneg == AUTONEG_DISABLE)
-		return genphy_c45_pma_setup_forced(phydev);
-
-	ret = genphy_c45_an_config_aneg(phydev);
-	if (ret < 0)
-		return ret;
-	if (ret > 0)
-		changed = true;
-
-	/* Clause 45 has no standardized support for 1000BaseT, therefore
-	 * use vendor registers for this mode.
-	 */
-	reg = 0;
-	if (linkmode_test_bit(ETHTOOL_LINK_MODE_1000baseT_Full_BIT,
-			      phydev->advertising))
-		reg |= MDIO_AN_VEND_PROV_1000BASET_FULL;
-
-	if (linkmode_test_bit(ETHTOOL_LINK_MODE_1000baseT_Half_BIT,
-			      phydev->advertising))
-		reg |= MDIO_AN_VEND_PROV_1000BASET_HALF;
-
-	/* Handle the case when the 2.5G and 5G speeds are not advertised */
-	if (linkmode_test_bit(ETHTOOL_LINK_MODE_2500baseT_Full_BIT,
-			      phydev->advertising))
-		reg |= MDIO_AN_VEND_PROV_2500BASET_FULL;
-
-	if (linkmode_test_bit(ETHTOOL_LINK_MODE_5000baseT_Full_BIT,
-			      phydev->advertising))
-		reg |= MDIO_AN_VEND_PROV_5000BASET_FULL;
-
-	ret = phy_modify_mmd_changed(phydev, MDIO_MMD_AN, MDIO_AN_VEND_PROV,
-				     MDIO_AN_VEND_PROV_1000BASET_HALF |
-				     MDIO_AN_VEND_PROV_1000BASET_FULL |
-				     MDIO_AN_VEND_PROV_2500BASET_FULL |
-				     MDIO_AN_VEND_PROV_5000BASET_FULL, reg);
-	if (ret < 0)
-		return ret;
-	if (ret > 0)
-		changed = true;
-
-	return genphy_c45_check_and_restart_aneg(phydev, changed);
-}
-
 static int aqr_config_intr(struct phy_device *phydev)
 {
 	bool en = phydev->interrupts == PHY_INTERRUPT_ENABLED;
@@ -366,7 +311,7 @@ static int aqr105_get_features(struct phy_device *phydev)
 	return 0;
 }
 
-static int aqr105_setup_forced(struct phy_device *phydev)
+static int aqr_gen1_setup_forced(struct phy_device *phydev)
 {
 	int vend = MDIO_AN_VEND_PROV_EXC_PHYID_INFO;
 	int ctrl10 = 0;
@@ -418,7 +363,7 @@ static int aqr105_setup_forced(struct phy_device *phydev)
 	return genphy_c45_an_disable_aneg(phydev);
 }
 
-static int aqr105_config_aneg(struct phy_device *phydev)
+static int aqr_config_aneg(struct phy_device *phydev, bool gen1)
 {
 	bool changed = false;
 	u16 reg;
@@ -430,8 +375,12 @@ static int aqr105_config_aneg(struct phy_device *phydev)
 	if (ret > 0)
 		changed = true;
 
-	if (phydev->autoneg == AUTONEG_DISABLE)
-		return aqr105_setup_forced(phydev);
+	if (phydev->autoneg == AUTONEG_DISABLE) {
+		if (gen1)
+			return aqr_gen1_setup_forced(phydev);
+		else
+			return genphy_c45_pma_setup_forced(phydev);
+	}
 
 	ret = genphy_c45_an_config_aneg(phydev);
 	if (ret < 0)
@@ -471,6 +420,16 @@ static int aqr105_config_aneg(struct phy_device *phydev)
 		changed = true;
 
 	return genphy_c45_check_and_restart_aneg(phydev, changed);
+}
+
+static int aqr_gen1_config_aneg(struct phy_device *phydev)
+{
+	return aqr_config_aneg(phydev, true);
+}
+
+static int aqr_gen2_config_aneg(struct phy_device *phydev)
+{
+	return aqr_config_aneg(phydev, false);
 }
 
 static int aqr_gen1_read_rate(struct phy_device *phydev)
@@ -1185,7 +1144,7 @@ static struct phy_driver aqr_driver[] = {
 {
 	PHY_ID_MATCH_MODEL(PHY_ID_AQ1202),
 	.name		= "Aquantia AQ1202",
-	.config_aneg    = aqr_config_aneg,
+	.config_aneg    = aqr_gen2_config_aneg, /* FIXME: seems wrong */
 	.config_intr	= aqr_config_intr,
 	.handle_interrupt = aqr_handle_interrupt,
 	.read_status	= aqr_read_status,
@@ -1193,7 +1152,7 @@ static struct phy_driver aqr_driver[] = {
 {
 	PHY_ID_MATCH_MODEL(PHY_ID_AQ2104),
 	.name		= "Aquantia AQ2104",
-	.config_aneg    = aqr_config_aneg,
+	.config_aneg    = aqr_gen2_config_aneg, /* FIXME: seems wrong */
 	.config_intr	= aqr_config_intr,
 	.handle_interrupt = aqr_handle_interrupt,
 	.read_status	= aqr_read_status,
@@ -1204,7 +1163,7 @@ static struct phy_driver aqr_driver[] = {
 	.get_features	= aqr105_get_features,
 	.probe		= aqr107_probe,
 	.config_init	= aqr_gen1_config_init,
-	.config_aneg    = aqr105_config_aneg,
+	.config_aneg    = aqr_gen1_config_aneg,
 	.config_intr	= aqr_config_intr,
 	.handle_interrupt = aqr_handle_interrupt,
 	.read_status	= aqr_gen1_read_status,
@@ -1214,7 +1173,7 @@ static struct phy_driver aqr_driver[] = {
 {
 	PHY_ID_MATCH_MODEL(PHY_ID_AQR106),
 	.name		= "Aquantia AQR106",
-	.config_aneg    = aqr_config_aneg,
+	.config_aneg    = aqr_gen2_config_aneg,
 	.config_intr	= aqr_config_intr,
 	.handle_interrupt = aqr_handle_interrupt,
 	.read_status	= aqr_read_status,
@@ -1225,7 +1184,7 @@ static struct phy_driver aqr_driver[] = {
 	.probe		= aqr107_probe,
 	.get_rate_matching = aqr_gen2_get_rate_matching,
 	.config_init	= aqr_gen2_config_init,
-	.config_aneg    = aqr_config_aneg,
+	.config_aneg    = aqr_gen2_config_aneg,
 	.config_intr	= aqr_config_intr,
 	.handle_interrupt = aqr_handle_interrupt,
 	.read_status	= aqr_gen2_read_status,
@@ -1251,7 +1210,7 @@ static struct phy_driver aqr_driver[] = {
 	.probe		= aqr107_probe,
 	.get_rate_matching = aqr_gen2_get_rate_matching,
 	.config_init	= aqcs109_config_init,
-	.config_aneg    = aqr_config_aneg,
+	.config_aneg    = aqr_gen2_config_aneg,
 	.config_intr	= aqr_config_intr,
 	.handle_interrupt = aqr_handle_interrupt,
 	.read_status	= aqr_gen2_read_status,
@@ -1278,7 +1237,7 @@ static struct phy_driver aqr_driver[] = {
 	.probe		= aqr107_probe,
 	.get_rate_matching = aqr_gen2_get_rate_matching,
 	.config_init	= aqr_gen3_config_init,
-	.config_aneg    = aqr_config_aneg,
+	.config_aneg    = aqr_gen2_config_aneg,
 	.config_intr	= aqr_config_intr,
 	.handle_interrupt = aqr_handle_interrupt,
 	.read_status	= aqr_gen2_read_status,
@@ -1305,7 +1264,7 @@ static struct phy_driver aqr_driver[] = {
 	.probe		= aqr107_probe,
 	.get_rate_matching = aqr_gen2_get_rate_matching,
 	.config_init	= aqr_gen3_config_init,
-	.config_aneg    = aqr_config_aneg,
+	.config_aneg    = aqr_gen2_config_aneg,
 	.config_intr	= aqr_config_intr,
 	.handle_interrupt = aqr_handle_interrupt,
 	.read_status	= aqr_gen2_read_status,
@@ -1329,7 +1288,7 @@ static struct phy_driver aqr_driver[] = {
 {
 	PHY_ID_MATCH_MODEL(PHY_ID_AQR405),
 	.name		= "Aquantia AQR405",
-	.config_aneg    = aqr_config_aneg,
+	.config_aneg    = aqr_gen2_config_aneg,
 	.config_intr	= aqr_config_intr,
 	.handle_interrupt = aqr_handle_interrupt,
 	.read_status	= aqr_read_status,
@@ -1341,7 +1300,7 @@ static struct phy_driver aqr_driver[] = {
 	.name		= "Aquantia AQR112",
 	.probe		= aqr107_probe,
 	.config_init	= aqr_gen3_config_init,
-	.config_aneg    = aqr_config_aneg,
+	.config_aneg    = aqr_gen2_config_aneg,
 	.config_intr	= aqr_config_intr,
 	.handle_interrupt = aqr_handle_interrupt,
 	.get_tunable    = aqr107_get_tunable,
@@ -1367,7 +1326,7 @@ static struct phy_driver aqr_driver[] = {
 	.name		= "Aquantia AQR412",
 	.probe		= aqr107_probe,
 	.config_init	= aqr_gen3_config_init,
-	.config_aneg    = aqr_config_aneg,
+	.config_aneg    = aqr_gen2_config_aneg,
 	.config_intr	= aqr_config_intr,
 	.handle_interrupt = aqr_handle_interrupt,
 	.get_tunable    = aqr107_get_tunable,
@@ -1388,7 +1347,7 @@ static struct phy_driver aqr_driver[] = {
 	.name		= "Aquantia AQR412C",
 	.probe		= aqr107_probe,
 	.config_init	= aqr_gen3_config_init,
-	.config_aneg    = aqr_config_aneg,
+	.config_aneg    = aqr_gen2_config_aneg,
 	.config_intr	= aqr_config_intr,
 	.handle_interrupt = aqr_handle_interrupt,
 	.get_tunable    = aqr107_get_tunable,
@@ -1410,7 +1369,7 @@ static struct phy_driver aqr_driver[] = {
 	.probe          = aqr107_probe,
 	.get_rate_matching = aqr_gen2_get_rate_matching,
 	.config_init    = aqr_gen4_config_init,
-	.config_aneg    = aqr_config_aneg,
+	.config_aneg    = aqr_gen2_config_aneg,
 	.config_intr    = aqr_config_intr,
 	.handle_interrupt       = aqr_handle_interrupt,
 	.read_status    = aqr_gen2_read_status,
@@ -1436,7 +1395,7 @@ static struct phy_driver aqr_driver[] = {
 	.probe          = aqr107_probe,
 	.get_rate_matching = aqr_gen2_get_rate_matching,
 	.config_init    = aqr_gen4_config_init,
-	.config_aneg    = aqr_config_aneg,
+	.config_aneg    = aqr_gen2_config_aneg,
 	.config_intr    = aqr_config_intr,
 	.handle_interrupt       = aqr_handle_interrupt,
 	.read_status    = aqr_gen2_read_status,
@@ -1462,7 +1421,7 @@ static struct phy_driver aqr_driver[] = {
 	.probe          = aqr107_probe,
 	.get_rate_matching = aqr_gen2_get_rate_matching,
 	.config_init    = aqr_gen4_config_init,
-	.config_aneg    = aqr_config_aneg,
+	.config_aneg    = aqr_gen2_config_aneg,
 	.config_intr    = aqr_config_intr,
 	.handle_interrupt = aqr_handle_interrupt,
 	.read_status    = aqr_gen2_read_status,
@@ -1489,7 +1448,7 @@ static struct phy_driver aqr_driver[] = {
 	.probe		= aqr107_probe,
 	.get_rate_matching = aqr_gen2_get_rate_matching,
 	.config_init	= aqr_gen4_config_init,
-	.config_aneg	= aqr_config_aneg,
+	.config_aneg	= aqr_gen2_config_aneg,
 	.config_intr	= aqr_config_intr,
 	.handle_interrupt = aqr_handle_interrupt,
 	.read_status	= aqr_gen2_read_status,
@@ -1516,7 +1475,7 @@ static struct phy_driver aqr_driver[] = {
 	.probe          = aqr107_probe,
 	.get_rate_matching = aqr_gen2_get_rate_matching,
 	.config_init    = aqr_gen4_config_init,
-	.config_aneg    = aqr_config_aneg,
+	.config_aneg    = aqr_gen2_config_aneg,
 	.config_intr    = aqr_config_intr,
 	.handle_interrupt = aqr_handle_interrupt,
 	.read_status    = aqr_gen2_read_status,
@@ -1543,7 +1502,7 @@ static struct phy_driver aqr_driver[] = {
 	.probe		= aqr107_probe,
 	.get_rate_matching = aqr_gen2_get_rate_matching,
 	.config_init	= aqr_gen4_config_init,
-	.config_aneg    = aqr_config_aneg,
+	.config_aneg    = aqr_gen2_config_aneg,
 	.config_intr	= aqr_config_intr,
 	.handle_interrupt = aqr_handle_interrupt,
 	.read_status	= aqr_gen2_read_status,
