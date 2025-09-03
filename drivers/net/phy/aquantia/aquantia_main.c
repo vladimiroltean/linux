@@ -900,6 +900,49 @@ static int aqr_gen2_fill_interface_modes(struct phy_device *phydev)
 	return 0;
 }
 
+static int aqr_gen2_update_startup_interface(struct phy_device *phydev)
+{
+	struct aqr107_priv *priv = phydev->priv;
+	int startup_speed;
+	int val;
+
+	val = phy_read_mmd(phydev, MDIO_MMD_VEND1, VEND1_GLOBAL_STARTUP_RATE);
+	if (val < 0)
+		return val;
+
+	switch (FIELD_GET(VEND1_GLOBAL_STARTUP_RATE_MASK, val)) {
+	case VEND1_GLOBAL_STARTUP_RATE_100M:
+		startup_speed = SPEED_100;
+		break;
+	case VEND1_GLOBAL_STARTUP_RATE_1G:
+		startup_speed = SPEED_1000;
+		break;
+	case VEND1_GLOBAL_STARTUP_RATE_2_5G:
+		startup_speed = SPEED_2500;
+		break;
+	case VEND1_GLOBAL_STARTUP_RATE_5G:
+		startup_speed = SPEED_5000;
+		break;
+	case VEND1_GLOBAL_STARTUP_RATE_10G:
+		startup_speed = SPEED_10000;
+		break;
+	default:
+		return 0;
+	}
+
+	for (int i = 0; i < AQR_NUM_GLOBAL_CFG; i++) {
+		struct aqr_global_syscfg *syscfg = &priv->global_cfg[i];
+
+		if (syscfg->speed != startup_speed)
+			continue;
+
+		phydev->interface = syscfg->interface;
+		break;
+	}
+
+	return 0;
+}
+
 static int aqr_gen2_config_init(struct phy_device *phydev)
 {
 	int ret;
@@ -908,7 +951,11 @@ static int aqr_gen2_config_init(struct phy_device *phydev)
 	if (ret)
 		return ret;
 
-	return aqr_gen2_fill_interface_modes(phydev);
+	ret = aqr_gen2_fill_interface_modes(phydev);
+	if (ret)
+		return ret;
+
+	return aqr_gen2_update_startup_interface(phydev);
 }
 
 static int aqr_gen3_config_init(struct phy_device *phydev)

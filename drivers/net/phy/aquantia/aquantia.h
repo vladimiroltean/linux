@@ -42,6 +42,18 @@
 #define VEND1_GLOBAL_MAILBOX_INTERFACE6_LSW_DATA_MASK	GENMASK(15, 0)
 #define VEND1_GLOBAL_MAILBOX_INTERFACE6_LSW_DATA(x)	FIELD_PREP(VEND1_GLOBAL_MAILBOX_INTERFACE6_LSW_DATA_MASK, (u16)(x))
 
+/* Global start rate; the protocol associated with this speed is used by
+ * default on the system interface.
+ */
+#define VEND1_GLOBAL_STARTUP_RATE		0x031a
+#define VEND1_GLOBAL_STARTUP_RATE_MASK		GENMASK(3, 0)
+#define VEND1_GLOBAL_STARTUP_RATE_OFF		0
+#define VEND1_GLOBAL_STARTUP_RATE_100M		1
+#define VEND1_GLOBAL_STARTUP_RATE_1G		2
+#define VEND1_GLOBAL_STARTUP_RATE_10G		3
+#define VEND1_GLOBAL_STARTUP_RATE_2_5G		4
+#define VEND1_GLOBAL_STARTUP_RATE_5G		5
+
 /* The following registers all have similar layouts; first the registers... */
 #define VEND1_GLOBAL_CFG_10M			0x0310
 #define VEND1_GLOBAL_CFG_100M			0x031b
