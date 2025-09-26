@@ -746,7 +746,7 @@ int dpaa2_mac_open(struct dpaa2_mac *mac)
 	}
 
 	mac->fw_node = fw_node;
-	net_dev->dev.of_node = to_of_node(mac->fw_node);
+	device_set_node(&net_dev->dev, mac->fw_node);
 
 	if (mac->features & DPAA2_MAC_FEATURE_STATS_BUNDLE)
 		dpaa2_mac_setup_stats(mac, &mac->ethtool_stats,
