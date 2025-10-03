@@ -1077,7 +1077,8 @@ static unsigned int aqr_gen2_inband_caps(struct phy_device *phydev,
 {
 	if (interface == PHY_INTERFACE_MODE_SGMII ||
 	    interface == PHY_INTERFACE_MODE_USXGMII ||
-	    interface == PHY_INTERFACE_MODE_10G_QXGMII)
+	    interface == PHY_INTERFACE_MODE_10G_QXGMII |
+	    interface == PHY_INTERFACE_MODE_2500BASEX)
 		return LINK_INBAND_ENABLE | LINK_INBAND_DISABLE;
 
 	return 0;
