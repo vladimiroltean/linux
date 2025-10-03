@@ -16,6 +16,8 @@
 		aqr115_phy: ethernet-phy@3 {
 			compatible = "ethernet-phy-ieee802.3-c45";
 			reg = <0x3>;
+			marvell,system-interface-override = "2500base-x", "2500base-x", "2500base-x";
+			marvell,system-interface-override-speeds = <100>, <1000>, <2500>;
 		};
 
 		aqr113c_phy: ethernet-phy@8 {
