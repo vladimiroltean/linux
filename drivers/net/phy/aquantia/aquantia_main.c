@@ -785,6 +785,18 @@ static int aqr_gen1_config_init(struct phy_device *phydev)
 	return 0;
 }
 
+static int aqr_global_cfg_reg_by_speed(int speed, u16 *reg)
+{
+	for (int i = 0; i < AQR_NUM_GLOBAL_CFG; i++) {
+		if (speed == aqr_global_cfg_regs[i].speed) {
+			*reg = aqr_global_cfg_regs[i].reg;
+			return 0;
+		}
+	}
+
+	return -EINVAL;
+}
+
 /* Walk the media-speed configuration registers to determine which
  * host-side serdes modes may be used by the PHY depending on the
  * negotiated media speed.
@@ -900,47 +912,194 @@ static int aqr_gen2_fill_interface_modes(struct phy_device *phydev)
 	return 0;
 }
 
-static int aqr_gen2_update_startup_interface(struct phy_device *phydev)
+static int aqr_set_low_power(struct phy_device *phydev, bool enable)
 {
-	struct aqr107_priv *priv = phydev->priv;
-	int startup_speed;
-	int val;
+	int val = enable ? VEND1_GLOBAL_SC_LOW_POWER : 0;
+	int err;
 
-	val = phy_read_mmd(phydev, MDIO_MMD_VEND1, VEND1_GLOBAL_STARTUP_RATE);
-	if (val < 0)
-		return val;
+	err = phy_write_mmd(phydev, MDIO_MMD_VEND1, VEND1_GLOBAL_SC, val);
+	if (err)
+		return err;
 
-	switch (FIELD_GET(VEND1_GLOBAL_STARTUP_RATE_MASK, val)) {
-	case VEND1_GLOBAL_STARTUP_RATE_100M:
-		startup_speed = SPEED_100;
-		break;
-	case VEND1_GLOBAL_STARTUP_RATE_1G:
-		startup_speed = SPEED_1000;
-		break;
-	case VEND1_GLOBAL_STARTUP_RATE_2_5G:
-		startup_speed = SPEED_2500;
-		break;
-	case VEND1_GLOBAL_STARTUP_RATE_5G:
-		startup_speed = SPEED_5000;
-		break;
-	case VEND1_GLOBAL_STARTUP_RATE_10G:
-		startup_speed = SPEED_10000;
-		break;
-	default:
-		return 0;
-	}
-
-	for (int i = 0; i < AQR_NUM_GLOBAL_CFG; i++) {
-		struct aqr_global_syscfg *syscfg = &priv->global_cfg[i];
-
-		if (syscfg->speed != startup_speed)
-			continue;
-
-		phydev->interface = syscfg->interface;
-		break;
-	}
+	mdelay(10);
 
 	return 0;
+}
+
+static int aqr_speed_to_startup_rate(int speed)
+{
+	switch (speed) {
+	case SPEED_100:
+		return VEND1_GLOBAL_STARTUP_RATE_100M;
+	case SPEED_1000:
+		return VEND1_GLOBAL_STARTUP_RATE_1G;
+	case SPEED_2500:
+		return VEND1_GLOBAL_STARTUP_RATE_2_5G;
+	case SPEED_5000:
+		return VEND1_GLOBAL_STARTUP_RATE_5G;
+	case SPEED_10000:
+		return VEND1_GLOBAL_STARTUP_RATE_10G;
+	default:
+		return VEND1_GLOBAL_STARTUP_RATE_OFF;
+	}
+}
+
+static int aqr_interface_to_serdes_mode(phy_interface_t interface)
+{
+	switch (interface) {
+	case PHY_INTERFACE_MODE_10GBASER:
+		return VEND1_GLOBAL_CFG_SERDES_MODE_XFI;
+	case PHY_INTERFACE_MODE_SGMII:
+		return VEND1_GLOBAL_CFG_SERDES_MODE_SGMII;
+	case PHY_INTERFACE_MODE_2500BASEX:
+		return VEND1_GLOBAL_CFG_SERDES_MODE_OCSGMII;
+	default:
+		return -EINVAL;
+	}
+}
+
+static int aqr_gen2_system_interface_override(struct phy_device *phydev)
+{
+	struct device_node *np = dev_of_node(&phydev->mdio.dev);
+	int num_interfaces, num_speeds;
+	phy_interface_t interface;
+	bool powered_down = false;
+	u16 reg, startup_rate;
+	int i, ret = 0, val;
+	u32 startup_speed;
+
+	if (!np)
+		return 0;
+
+	/* Parse and apply startup rate if property exists */
+	if (!of_property_read_u32(np, "marvell,system-interface-startup-rate", &startup_speed)) {
+		startup_rate = aqr_speed_to_startup_rate(startup_speed);
+		if (!startup_rate) {
+			phydev_err(phydev, "Invalid startup rate %u Mbps. Valid rates: 100, 1000, 2500, 5000, 10000\n",
+				   startup_speed);
+			return -EINVAL;
+		}
+
+		ret = aqr_set_low_power(phydev, true);
+		if (ret)
+			return ret;
+
+		powered_down = true;
+
+		ret = phy_write_mmd(phydev, MDIO_MMD_VEND1, VEND1_GLOBAL_STARTUP_RATE, startup_rate);
+		if (ret)
+			goto out;
+
+		phydev_info(phydev, "Startup rate: %u Mbps\n", startup_speed);
+	}
+
+	/* Check for interface overrides */
+	num_interfaces = of_property_count_strings(np, "marvell,system-interface-override");
+	if (num_interfaces <= 0)
+		return 0; /* No overrides specified */
+
+	num_speeds = of_property_count_u32_elems(np, "marvell,system-interface-override-speeds");
+	if (num_speeds <= 0) {
+		phydev_err(phydev, "marvell,system-interface-override-speeds property missing or invalid\n");
+		return -EINVAL;
+	}
+
+	if (num_interfaces != num_speeds) {
+		phydev_err(phydev, "Interface override arrays have different lengths: interfaces=%d, speeds=%d\n",
+			   num_interfaces, num_speeds);
+		return -EINVAL;
+	}
+
+	/* Set PHY in low power mode for configuration */
+	if (!powered_down) {
+		ret = aqr_set_low_power(phydev, false);
+		if (ret)
+			return ret;
+
+		powered_down = true;
+	}
+
+	/* Apply each override directly to hardware registers */
+	for (i = 0; i < num_interfaces; i++) {
+		int serdes_mode, rate_adapt;
+		const char *interface_str;
+		u32 speed;
+
+		ret = of_property_read_string_index(np, "marvell,system-interface-override",
+						    i, &interface_str);
+		if (ret) {
+			phydev_err(phydev, "Failed to read interface string %d: %d\n", i, ret);
+			goto out;
+		}
+
+		ret = of_property_read_u32_index(np, "marvell,system-interface-override-speeds",
+						 i, &speed);
+		if (ret) {
+			phydev_err(phydev, "Failed to read speed array: %d\n", ret);
+			goto out;
+		}
+
+		ret = aqr_global_cfg_reg_by_speed(speed, &reg);
+		if (ret) {
+			phydev_warn(phydev, "Invalid speed %d at index %d\n",
+				    speed, i);
+			continue;
+		}
+
+		/* Check if this speed is supported by firmware */
+		val = phy_read_mmd(phydev, MDIO_MMD_VEND1, reg);
+		if (val < 0) {
+			ret = val;
+			goto out;
+		}
+
+		if (!val) {
+			phydev_dbg(phydev, "Speed %u not supported by firmware\n", speed);
+			continue;
+		}
+
+		/* Convert string to interface mode */
+		ret = phy_interface_by_name(interface_str, &interface);
+		if (ret < 0) {
+			phydev_warn(phydev, "Invalid interface mode '%s' at index %d\n",
+				    interface_str, i);
+			continue;
+		}
+
+		serdes_mode = aqr_interface_to_serdes_mode(interface);
+		if (serdes_mode < 0) {
+			phydev_warn(phydev, "Invalid protocol %s at index %d\n",
+				    phy_modes(interface), i);
+			continue;
+		}
+
+		if (interface == PHY_INTERFACE_MODE_USXGMII ||
+		    interface == PHY_INTERFACE_MODE_10G_QXGMII)
+			rate_adapt = VEND1_GLOBAL_CFG_RATE_ADAPT_USX;
+		else if ((interface == PHY_INTERFACE_MODE_2500BASEX &&
+			  speed < SPEED_2500) ||
+			 (interface == PHY_INTERFACE_MODE_10GBASER &&
+			  speed < SPEED_10000))
+			rate_adapt = VEND1_GLOBAL_CFG_RATE_ADAPT_PAUSE;
+		else
+			rate_adapt = 0;
+
+		/* Apply the override */
+		ret = phy_modify_mmd(phydev, MDIO_MMD_VEND1, reg,
+				     VEND1_GLOBAL_CFG_SERDES_MODE |
+				     VEND1_GLOBAL_CFG_RATE_ADAPT,
+				     serdes_mode | rate_adapt);
+		if (ret)
+			goto out;
+	}
+
+out:
+	if (powered_down) {
+		/* Wake PHY back up */
+		if (aqr_set_low_power(phydev, false) && !ret)
+			ret = -EIO;
+	}
+	return ret;
 }
 
 static int aqr_gen2_config_init(struct phy_device *phydev)
@@ -951,11 +1110,11 @@ static int aqr_gen2_config_init(struct phy_device *phydev)
 	if (ret)
 		return ret;
 
-	ret = aqr_gen2_fill_interface_modes(phydev);
+	ret = aqr_gen2_system_interface_override(phydev);
 	if (ret)
 		return ret;
 
-	return aqr_gen2_update_startup_interface(phydev);
+	return aqr_gen2_fill_interface_modes(phydev);
 }
 
 static int aqr_gen3_config_init(struct phy_device *phydev)
