@@ -304,6 +304,28 @@ static inline const char *phy_modes(phy_interface_t interface)
 }
 
 /**
+ * phy_interface_by_name - map device tree binding of phy-mode to phy_interface_t enum
+ * @name: phy-mode value as per ethernet-controller.yaml
+ * @interface: pointer to phy_interface_t return value
+ *
+ * Description: performs the reverse translation of phy_modes().
+ *
+ * Return: zero on match against a valid PHY interface mode, -ENODEV otherwise.
+ */
+static inline int phy_interface_by_name(const char *name,
+					phy_interface_t *interface)
+{
+	for (int i = 0; i < PHY_INTERFACE_MODE_MAX; i++) {
+		if (!strcasecmp(name, phy_modes(i))) {
+			*interface = i;
+			return 0;
+		}
+	}
+
+	return -ENODEV;
+}
+
+/**
  * rgmii_clock - map link speed to the clock rate
  * @speed: link speed value
  *

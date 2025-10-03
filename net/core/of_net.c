@@ -27,7 +27,7 @@
 int of_get_phy_mode(struct device_node *np, phy_interface_t *interface)
 {
 	const char *pm;
-	int err, i;
+	int err;
 
 	*interface = PHY_INTERFACE_MODE_NA;
 
@@ -37,13 +37,7 @@ int of_get_phy_mode(struct device_node *np, phy_interface_t *interface)
 	if (err < 0)
 		return err;
 
-	for (i = 0; i < PHY_INTERFACE_MODE_MAX; i++)
-		if (!strcasecmp(pm, phy_modes(i))) {
-			*interface = i;
-			return 0;
-		}
-
-	return -ENODEV;
+	return phy_interface_by_name(pm, interface);
 }
 EXPORT_SYMBOL_GPL(of_get_phy_mode);
 
