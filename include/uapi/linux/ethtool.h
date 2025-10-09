@@ -2105,6 +2105,7 @@ enum ethtool_link_mode_bit_indices {
 	ETHTOOL_LINK_MODE_1600000baseDR8_2_Full_BIT	 = 124,
 	ETHTOOL_LINK_MODE_25000baseCR_S_Full_BIT	 = 125,
 	ETHTOOL_LINK_MODE_25000baseKR_S_Full_BIT	 = 126,
+	ETHTOOL_LINK_MODE_2500baseKX_Full_BIT		 = 127,
 
 	/* must be last entry */
 	__ETHTOOL_LINK_MODE_MASK_NBITS

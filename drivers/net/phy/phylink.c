@@ -265,6 +265,7 @@ static int phylink_interface_max_speed(phy_interface_t interface)
 		return SPEED_1000;
 
 	case PHY_INTERFACE_MODE_2500BASEX:
+	case PHY_INTERFACE_MODE_2500BASEKX:
 	case PHY_INTERFACE_MODE_10G_QXGMII:
 		return SPEED_2500;
 
@@ -713,6 +714,8 @@ phy_interface_t phylink_c73_linkmode_to_interface(unsigned long *supported)
 		return PHY_INTERFACE_MODE_25GKR;
 	if (linkmode_test_bit(ETHTOOL_LINK_MODE_10000baseKR_Full_BIT, supported))
 		return PHY_INTERFACE_MODE_10GKR;
+	if (linkmode_test_bit(ETHTOOL_LINK_MODE_2500baseKX_Full_BIT, supported))
+		return PHY_INTERFACE_MODE_2500BASEKX;
 	if (linkmode_test_bit(ETHTOOL_LINK_MODE_1000baseKX_Full_BIT, supported))
 		return PHY_INTERFACE_MODE_1000BASEKX;
 	return PHY_INTERFACE_MODE_NA;
@@ -4137,6 +4140,7 @@ static struct {
 	{ ETHTOOL_LINK_MODE_10000baseKX4_Full_BIT, SPEED_10000 },
 	/* 5GBASE-KR not supported */
 	{ ETHTOOL_LINK_MODE_2500baseX_Full_BIT, SPEED_2500 },
+	{ ETHTOOL_LINK_MODE_2500baseKX_Full_BIT, SPEED_2500 },
 	{ ETHTOOL_LINK_MODE_1000baseKX_Full_BIT, SPEED_1000 },
 };
 

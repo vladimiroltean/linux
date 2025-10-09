@@ -569,6 +569,8 @@ static inline void mii_c73_mod_linkmode(unsigned long *adv, u16 *lpa)
 			 adv, lpa[1] & MDIO_AN_C73_1_10GBASE_KR);
 	linkmode_mod_bit(ETHTOOL_LINK_MODE_2500baseX_Full_BIT,
 			 adv, lpa[2] & MDIO_AN_C73_2_2500BASE_KX);
+	linkmode_mod_bit(ETHTOOL_LINK_MODE_2500baseKX_Full_BIT,
+			 adv, lpa[2] & MDIO_AN_C73_2_2500BASE_KX);
 	/* 5GBASE_KR not implemented */
 }
 

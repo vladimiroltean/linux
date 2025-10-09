@@ -826,7 +826,8 @@ static int genphy_c45_write_eee_adv(struct phy_device *phydev,
 		 */
 		val = phy_modify_mmd_changed(phydev, MDIO_MMD_AN,
 					     MDIO_AN_EEE_ADV2,
-					     MDIO_EEE_2_5GT | MDIO_EEE_5GT,
+					     MDIO_EEE_2_5GT | MDIO_EEE_5GT |
+					     MDIO_EEE_2_5GKX,
 					     val);
 		if (val < 0)
 			return val;
@@ -1170,6 +1171,10 @@ int genphy_c45_pma_read_ext_abilities(struct phy_device *phydev)
 		linkmode_mod_bit(ETHTOOL_LINK_MODE_5000baseT_Full_BIT,
 				 phydev->supported,
 				 val & MDIO_PMA_NG_EXTABLE_5GBT);
+
+		linkmode_mod_bit(ETHTOOL_LINK_MODE_2500baseKX_Full_BIT,
+				 phydev->supported,
+				 val & MDIO_PMA_NG_EXTABLE_2_5GKX);
 	}
 
 	if (val & MDIO_PMA_EXTABLE_BT1) {

@@ -18,7 +18,7 @@
  */
 const char *phy_speed_to_str(int speed)
 {
-	BUILD_BUG_ON_MSG(__ETHTOOL_LINK_MODE_MASK_NBITS != 127,
+	BUILD_BUG_ON_MSG(__ETHTOOL_LINK_MODE_MASK_NBITS != 128,
 		"Enum ethtool_link_mode_bit_indices and phylib are out of sync. "
 		"If a speed or mode has been added please update phy_speed_to_str "
 		"and the PHY settings array.\n");
@@ -185,6 +185,7 @@ int phy_interface_num_ports(phy_interface_t interface)
 	case PHY_INTERFACE_MODE_SMII:
 	case PHY_INTERFACE_MODE_1000BASEX:
 	case PHY_INTERFACE_MODE_2500BASEX:
+	case PHY_INTERFACE_MODE_2500BASEKX:
 	case PHY_INTERFACE_MODE_5GBASER:
 	case PHY_INTERFACE_MODE_10GBASER:
 	case PHY_INTERFACE_MODE_25GBASER:
@@ -273,6 +274,8 @@ void of_set_phy_eee_broken(struct phy_device *phydev)
 		linkmode_set_bit(ETHTOOL_LINK_MODE_10000baseT_Full_BIT, modes);
 	if (of_property_read_bool(node, "eee-broken-1000kx"))
 		linkmode_set_bit(ETHTOOL_LINK_MODE_1000baseKX_Full_BIT, modes);
+	if (of_property_read_bool(node, "eee-broken-2500kx"))
+		linkmode_set_bit(ETHTOOL_LINK_MODE_2500baseKX_Full_BIT, modes);
 	if (of_property_read_bool(node, "eee-broken-10gkx4"))
 		linkmode_set_bit(ETHTOOL_LINK_MODE_10000baseKX4_Full_BIT, modes);
 	if (of_property_read_bool(node, "eee-broken-10gkr"))

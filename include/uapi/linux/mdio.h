@@ -457,6 +457,7 @@
 
 #define MDIO_EEE_2_5GT		0x0001	/* 2.5GT EEE cap */
 #define MDIO_EEE_5GT		0x0002	/* 5GT EEE cap */
+#define MDIO_EEE_2_5GKX		0x0004	/* 2.5GKX EEE cap */
 
 /* AN MultiGBASE-T AN control 2 */
 #define MDIO_AN_THP_BP2_5GT	0x0008	/* 2.5GT THP bypass request */
@@ -464,6 +465,7 @@
 /* 2.5G/5G Extended abilities register. */
 #define MDIO_PMA_NG_EXTABLE_2_5GBT	0x0001	/* 2.5GBASET ability */
 #define MDIO_PMA_NG_EXTABLE_5GBT	0x0002	/* 5GBASET ability */
+#define MDIO_PMA_NG_EXTABLE_2_5GKX	0x0004	/* 2.5GBASE-KX ability */
 
 /* LASI RX_ALARM control/status registers. */
 #define MDIO_PMA_LASI_RX_PHYXSLFLT	0x0001	/* PHY XS RX local fault */

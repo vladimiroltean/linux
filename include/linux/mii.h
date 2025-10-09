@@ -13,7 +13,7 @@
 #include <linux/linkmode.h>
 #include <uapi/linux/mii.h>
 
-/* 802.3-2018 clause 73.6 Link codeword encoding */
+/* 802.3-2022 clause 73.6 Link codeword encoding */
 #define C73_BASE_PAGE_SELECTOR(x)		((x) & GENMASK(4, 0))
 #define C73_BASE_PAGE_ECHOED_NONCE(x)		(((x) << 5) & GENMASK(9, 5))
 #define C73_BASE_PAGE_ECHOED_NONCE_X(x)		(((x) & GENMASK(9, 5)) >> 5)
@@ -38,6 +38,7 @@
 #define C73_BASE_PAGE_TECH_ABL_100GBASECR4	C73_BASE_PAGE_A(8)
 #define C73_BASE_PAGE_TECH_ABL_25GBASEKRS	C73_BASE_PAGE_A(9)
 #define C73_BASE_PAGE_TECH_ABL_25GBASEKR	C73_BASE_PAGE_A(10)
+#define C73_BASE_PAGE_TECH_ABL_2500BASEKX	C73_BASE_PAGE_A(11)
 #define C73_BASE_PAGE_25G_RS_FEC_REQ		BIT_ULL(44)
 #define C73_BASE_PAGE_25G_BASER_FEC_REQ		BIT_ULL(45)
 #define C73_BASE_PAGE_10G_BASER_FEC_ABL		BIT_ULL(46)
@@ -559,6 +560,9 @@ static inline u64 linkmode_adv_to_c73_base_page(const unsigned long *advertising
 	if (linkmode_test_bit(ETHTOOL_LINK_MODE_1000baseKX_Full_BIT,
 			      advertising))
 		result |= C73_BASE_PAGE_TECH_ABL_1000BASEKX;
+	if (linkmode_test_bit(ETHTOOL_LINK_MODE_2500baseKX_Full_BIT,
+			      advertising))
+		result |= C73_BASE_PAGE_TECH_ABL_2500BASEKX;
 	if (linkmode_test_bit(ETHTOOL_LINK_MODE_10000baseKX4_Full_BIT,
 			      advertising))
 		result |= C73_BASE_PAGE_TECH_ABL_10GBASEKX4;
@@ -594,6 +598,9 @@ static inline void mii_c73_mod_linkmode_lpa_t(unsigned long *advertising,
 {
 	linkmode_mod_bit(ETHTOOL_LINK_MODE_1000baseKX_Full_BIT, advertising,
 			 base_page & C73_BASE_PAGE_TECH_ABL_1000BASEKX);
+
+	linkmode_mod_bit(ETHTOOL_LINK_MODE_2500baseKX_Full_BIT, advertising,
+			 base_page & C73_BASE_PAGE_TECH_ABL_2500BASEKX);
 
 	linkmode_mod_bit(ETHTOOL_LINK_MODE_10000baseKX4_Full_BIT, advertising,
 			 base_page & C73_BASE_PAGE_TECH_ABL_10GBASEKX4);

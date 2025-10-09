@@ -241,6 +241,7 @@ const char link_mode_names[][ETH_GSTRING_LEN] = {
 	__DEFINE_LINK_MODE_NAME(1600000, DR8_2, Full),
 	__DEFINE_LINK_MODE_NAME(25000, CR_S, Full),
 	__DEFINE_LINK_MODE_NAME(25000, KR_S, Full),
+	__DEFINE_LINK_MODE_NAME(2500, KX, Full),
 };
 static_assert(ARRAY_SIZE(link_mode_names) == __ETHTOOL_LINK_MODE_MASK_NBITS);
 
@@ -472,6 +473,7 @@ const struct link_mode_info link_mode_params[] = {
 	__DEFINE_LINK_MODE_PARAMS(1600000, DR8_2, Full, D),
 	__DEFINE_LINK_MODE_PARAMS(25000, CR_S, Full, C),
 	__DEFINE_LINK_MODE_PARAMS(25000, KR_S, Full, K),
+	__DEFINE_LINK_MODE_PARAMS(2500, KX, Full, K),
 };
 static_assert(ARRAY_SIZE(link_mode_params) == __ETHTOOL_LINK_MODE_MASK_NBITS);
 EXPORT_SYMBOL_GPL(link_mode_params);
