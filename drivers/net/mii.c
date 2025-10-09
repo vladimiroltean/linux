@@ -664,6 +664,7 @@ static const enum ethtool_link_mode_bit_indices c73_linkmodes[] = {
 	ETHTOOL_LINK_MODE_25000baseCR_S_Full_BIT,
 	ETHTOOL_LINK_MODE_10000baseKR_Full_BIT,
 	ETHTOOL_LINK_MODE_10000baseKX4_Full_BIT,
+	ETHTOOL_LINK_MODE_2500baseKX_Full_BIT,
 	ETHTOOL_LINK_MODE_1000baseKX_Full_BIT,
 };
 

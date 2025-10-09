@@ -344,6 +344,7 @@ unsigned long phy_caps_from_interface(phy_interface_t interface)
 		break;
 
 	case PHY_INTERFACE_MODE_2500BASEX:
+	case PHY_INTERFACE_MODE_2500BASEKX:
 		link_caps |= BIT(LINK_CAPA_2500FD);
 		break;
 

@@ -323,6 +323,12 @@ Some of the interface modes are described below:
     contrast with the 1000BASE-X phy mode used for Clause 38 and 39 PMDs, this
     interface mode has different autonegotiation and only supports full duplex.
 
+``PHY_INTERFACE_MODE_2500BASEKX``
+    This is 2.5GBASE-X as defined by IEEE 802.3 Clause 127 with Clause 128 PMD.
+    Similar to 1000BASEKX, this mode is resolved through Clause 73
+    auto-negotiation, and is not supposed to be used with Clause 37 in-band
+    auto-negotiation (all link parameters are established through Clause 73).
+
 ``PHY_INTERFACE_MODE_PSGMII``
     This is the Penta SGMII mode, it is similar to QSGMII but it combines 5
     SGMII lines into a single link compared to 4 on QSGMII.
