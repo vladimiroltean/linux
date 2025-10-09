@@ -347,13 +347,15 @@ static const enum ethtool_link_mode_bit_indices mtip_backplane_link_modes[] = {
 	ETHTOOL_LINK_MODE_25000baseKR_Full_BIT,
 	ETHTOOL_LINK_MODE_25000baseKR_S_Full_BIT,
 	ETHTOOL_LINK_MODE_10000baseKR_Full_BIT,
+	ETHTOOL_LINK_MODE_2500baseKX_Full_BIT,
 	ETHTOOL_LINK_MODE_1000baseKX_Full_BIT,
 };
 
 static bool
 link_mode_needs_training(enum ethtool_link_mode_bit_indices link_mode)
 {
-	if (link_mode == ETHTOOL_LINK_MODE_1000baseKX_Full_BIT)
+	if (link_mode == ETHTOOL_LINK_MODE_1000baseKX_Full_BIT ||
+	    link_mode == ETHTOOL_LINK_MODE_2500baseKX_Full_BIT)
 		return false;
 
 	return true;
@@ -1990,7 +1992,8 @@ static int mtip_c73_page_received(struct mtip_backplane *priv,
 			return err;
 	}
 
-	if (resolved == ETHTOOL_LINK_MODE_1000baseKX_Full_BIT) {
+	if (resolved == ETHTOOL_LINK_MODE_1000baseKX_Full_BIT ||
+	    resolved == ETHTOOL_LINK_MODE_2500baseKX_Full_BIT) {
 		err = mtip_fixup_c45_sgmii_if_mode(priv);
 		if (err)
 			return err;
