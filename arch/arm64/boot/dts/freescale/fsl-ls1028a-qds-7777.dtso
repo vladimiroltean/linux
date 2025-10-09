@@ -41,18 +41,16 @@
 &mscc_felix_ports {
 	port@0 {
 		status = "okay";
-		phy-handle = <&slot1_sxgmii0>;
-		phy-mode = "2500base-x";
 		phys = <&serdes_lane_a>;
 		phy-names = "serdes";
+		managed = "c73";
 	};
 
 	port@1 {
 		status = "okay";
-		phy-handle = <&slot1_sxgmii1>;
-		phy-mode = "2500base-x";
 		phys = <&serdes_lane_b>;
 		phy-names = "serdes";
+		managed = "c73";
 	};
 
 	port@2 {
