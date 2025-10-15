@@ -49,6 +49,7 @@ static inline struct net_device *dsa_conduit_find_user(struct net_device *dev,
  * @skb: Pointer to received socket buffer (packet)
  * @br: Pointer to bridge upper interface of ingress port
  * @vid: Parsed VID from packet
+ * @proto: Configured bridge VLAN EtherType
  *
  * The bridge can process tagged packets. Software like STP/PTP may not. The
  * bridge can also process untagged packets, to the same effect as if they were
@@ -57,14 +58,10 @@ static inline struct net_device *dsa_conduit_find_user(struct net_device *dev,
  */
 static inline void dsa_software_untag_vlan_aware_bridge(struct sk_buff *skb,
 							struct net_device *br,
-							u16 vid)
+							u16 vid, u16 proto)
 {
-	u16 pvid, proto;
+	u16 pvid;
 	int err;
-
-	err = br_vlan_get_proto(br, &proto);
-	if (err)
-		return;
 
 	err = br_vlan_get_pvid_rcu(skb->dev, &pvid);
 	if (err)
@@ -79,6 +76,7 @@ static inline void dsa_software_untag_vlan_aware_bridge(struct sk_buff *skb,
  * @skb: Pointer to received socket buffer (packet)
  * @br: Pointer to bridge upper interface of ingress port
  * @vid: Parsed VID from packet
+ * @proto: Configured bridge VLAN EtherType
  *
  * The bridge ignores all VLAN tags. Software like STP/PTP may not (it may run
  * on the plain port, or on a VLAN upper interface). Maybe packets are coming
@@ -103,15 +101,11 @@ static inline void dsa_software_untag_vlan_aware_bridge(struct sk_buff *skb,
  */
 static inline void dsa_software_untag_vlan_unaware_bridge(struct sk_buff *skb,
 							  struct net_device *br,
-							  u16 vid)
+							  u16 vid, u16 proto)
 {
 	struct net_device *upper_dev;
-	u16 pvid, proto;
+	u16 pvid;
 	int err;
-
-	err = br_vlan_get_proto(br, &proto);
-	if (err)
-		return;
 
 	err = br_vlan_get_pvid_rcu(skb->dev, &pvid);
 	if (err)
@@ -175,10 +169,10 @@ static inline struct sk_buff *dsa_software_vlan_untag(struct sk_buff *skb)
 
 	if (br_vlan_enabled(br)) {
 		if (dp->ds->untag_vlan_aware_bridge_pvid)
-			dsa_software_untag_vlan_aware_bridge(skb, br, vid);
+			dsa_software_untag_vlan_aware_bridge(skb, br, vid, proto);
 	} else {
 		if (dp->ds->untag_bridge_pvid)
-			dsa_software_untag_vlan_unaware_bridge(skb, br, vid);
+			dsa_software_untag_vlan_unaware_bridge(skb, br, vid, proto);
 	}
 
 	return skb;
