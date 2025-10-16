@@ -367,8 +367,6 @@ int dpaa2_mac_connect(struct dpaa2_mac *mac)
 	struct phylink *phylink;
 	int err;
 
-	mac->if_link_type = mac->attr.link_type;
-
 	dpmac_node = mac->fw_node;
 	if (!dpmac_node) {
 		netdev_err(net_dev, "No dpmac@%d node found.\n", mac->attr.id);
