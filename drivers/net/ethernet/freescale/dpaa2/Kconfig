@@ -1,10 +1,17 @@
 # SPDX-License-Identifier: GPL-2.0-only
-config FSL_DPAA2_ETH
-	tristate "Freescale DPAA2 Ethernet"
-	depends on FSL_MC_BUS && FSL_MC_DPIO
+config FSL_DPAA2_MAC
+	tristate
 	select PHYLINK
 	select PCS_LYNX
 	select FSL_XGMAC_MDIO
+	help
+	  Support module for managing DPAA2 DPMAC objects on the MC bus.
+	  These are not standalone, but attached to DPNI or DPSW objects.
+
+config FSL_DPAA2_ETH
+	tristate "Freescale DPAA2 Ethernet"
+	depends on FSL_MC_BUS && FSL_MC_DPIO
+	select FSL_DPAA2_MAC
 	select NET_DEVLINK
 	help
 	  This is the DPAA2 Ethernet driver supporting Freescale SoCs
@@ -34,6 +41,7 @@ config FSL_DPAA2_SWITCH
 	tristate "Freescale DPAA2 Ethernet Switch"
 	depends on BRIDGE || BRIDGE=n
 	depends on NET_SWITCHDEV
+	select FSL_DPAA2_MAC
 	help
 	  Driver for Freescale DPAA2 Ethernet Switch. This driver manages
 	  switch objects discovered on the Freeescale MC bus.
