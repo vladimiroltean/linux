@@ -361,6 +361,31 @@ void dpaa2_mac_stop(struct dpaa2_mac *mac)
 }
 EXPORT_SYMBOL(dpaa2_mac_stop);
 
+int dpaa2_mac_add_fixed_state_cb(struct dpaa2_mac *mac, void *priv,
+				 dpaa2_mac_fixed_state_cb_t cb)
+{
+	/* Overly defensive, but let things be clear that this is for
+	 * DPMAC_LINK_TYPE_FIXED, i.e. link notifications sent by the MC
+	 * firmware to the connected endpoint - DPNI or DPSW
+	 */
+	if (dpaa2_mac_is_type_phy(mac))
+		return -EINVAL;
+
+	mac->fixed_state_cb_priv = priv;
+	mac->fixed_state_cb = cb;
+
+	return 0;
+}
+
+/* Shim layer for struct phylink_config type conversion */
+static void dpaa2_mac_get_fixed_state(struct phylink_config *config,
+				      struct phylink_link_state *state)
+{
+	struct dpaa2_mac *mac = phylink_to_dpaa2_mac(config);
+
+	mac->fixed_state_cb(mac->fixed_state_cb_priv, state);
+}
+
 int dpaa2_mac_connect(struct dpaa2_mac *mac)
 {
 	struct net_device *net_dev = mac->net_dev;
@@ -424,6 +449,10 @@ int dpaa2_mac_connect(struct dpaa2_mac *mac)
 
 	dpaa2_mac_set_supported_interfaces(mac);
 
+	/* Test whether dpaa2_mac_add_fixed_state_cb() was previously called */
+	if (mac->fixed_state_cb_priv && mac->fixed_state_cb)
+		mac->phylink_config.get_fixed_state = dpaa2_mac_get_fixed_state;
+
 	phylink = phylink_create(&mac->phylink_config,
 				 dpmac_node, mac->if_mode,
 				 &dpaa2_mac_phylink_ops);
@@ -433,12 +462,27 @@ int dpaa2_mac_connect(struct dpaa2_mac *mac)
 	}
 	mac->phylink = phylink;
 
-	rtnl_lock();
-	err = phylink_fwnode_phy_connect(mac->phylink, dpmac_node, 0);
-	rtnl_unlock();
-	if (err) {
-		netdev_err(net_dev, "phylink_fwnode_phy_connect() = %d\n", err);
-		goto err_phylink_destroy;
+	if (dpaa2_mac_is_type_phy(mac)) {
+		rtnl_lock();
+		err = phylink_fwnode_phy_connect(mac->phylink, dpmac_node, 0);
+		rtnl_unlock();
+		if (err) {
+			netdev_err(net_dev, "phylink_fwnode_phy_connect() = %d\n", err);
+			goto err_phylink_destroy;
+		}
+	} else {
+		struct phylink_link_state state = {
+			.speed = SPEED_10,
+			.duplex = DUPLEX_FULL,
+		};
+
+		err = phylink_set_fixed_link(mac->phylink, &state);
+		if (err) {
+			/* This may fail - it means the OF node already describes the fixed link */
+			netdev_info(net_dev, "phylink_set_fixed_link() failed: %pe\n",
+				   ERR_PTR(err));
+//			goto err_phylink_destroy;
+		}
 	}
 
 	return 0;

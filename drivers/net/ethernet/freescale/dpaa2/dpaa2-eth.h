@@ -356,9 +356,6 @@ static inline struct dpaa2_faead *dpaa2_get_faead(void *buf_addr, bool swa)
 					 DPAA2_FAS_L3CE		| \
 					 DPAA2_FAS_L4CE)
 
-/* Time in milliseconds between link state updates */
-#define DPAA2_ETH_LINK_STATE_REFRESH	1000
-
 /* Number of times to retry a frame enqueue before giving up.
  * Value determined empirically, in order to minimize the number
  * of frames dropped on Tx
@@ -597,7 +594,6 @@ struct dpaa2_eth_priv {
 
 	struct dpni_link_state link_state;
 	bool do_link_poll;
-	struct task_struct *poll_thread;
 
 	/* enabled ethtool hashing bits */
 	u64 rx_hash_fields;
@@ -736,6 +732,14 @@ static inline bool dpaa2_eth_tx_pause_enabled(u64 link_options)
 static inline bool dpaa2_eth_rx_pause_enabled(u64 link_options)
 {
 	return !!(link_options & DPNI_LINK_OPT_PAUSE);
+}
+
+static inline int dpaa2_eth_duplex(u64 link_options)
+{
+	if (link_options & DPNI_LINK_OPT_HALF_DUPLEX)
+		return DUPLEX_HALF;
+
+	return DUPLEX_FULL;
 }
 
 static inline unsigned int dpaa2_eth_needed_headroom(struct sk_buff *skb)

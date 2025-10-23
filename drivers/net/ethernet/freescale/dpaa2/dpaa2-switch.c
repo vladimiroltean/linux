@@ -600,13 +600,12 @@ static int dpaa2_switch_port_link_state_update(struct net_device *netdev)
 	struct dpsw_link_state state;
 	int err;
 
-	/* When we manage the MAC/PHY using phylink there is no need
-	 * to manually update the netif_carrier.
-	 * We can avoid locking because we are called from the "link changed"
-	 * IRQ handler, which is the same as the "endpoint changed" IRQ handler
-	 * (the writer to port_priv->mac), so we cannot race with it.
+	/* We can dereference port_priv->mac without holding mriv->mac_lock
+	 * because we are called from the "link changed" IRQ handler, which
+	 * is the same as the "endpoint changed" IRQ handler (the writer to
+	 * port_priv->mac), so we cannot race with it.
 	 */
-	if (dpaa2_mac_is_type_phy(port_priv->mac))
+	if (!dpaa2_mac_is_type_phy(port_priv->mac))
 		return 0;
 
 	/* Interrupts are received even though no one issued an 'ifconfig up'
@@ -1470,14 +1469,12 @@ static int dpaa2_switch_port_connect_mac(struct ethsw_port_priv *port_priv)
 	if (err)
 		goto err_free_mac;
 
-	if (dpaa2_mac_is_type_phy(mac)) {
-		err = dpaa2_mac_connect(mac);
-		if (err) {
-			netdev_err(port_priv->netdev,
-				   "Error connecting to the MAC endpoint %pe\n",
-				   ERR_PTR(err));
-			goto err_close_mac;
-		}
+	err = dpaa2_mac_connect(mac);
+	if (err) {
+		netdev_err(port_priv->netdev,
+			   "Error connecting to the MAC endpoint %pe\n",
+			   ERR_PTR(err));
+		goto err_close_mac;
 	}
 
 	mutex_lock(&port_priv->mac_lock);
@@ -1507,9 +1504,7 @@ static void dpaa2_switch_port_disconnect_mac(struct ethsw_port_priv *port_priv)
 	if (!mac)
 		return;
 
-	if (dpaa2_mac_is_type_phy(mac))
-		dpaa2_mac_disconnect(mac);
-
+	dpaa2_mac_disconnect(mac);
 	dpaa2_mac_close(mac);
 	kfree(mac);
 }

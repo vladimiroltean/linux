@@ -11,6 +11,9 @@
 #include "dpmac.h"
 #include "dpmac-cmd.h"
 
+typedef int dpaa2_mac_fixed_state_cb_t(void *priv,
+				       struct phylink_link_state *state);
+
 struct dpaa2_mac {
 	struct fsl_mc_device *mc_dev;
 	struct dpmac_link_state state;
@@ -19,6 +22,9 @@ struct dpaa2_mac {
 	struct dpmac_attr attr;
 	u16 ver_major, ver_minor;
 	unsigned long features;
+
+	void *fixed_state_cb_priv;
+	dpaa2_mac_fixed_state_cb_t *fixed_state_cb;
 
 	struct phylink_config phylink_config;
 	struct phylink *phylink;
@@ -37,6 +43,9 @@ static inline bool dpaa2_mac_is_type_phy(struct dpaa2_mac *mac)
 	return mac->attr.link_type == DPMAC_LINK_TYPE_PHY ||
 	       mac->attr.link_type == DPMAC_LINK_TYPE_BACKPLANE;
 }
+
+int dpaa2_mac_add_fixed_state_cb(struct dpaa2_mac *mac, void *priv,
+				 dpaa2_mac_fixed_state_cb_t cb);
 
 int dpaa2_mac_open(struct dpaa2_mac *mac);
 

@@ -2131,7 +2131,7 @@ set_cgtd:
 
 static int dpaa2_eth_link_state_update(struct dpaa2_eth_priv *priv)
 {
-	struct dpni_link_state state = {0};
+	struct dpni_link_state state = {};
 	bool tx_pause;
 	int err;
 
@@ -2149,32 +2149,44 @@ static int dpaa2_eth_link_state_update(struct dpaa2_eth_priv *priv)
 	tx_pause = dpaa2_eth_tx_pause_enabled(state.options);
 	dpaa2_eth_set_rx_taildrop(priv, tx_pause, priv->pfc_enabled);
 
-	/* When we manage the MAC/PHY using phylink there is no need
-	 * to manually update the netif_carrier.
-	 * We can avoid locking because we are called from the "link changed"
-	 * IRQ handler, which is the same as the "endpoint changed" IRQ handler
-	 * (the writer to priv->mac), so we cannot race with it.
+	/* We can dereference priv->mac without holding mriv->mac_lock because
+	 * we are called from the "link changed" IRQ handler, which is the same
+	 * as the "endpoint changed" IRQ handler (the writer to priv->mac), so
+	 * we cannot race with it.
 	 */
-	if (dpaa2_mac_is_type_phy(priv->mac))
-		goto out;
+	if (!dpaa2_mac_is_type_phy(priv->mac) &&
+	    priv->link_state.up != state.up)
+		phylink_mac_change(priv->mac->phylink, state.up);
 
-	/* Chech link state; speed / duplex changes are not treated yet */
-	if (priv->link_state.up == state.up)
-		goto out;
+	priv->link_state = state;
 
-	if (state.up) {
-		netif_carrier_on(priv->net_dev);
-		netif_tx_start_all_queues(priv->net_dev);
+	return 0;
+}
+
+static int dpaa2_eth_get_fixed_state(void *cb_priv,
+				     struct phylink_link_state *state)
+{
+	struct dpni_link_state dpni_state = {};
+	struct dpaa2_eth_priv *priv = cb_priv;
+	int err;
+
+	if (priv->do_link_poll) {
+		dpni_state = priv->link_state;
 	} else {
-		netif_tx_stop_all_queues(priv->net_dev);
-		netif_carrier_off(priv->net_dev);
+		err = dpni_get_link_state(priv->mc_io, 0, priv->mc_token,
+					  &dpni_state);
+		if (unlikely(err)) {
+			netdev_err(priv->net_dev,
+				   "dpni_get_link_state() returned %pe\n",
+				   ERR_PTR(err));
+			return err;
+		}
 	}
 
-	netdev_info(priv->net_dev, "Link Event: state %s\n",
-		    state.up ? "up" : "down");
-
-out:
-	priv->link_state = state;
+	state->link = dpni_state.up;
+	state->speed = dpni_state.rate;
+	state->duplex = dpaa2_eth_duplex(dpni_state.options);
+	netdev_info(priv->net_dev, "%s: link %d speed %d duplex %d\n", __func__, state->link, state->speed, state->duplex);
 
 	return 0;
 }
@@ -2188,20 +2200,6 @@ static int dpaa2_eth_open(struct net_device *net_dev)
 
 	mutex_lock(&priv->mac_lock);
 
-	if (!dpaa2_eth_is_type_phy(priv)) {
-		/* We'll only start the txqs when the link is actually ready;
-		 * make sure we don't race against the link up notification,
-		 * which may come immediately after dpni_enable();
-		 */
-		netif_tx_stop_all_queues(net_dev);
-
-		/* Also, explicitly set carrier off, otherwise
-		 * netif_carrier_ok() will return true and cause 'ip link show'
-		 * to report the LOWER_UP flag, even though the link
-		 * notification wasn't even received.
-		 */
-		netif_carrier_off(net_dev);
-	}
 	dpaa2_eth_enable_ch_napi(priv);
 
 	err = dpni_enable(priv->mc_io, 0, priv->mc_token);
@@ -2211,7 +2209,7 @@ static int dpaa2_eth_open(struct net_device *net_dev)
 		goto enable_err;
 	}
 
-	if (dpaa2_eth_is_type_phy(priv))
+	if (priv->mac)
 		dpaa2_mac_start(priv->mac);
 
 	mutex_unlock(&priv->mac_lock);
@@ -2288,14 +2286,8 @@ static int dpaa2_eth_stop(struct net_device *net_dev)
 	int retries = 10;
 
 	mutex_lock(&priv->mac_lock);
-
-	if (dpaa2_eth_is_type_phy(priv)) {
+	if (priv->mac)
 		dpaa2_mac_stop(priv->mac);
-	} else {
-		netif_tx_stop_all_queues(net_dev);
-		netif_carrier_off(net_dev);
-	}
-
 	mutex_unlock(&priv->mac_lock);
 
 	/* On dpni_disable(), the MC firmware will:
@@ -2635,19 +2627,14 @@ static int dpaa2_eth_hwtstamp_get(struct net_device *dev,
 static int dpaa2_eth_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
 {
 	struct dpaa2_eth_priv *priv = netdev_priv(dev);
-	int err;
+	int err = -EOPNOTSUPP;
 
 	mutex_lock(&priv->mac_lock);
-
-	if (dpaa2_eth_is_type_phy(priv)) {
+	if (priv->mac)
 		err = phylink_mii_ioctl(priv->mac->phylink, rq, cmd);
-		mutex_unlock(&priv->mac_lock);
-		return err;
-	}
-
 	mutex_unlock(&priv->mac_lock);
 
-	return -EOPNOTSUPP;
+	return err;
 }
 
 static bool xdp_mtu_valid(struct dpaa2_eth_priv *priv, int mtu)
@@ -3639,8 +3626,6 @@ static int dpaa2_eth_set_pause(struct dpaa2_eth_priv *priv)
 		dev_err(dev, "dpni_set_link_cfg() failed\n");
 		return err;
 	}
-
-	priv->link_state.options = link_cfg.options;
 
 	return 0;
 }
@@ -4635,22 +4620,6 @@ static int dpaa2_eth_netdev_init(struct net_device *net_dev)
 	return 0;
 }
 
-static int dpaa2_eth_poll_link_state(void *arg)
-{
-	struct dpaa2_eth_priv *priv = (struct dpaa2_eth_priv *)arg;
-	int err;
-
-	while (!kthread_should_stop()) {
-		err = dpaa2_eth_link_state_update(priv);
-		if (unlikely(err))
-			return err;
-
-		msleep(DPAA2_ETH_LINK_STATE_REFRESH);
-	}
-
-	return 0;
-}
-
 static int dpaa2_eth_connect_mac(struct dpaa2_eth_priv *priv)
 {
 	struct fsl_mc_device *dpni_dev, *dpmac_dev;
@@ -4687,18 +4656,22 @@ static int dpaa2_eth_connect_mac(struct dpaa2_eth_priv *priv)
 	if (err)
 		goto err_free_mac;
 
-	if (dpaa2_mac_is_type_phy(mac)) {
-		err = dpaa2_mac_connect(mac);
-		if (err) {
-			if (err == -EPROBE_DEFER)
-				netdev_dbg(priv->net_dev,
-					   "could not connect to MAC\n");
-			else
-				netdev_err(priv->net_dev,
-					   "Error connecting to the MAC endpoint: %pe",
-					   ERR_PTR(err));
+	if (!dpaa2_mac_is_type_phy(mac)) {
+		err = dpaa2_mac_add_fixed_state_cb(mac, priv,
+						   dpaa2_eth_get_fixed_state);
+		if (err)
 			goto err_close_mac;
-		}
+	}
+
+	err = dpaa2_mac_connect(mac);
+	if (err) {
+		if (err == -EPROBE_DEFER)
+			netdev_dbg(priv->net_dev, "could not connect to MAC\n");
+		else
+			netdev_err(priv->net_dev,
+				   "Error connecting to the MAC endpoint: %pe",
+				   ERR_PTR(err));
+		goto err_close_mac;
 	}
 
 	mutex_lock(&priv->mac_lock);
@@ -4728,9 +4701,7 @@ static void dpaa2_eth_disconnect_mac(struct dpaa2_eth_priv *priv)
 	if (!mac)
 		return;
 
-	if (dpaa2_mac_is_type_phy(mac))
-		dpaa2_mac_disconnect(mac);
-
+	dpaa2_mac_disconnect(mac);
 	dpaa2_mac_close(mac);
 	kfree(mac);
 }
@@ -4992,12 +4963,6 @@ static int dpaa2_eth_probe(struct fsl_mc_device *dpni_dev)
 	err = dpaa2_eth_setup_irqs(dpni_dev);
 	if (err) {
 		netdev_warn(net_dev, "Failed to set link interrupt, fall back to polling\n");
-		priv->poll_thread = kthread_run(dpaa2_eth_poll_link_state, priv,
-						"%s_poll_link", net_dev->name);
-		if (IS_ERR(priv->poll_thread)) {
-			dev_err(dev, "Error starting polling thread\n");
-			goto err_poll_thread;
-		}
 		priv->do_link_poll = true;
 	}
 
@@ -5036,11 +5001,8 @@ err_dl_port_add:
 err_dl_trap_register:
 	dpaa2_eth_dl_free(priv);
 err_dl_register:
-	if (priv->do_link_poll)
-		kthread_stop(priv->poll_thread);
-	else
+	if (!priv->do_link_poll)
 		fsl_mc_free_irqs(dpni_dev);
-err_poll_thread:
 	dpaa2_eth_disconnect_mac(priv);
 err_connect_mac:
 	dpaa2_eth_free_rings(priv);
@@ -5096,9 +5058,7 @@ static void dpaa2_eth_remove(struct fsl_mc_device *ls_dev)
 	dpaa2_eth_dl_traps_unregister(priv);
 	dpaa2_eth_dl_free(priv);
 
-	if (priv->do_link_poll)
-		kthread_stop(priv->poll_thread);
-	else
+	if (!priv->do_link_poll)
 		fsl_mc_free_irqs(ls_dev);
 
 	dpaa2_eth_disconnect_mac(priv);
