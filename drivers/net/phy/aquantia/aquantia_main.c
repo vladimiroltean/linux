@@ -839,6 +839,7 @@ static int aqr_gen2_read_global_syscfg(struct phy_device *phydev)
 
 	for (i = 0; i < AQR_NUM_GLOBAL_CFG; i++) {
 		struct aqr_global_syscfg *syscfg = &priv->global_cfg[i];
+		bool inband;
 
 		syscfg->speed = aqr_global_cfg_regs[i].speed;
 
@@ -849,6 +850,7 @@ static int aqr_gen2_read_global_syscfg(struct phy_device *phydev)
 
 		serdes_mode = FIELD_GET(VEND1_GLOBAL_CFG_SERDES_MODE, val);
 		rate_adapt = FIELD_GET(VEND1_GLOBAL_CFG_RATE_ADAPT, val);
+		inband = FIELD_GET(VEND1_GLOBAL_CFG_AUTONEG_ENA, val);
 
 		switch (serdes_mode) {
 		case VEND1_GLOBAL_CFG_SERDES_MODE_XFI:
@@ -896,12 +898,13 @@ static int aqr_gen2_read_global_syscfg(struct phy_device *phydev)
 		}
 
 		phydev_dbg(phydev,
-			   "Media speed %d uses host interface %s with %s\n",
+			   "Media speed %d uses host interface %s with %s, inband %s\n",
 			   syscfg->speed, phy_modes(syscfg->interface),
 			   syscfg->rate_adapt == AQR_RATE_ADAPT_NONE ? "no rate adaptation" :
 			   syscfg->rate_adapt == AQR_RATE_ADAPT_PAUSE ? "rate adaptation through flow control" :
 			   syscfg->rate_adapt == AQR_RATE_ADAPT_USX ? "rate adaptation through symbol replication" :
-			   "unrecognized rate adaptation type");
+			   "unrecognized rate adaptation type",
+			   str_enabled_disabled(inband));
 	}
 
 	return 0;
