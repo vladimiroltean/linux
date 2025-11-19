@@ -210,6 +210,7 @@ static unsigned int phylink_interface_signal_rate(phy_interface_t interface)
 {
 	switch (interface) {
 	case PHY_INTERFACE_MODE_SGMII:
+	case PHY_INTERFACE_MODE_REVSGMII:
 	case PHY_INTERFACE_MODE_1000BASEX: /* 1.25Mbd */
 		return 1250;
 	case PHY_INTERFACE_MODE_2500BASEX: /* 3.125Mbd */
@@ -259,6 +260,7 @@ static int phylink_interface_max_speed(phy_interface_t interface)
 	case PHY_INTERFACE_MODE_QSGMII:
 	case PHY_INTERFACE_MODE_QUSGMII:
 	case PHY_INTERFACE_MODE_SGMII:
+	case PHY_INTERFACE_MODE_REVSGMII:
 	case PHY_INTERFACE_MODE_GMII:
 		return SPEED_1000;
 
@@ -803,6 +805,7 @@ static int phylink_parse_mode(struct phylink *pl,
 
 		switch (pl->link_config.interface) {
 		case PHY_INTERFACE_MODE_SGMII:
+		case PHY_INTERFACE_MODE_REVSGMII:
 		case PHY_INTERFACE_MODE_PSGMII:
 		case PHY_INTERFACE_MODE_QSGMII:
 		case PHY_INTERFACE_MODE_QUSGMII:
@@ -1037,6 +1040,7 @@ static enum inband_type phylink_get_inband_type(phy_interface_t interface)
 {
 	switch (interface) {
 	case PHY_INTERFACE_MODE_SGMII:
+	case PHY_INTERFACE_MODE_REVSGMII:
 	case PHY_INTERFACE_MODE_QSGMII:
 	case PHY_INTERFACE_MODE_QUSGMII:
 	case PHY_INTERFACE_MODE_USXGMII:
@@ -1456,7 +1460,8 @@ static void phylink_mac_initial_config(struct phylink *pl, bool force_restart)
 
 	case MLO_AN_INBAND:
 		link_state = pl->link_config;
-		if (link_state.interface == PHY_INTERFACE_MODE_SGMII)
+		if (link_state.interface == PHY_INTERFACE_MODE_SGMII ||
+		    link_state.interface == PHY_INTERFACE_MODE_REVSGMII)
 			link_state.pause = MLO_PAUSE_NONE;
 		break;
 
@@ -4020,6 +4025,51 @@ static void phylink_decode_c37_word(struct phylink_link_state *state,
 	phylink_resolve_an_pause(state);
 }
 
+static void phylink_decode_revsgmii_word(struct phylink_link_state *state,
+					 uint16_t config_reg)
+{
+	if (!(config_reg & ADVERTISE_SGMII) || !(config_reg & BIT(14))) {
+		state->link = false;
+		return;
+	}
+
+	state->link = true;
+
+#if 0
+	if (linkmode_test_bit(ETHTOOL_LINK_MODE_1000baseT_Full_BIT,
+			      state->advertising)) {
+		state->speed = SPEED_1000;
+		state->duplex = DUPLEX_FULL;
+	} else
+	if (linkmode_test_bit(ETHTOOL_LINK_MODE_100baseT_Full_BIT,
+				     state->advertising)) {
+		state->speed = SPEED_100;
+		state->duplex = DUPLEX_FULL;
+	} else if (linkmode_test_bit(ETHTOOL_LINK_MODE_10baseT_Full_BIT,
+				     state->advertising)) {
+		state->speed = SPEED_10;
+		state->duplex = DUPLEX_FULL;
+	} else if (linkmode_test_bit(ETHTOOL_LINK_MODE_1000baseT_Half_BIT,
+				     state->advertising)) {
+		state->speed = SPEED_1000;
+		state->duplex = DUPLEX_HALF;
+	} else if (linkmode_test_bit(ETHTOOL_LINK_MODE_100baseT_Half_BIT,
+				     state->advertising)) {
+		state->speed = SPEED_100;
+		state->duplex = DUPLEX_HALF;
+	} else if (linkmode_test_bit(ETHTOOL_LINK_MODE_10baseT_Half_BIT,
+				     state->advertising)) {
+		state->speed = SPEED_10;
+		state->duplex = DUPLEX_HALF;
+	} else {
+		state->link = false;
+	}
+#else
+	state->speed = SPEED_1000;
+	state->duplex = DUPLEX_FULL;
+#endif
+}
+
 static void phylink_decode_sgmii_word(struct phylink_link_state *state,
 				      uint16_t config_reg)
 {
@@ -4178,6 +4228,11 @@ void phylink_mii_c22_pcs_decode_state(struct phylink_link_state *state,
 			phylink_decode_sgmii_word(state, lpa);
 		break;
 
+	case PHY_INTERFACE_MODE_REVSGMII:
+		if (neg_mode == PHYLINK_PCS_NEG_INBAND_ENABLED)
+			phylink_decode_revsgmii_word(state, lpa);
+		break;
+
 	case PHY_INTERFACE_MODE_QUSGMII:
 		if (neg_mode == PHYLINK_PCS_NEG_INBAND_ENABLED)
 			phylink_decode_usgmii_word(state, lpa);
@@ -4255,6 +4310,33 @@ int phylink_mii_c22_pcs_encode_advertisement(phy_interface_t interface,
 	case PHY_INTERFACE_MODE_SGMII:
 	case PHY_INTERFACE_MODE_QSGMII:
 		return 0x0001;
+	case PHY_INTERFACE_MODE_REVSGMII:
+		adv = LPA_SGMII_LINK | ADVERTISE_SGMII;
+#if 0
+		if (linkmode_test_bit(ETHTOOL_LINK_MODE_1000baseT_Full_BIT,
+				      advertising))
+			adv |= LPA_SGMII_1000FULL;
+		else
+		if (linkmode_test_bit(ETHTOOL_LINK_MODE_100baseT_Full_BIT,
+					   advertising))
+			adv |= LPA_SGMII_100FULL;
+		else if (linkmode_test_bit(ETHTOOL_LINK_MODE_10baseT_Full_BIT,
+					   advertising))
+			adv |= LPA_SGMII_10FULL;
+		else if (linkmode_test_bit(ETHTOOL_LINK_MODE_1000baseT_Half_BIT,
+					   advertising))
+			adv |= LPA_SGMII_1000HALF;
+		else if (linkmode_test_bit(ETHTOOL_LINK_MODE_100baseT_Half_BIT,
+					   advertising))
+			adv |= LPA_SGMII_100HALF;
+		else if (linkmode_test_bit(ETHTOOL_LINK_MODE_10baseT_Half_BIT,
+					   advertising))
+			adv |= LPA_SGMII_10HALF;
+#else
+		adv |= LPA_SGMII_1000FULL;
+#endif
+
+		return adv;
 	default:
 		/* Nothing to do for other modes */
 		return -EINVAL;
