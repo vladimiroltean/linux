@@ -610,7 +610,8 @@ static int xpcs_switch_interface_mode(struct dw_xpcs *xpcs,
 	if (xpcs->info.pma == WX_TXGBE_XPCS_PMA_10G_ID) {
 		ret = txgbe_xpcs_switch_mode(xpcs, interface);
 	} else if (xpcs->interface != interface) {
-		if (interface == PHY_INTERFACE_MODE_SGMII)
+		if (interface == PHY_INTERFACE_MODE_SGMII ||
+		    interface == PHY_INTERFACE_MODE_REVSGMII)
 			xpcs->need_reset = true;
 		xpcs->interface = interface;
 	}
@@ -648,9 +649,12 @@ static void xpcs_pre_config(struct phylink_pcs *pcs, phy_interface_t interface)
 }
 
 static int xpcs_config_aneg_c37_sgmii(struct dw_xpcs *xpcs,
-				      unsigned int neg_mode)
+				      phy_interface_t interface,
+				      unsigned int neg_mode,
+				      const unsigned long *advertising)
 {
-	int ret, mdio_ctrl, tx_conf;
+	int ret, mdio_ctrl, tx_conf, pcs_mode;
+	int changed = 0;
 	u16 mask, val;
 
 	/* For AN for C37 SGMII mode, the settings are :-
@@ -683,12 +687,21 @@ static int xpcs_config_aneg_c37_sgmii(struct dw_xpcs *xpcs,
 	}
 
 	mask = DW_VR_MII_PCS_MODE_MASK | DW_VR_MII_TX_CONFIG_MASK;
-	val = FIELD_PREP(DW_VR_MII_PCS_MODE_MASK,
-			 DW_VR_MII_PCS_MODE_C37_SGMII);
+#if 1
+	pcs_mode = (interface == PHY_INTERFACE_MODE_REVSGMII) ?
+		   DW_VR_MII_PCS_MODE_C37_1000BASEX :
+		   DW_VR_MII_PCS_MODE_C37_SGMII;
+#else
+	pcs_mode = DW_VR_MII_PCS_MODE_C37_SGMII;
+#endif
+	val = FIELD_PREP(DW_VR_MII_PCS_MODE_MASK, pcs_mode);
 
 	if (xpcs->info.pma == WX_TXGBE_XPCS_PMA_10G_ID) {
 		mask |= DW_VR_MII_AN_CTRL_8BIT;
 		val |= DW_VR_MII_AN_CTRL_8BIT;
+	}
+	if (xpcs->info.pma == WX_TXGBE_XPCS_PMA_10G_ID ||
+	    interface == PHY_INTERFACE_MODE_REVSGMII) {
 		/* Hardware requires it to be PHY side SGMII */
 		tx_conf = DW_VR_MII_TX_CONFIG_PHY_SIDE_SGMII;
 	} else {
@@ -702,25 +715,55 @@ static int xpcs_config_aneg_c37_sgmii(struct dw_xpcs *xpcs,
 		return ret;
 
 	val = 0;
-	mask = DW_VR_MII_DIG_CTRL1_2G5_EN | DW_VR_MII_DIG_CTRL1_MAC_AUTO_SW;
+	mask = DW_VR_MII_DIG_CTRL1_2G5_EN | DW_VR_MII_DIG_CTRL1_MAC_AUTO_SW |
+	       DW_VR_MII_DIG_CTRL1_PHY_MODE_CTRL;
 
-	if (neg_mode == PHYLINK_PCS_NEG_INBAND_ENABLED)
+	if (neg_mode == PHYLINK_PCS_NEG_INBAND_ENABLED &&
+	    interface != PHY_INTERFACE_MODE_REVSGMII)
 		val = DW_VR_MII_DIG_CTRL1_MAC_AUTO_SW;
 
-	if (xpcs->info.pma == WX_TXGBE_XPCS_PMA_10G_ID) {
-		mask |= DW_VR_MII_DIG_CTRL1_PHY_MODE_CTRL;
+	/*
+	 * If DW_VR_MII_DIG_CTRL1_PHY_MODE_CTRL == 1,
+	 * this bit is derived from the input port
+	 * 'xpcs_sgmii_link_speed_i[1:0]'
+	 */
+	if (xpcs->info.pma == WX_TXGBE_XPCS_PMA_10G_ID
+#if 0
+	    || interface == PHY_INTERFACE_MODE_REVSGMII
+#endif
+	    )
 		val |= DW_VR_MII_DIG_CTRL1_PHY_MODE_CTRL;
-	}
 
 	ret = xpcs_modify(xpcs, MDIO_MMD_VEND2, DW_VR_MII_DIG_CTRL1, mask, val);
 	if (ret < 0)
 		return ret;
 
-	if (neg_mode == PHYLINK_PCS_NEG_INBAND_ENABLED)
+	if (neg_mode == PHYLINK_PCS_NEG_INBAND_ENABLED) {
+		dev_err(&xpcs->mdiodev->dev, "Writing MII_BMCR=0x%x\n", mdio_ctrl | BMCR_ANENABLE);
+
 		ret = xpcs_write(xpcs, MDIO_MMD_VEND2, MII_BMCR,
 				 mdio_ctrl | BMCR_ANENABLE);
+		if (ret)
+			return ret;
+	}
 
-	return ret;
+	if (interface == PHY_INTERFACE_MODE_REVSGMII) {
+		int adv;
+
+		adv = phylink_mii_c22_pcs_encode_advertisement(interface,
+							       advertising);
+		dev_err(&xpcs->mdiodev->dev, "%s: adv 0x%x\n", __func__, adv);
+		if (adv >= 0) {
+			ret = xpcs_modify_changed(xpcs, MDIO_MMD_VEND2,
+						  MII_ADVERTISE, 0xffff, adv);
+			if (ret < 0)
+				return ret;
+
+			changed = ret;
+		}
+	}
+
+	return changed;
 }
 
 static int xpcs_config_aneg_c37_1000basex(struct dw_xpcs *xpcs,
@@ -840,7 +883,8 @@ static int xpcs_do_config(struct dw_xpcs *xpcs, phy_interface_t interface,
 		}
 		break;
 	case DW_AN_C37_SGMII:
-		ret = xpcs_config_aneg_c37_sgmii(xpcs, neg_mode);
+		ret = xpcs_config_aneg_c37_sgmii(xpcs, interface, neg_mode,
+						 advertising);
 		if (ret)
 			return ret;
 		break;
@@ -1162,6 +1206,7 @@ static void xpcs_link_up(struct phylink_pcs *pcs, unsigned int neg_mode,
 		break;
 
 	case PHY_INTERFACE_MODE_SGMII:
+	case PHY_INTERFACE_MODE_REVSGMII:
 	case PHY_INTERFACE_MODE_1000BASEX:
 		xpcs_link_up_sgmii_1000basex(xpcs, neg_mode, interface, speed,
 					     duplex);
@@ -1325,6 +1370,10 @@ static const struct dw_xpcs_compat synopsys_xpcs_compat[] = {
 		.supported = xpcs_sgmii_features,
 		.an_mode = DW_AN_C37_SGMII,
 	}, {
+		.interface = PHY_INTERFACE_MODE_REVSGMII,
+		.supported = xpcs_sgmii_features,
+		.an_mode = DW_AN_C37_SGMII,
+	}, {
 		.interface = PHY_INTERFACE_MODE_1000BASEX,
 		.supported = xpcs_1000basex_features,
 		.an_mode = DW_AN_C37_1000BASEX,
@@ -1342,6 +1391,12 @@ static const struct dw_xpcs_compat nxp_sja1105_xpcs_compat[] = {
 		.supported = xpcs_sgmii_features,
 		.an_mode = DW_AN_C37_SGMII,
 		.pma_config = nxp_sja1105_sgmii_pma_config,
+	},
+	{
+		.interface = PHY_INTERFACE_MODE_REVSGMII,
+		.supported = xpcs_sgmii_features,
+		.an_mode = DW_AN_C37_SGMII,
+		.pma_config = nxp_sja1105_sgmii_pma_config,
 	}, {
 	}
 };
@@ -1349,6 +1404,11 @@ static const struct dw_xpcs_compat nxp_sja1105_xpcs_compat[] = {
 static const struct dw_xpcs_compat nxp_sja1110_xpcs_compat[] = {
 	{
 		.interface = PHY_INTERFACE_MODE_SGMII,
+		.supported = xpcs_sgmii_features,
+		.an_mode = DW_AN_C37_SGMII,
+		.pma_config = nxp_sja1110_sgmii_pma_config,
+	}, {
+		.interface = PHY_INTERFACE_MODE_REVSGMII,
 		.supported = xpcs_sgmii_features,
 		.an_mode = DW_AN_C37_SGMII,
 		.pma_config = nxp_sja1110_sgmii_pma_config,
