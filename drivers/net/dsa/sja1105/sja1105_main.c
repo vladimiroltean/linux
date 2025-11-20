@@ -315,6 +315,7 @@ static int sja1105_init_mii_settings(struct sja1105_private *priv)
 			mii->xmii_mode[i] = XMII_MODE_RGMII;
 			break;
 		case PHY_INTERFACE_MODE_SGMII:
+		case PHY_INTERFACE_MODE_REVSGMII:
 			if (!priv->info->supports_sgmii[i])
 				goto unsupported;
 
@@ -1395,14 +1396,18 @@ static void sja1105_phylink_get_caps(struct dsa_switch *ds, int port,
 
 	phy_mode = priv->phy_mode[port];
 	if (phy_mode == PHY_INTERFACE_MODE_SGMII ||
+	    phy_mode == PHY_INTERFACE_MODE_REVSGMII ||
 	    phy_mode == PHY_INTERFACE_MODE_2500BASEX) {
 		/* Changing the PHY mode on SERDES ports is possible and makes
 		 * sense, because that is done through the XPCS. We allow
 		 * changes between SGMII and 2500base-X.
 		 */
-		if (priv->info->supports_sgmii[port])
+		if (priv->info->supports_sgmii[port]) {
 			__set_bit(PHY_INTERFACE_MODE_SGMII,
 				  config->supported_interfaces);
+			__set_bit(PHY_INTERFACE_MODE_REVSGMII,
+				  config->supported_interfaces);
+		}
 
 		if (priv->info->supports_2500basex[port])
 			__set_bit(PHY_INTERFACE_MODE_2500BASEX,

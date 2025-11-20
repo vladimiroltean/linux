@@ -406,6 +406,7 @@ static int sja1105_mdiobus_pcs_register(struct sja1105_private *priv)
 			continue;
 
 		if (priv->phy_mode[port] != PHY_INTERFACE_MODE_SGMII &&
+		    priv->phy_mode[port] != PHY_INTERFACE_MODE_REVSGMII &&
 		    priv->phy_mode[port] != PHY_INTERFACE_MODE_2500BASEX)
 			continue;
 
