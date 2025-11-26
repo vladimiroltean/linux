@@ -500,12 +500,19 @@ static int felix_tag_npi_setup(struct dsa_switch *ds)
 
 	felix_npi_port_init(ocelot, first_cpu_dp->index);
 
+	dsa_switch_for_each_user_port(dp, ds)
+		dsa_port_simple_hsr_join(ds, dp->index, dp->hsr_dev, NULL);
+
 	return 0;
 }
 
 static void felix_tag_npi_teardown(struct dsa_switch *ds)
 {
 	struct ocelot *ocelot = ds->priv;
+	struct dsa_port *dp;
+
+	dsa_switch_for_each_user_port(dp, ds)
+		dsa_port_simple_hsr_leave(ds, dp->index, dp->hsr_dev);
 
 	felix_npi_port_deinit(ocelot, ocelot->npi);
 }
@@ -2232,6 +2239,35 @@ static void felix_get_mm_stats(struct dsa_switch *ds, int port,
 	ocelot_port_get_mm_stats(ocelot, port, stats);
 }
 
+static int felix_port_hsr_join(struct dsa_switch *ds, int port,
+			       struct net_device *hsr,
+			       struct netlink_ext_ack *extack)
+{
+	struct ocelot *ocelot = ds->priv;
+	struct felix *felix = ocelot_to_felix(ocelot);
+
+	if (felix->tag_proto == DSA_TAG_PROTO_OCELOT_8021Q) {
+		NL_SET_ERR_MSG_MOD(extack,
+				   "Offloading not supported with \"ocelot-8021q\"");
+		/* returning -EOPNOTSUPP would clear dp->hsr_dev */
+		return 0;
+	}
+
+	return dsa_port_simple_hsr_join(ds, port, hsr, extack);
+}
+
+static int felix_port_hsr_leave(struct dsa_switch *ds, int port,
+				struct net_device *hsr)
+{
+	struct ocelot *ocelot = ds->priv;
+	struct felix *felix = ocelot_to_felix(ocelot);
+
+	if (felix->tag_proto == DSA_TAG_PROTO_OCELOT_8021Q)
+		return 0;
+
+	return dsa_port_simple_hsr_leave(ds, port, hsr);
+}
+
 static const struct phylink_mac_ops felix_phylink_mac_ops = {
 	.mac_select_pcs		= felix_phylink_mac_select_pcs,
 	.mac_config		= felix_phylink_mac_config,
@@ -2318,6 +2354,8 @@ static const struct dsa_switch_ops felix_switch_ops = {
 	.port_del_dscp_prio		= felix_port_del_dscp_prio,
 	.port_set_host_flood		= felix_port_set_host_flood,
 	.port_change_conduit		= felix_port_change_conduit,
+	.port_hsr_join			= felix_port_hsr_join,
+	.port_hsr_leave			= felix_port_hsr_leave,
 };
 
 int felix_register_switch(struct device *dev, resource_size_t switch_base,
