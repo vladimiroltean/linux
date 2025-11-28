@@ -679,6 +679,15 @@ config SPI_FSL_ESPI
 	  From MPC8536, 85xx platform uses the controller, and all P10xx,
 	  P20xx, P30xx,P40xx, P50xx uses this controller.
 
+config SPI_FTDI_MPSSE
+	tristate "FTDI MPSSE SPI controller"
+	depends on USB_FT232H_INTF || COMPILE_TEST || GPIOLIB && SYSFS
+	select GPIO_SYSFS
+	select GPIOLIB_IRQCHIP
+	help
+	  FT232H supports SPI in MPSSE mode. This driver provides MPSSE
+	  SPI controller in master mode.
+
 config SPI_LJCA
 	tristate "Intel La Jolla Cove Adapter SPI support"
 	depends on USB_LJCA
