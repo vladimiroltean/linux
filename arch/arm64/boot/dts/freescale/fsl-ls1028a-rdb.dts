@@ -347,3 +347,15 @@
 &usb1 {
 	status = "okay";
 };
+
+#define USB_HOST		usb0
+#define DSA_CONDUIT		enetc_port0
+#define DSA_CPU_PORT		sja1110_p4
+#define DSA_TREE_INDEX		1
+#define DSA_SWITCH_INDEX	0
+#include "fsl-sja1110-mgs-evm.dtsi"
+#undef DSA_SWITCH_INDEX
+#undef DSA_TREE_INDEX
+#undef DSA_CPU_PORT
+#undef DSA_CONDUIT
+#undef USB_HOST

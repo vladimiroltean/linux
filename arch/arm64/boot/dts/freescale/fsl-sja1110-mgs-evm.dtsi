@@ -1,0 +1,157 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/* Copyright 2025 NXP */
+
+#include <dt-bindings/gpio/gpio.h>
+
+/* Definitions which must be provided via C preprocessor:
+ * USB_HOST
+ * DSA_CONDUIT
+ * DSA_CPU_PORT
+ * DSA_TREE_INDEX
+ * DSA_SWITCH_INDEX
+ */
+/ {
+	spi_bridge: spi-mpsse {
+		compatible = "ftdi,spi-mpsse";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		ftdi,mpsse-handle = <&mpsse_if0>;
+		sck-gpios =  <&mpsse_if0 0 GPIO_ACTIVE_HIGH>;
+		mosi-gpios = <&mpsse_if0 1 GPIO_ACTIVE_HIGH>;
+		miso-gpios = <&mpsse_if0 2 GPIO_ACTIVE_HIGH>;
+		cs-gpios = <&mpsse_if0 3 GPIO_ACTIVE_LOW>,
+			   <&mpsse_if0 4 GPIO_ACTIVE_LOW>;
+	};
+};
+
+&USB_HOST {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "okay";
+
+	device@1 {
+		compatible = "usb403,6011";
+		reg = <1>;
+		#address-cells = <2>;
+		#size-cells = <0>;
+
+		mpsse_if0: interface@0 {
+			compatible = "ftdi,gpio-mpsse", "usbif403,6011.config1.0";
+			reg = <0 1>;
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
+		mpsse_if1: interface@1 {
+			compatible = "ftdi,gpio-mpsse", "usbif403,6011.config1.1";
+			reg = <1 1>;
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
+		mpsse_if2: interface@2 {
+			compatible = "ftdi,gpio-mpsse", "usbif403,6011.config1.2";
+			reg = <2 1>;
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
+		mpsse_if3: interface@3 {
+			compatible = "ftdi,gpio-mpsse", "usbif403,6011.config1.3";
+			reg = <3 1>;
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+	};
+};
+
+&spi_bridge {
+	sja1110: ethernet-switch@0 {
+		compatible = "nxp,sja1110d";
+		reg = <0>;
+		spi-max-frequency = <15000000>;
+		dsa,member = <DSA_TREE_INDEX DSA_SWITCH_INDEX>;
+
+		ethernet-ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			/* Microcontroller port */
+			sja1110_p0: port@0 {
+				reg = <0>;
+				status = "disabled";
+			};
+
+			sja1110_p1: port@1 {
+				reg = <1>;
+				status = "disabled";
+			};
+
+			sja1110_p2: port@2 {
+				reg = <2>;
+				status = "disabled";
+			};
+
+			sja1110_p3: port@3 {
+				reg = <3>;
+				status = "disabled";
+			};
+
+			/* SFP interface */
+			sja1110_p4: port@4 {
+				reg = <4>;
+				phy-mode = "sgmii";
+				managed = "in-band-status";
+			};
+
+			sja1110_p5: port@5 {
+				reg = <5>;
+				phy-mode = "internal";
+				phy-handle = <&sja1110_p5_phy>;
+			};
+
+			sja1110_p6: port@6 {
+				reg = <6>;
+				phy-mode = "internal";
+				phy-handle = <&sja1110_p6_phy>;
+			};
+
+			sja1110_p7: port@7 {
+				reg = <7>;
+				phy-mode = "internal";
+				phy-handle = <&sja1110_p7_phy>;
+			};
+		};
+
+		mdios {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			mdio@0 {
+				compatible = "nxp,sja1110-base-t1-mdio";
+				#address-cells = <1>;
+				#size-cells = <0>;
+				reg = <0>;
+
+				sja1110_p5_phy: ethernet-phy@1 {
+					compatible = "ethernet-phy-ieee802.3-c45";
+					reg = <0x1>;
+				};
+
+				sja1110_p6_phy: ethernet-phy@2 {
+					compatible = "ethernet-phy-ieee802.3-c45";
+					reg = <0x2>;
+				};
+
+				sja1110_p7_phy: ethernet-phy@3 {
+					compatible = "ethernet-phy-ieee802.3-c45";
+					reg = <0x3>;
+				};
+			};
+		};
+	};
+};
+
+&DSA_CPU_PORT {
+	ethernet = <&DSA_CONDUIT>;
+};
