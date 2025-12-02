@@ -175,7 +175,6 @@ struct ft232h_intf_priv {
 	struct gpiod_lookup_table	*lookup_cs;
 	struct gpiod_lookup_table	*lookup_irq;
 
-
 	struct gpio_chip	cbus_gpio;
 	const char		*cbus_gpio_names[4];
 	u8			cbus_pin_offsets[4];
@@ -199,19 +198,17 @@ struct ft232h_intf_priv {
 
 	struct irq_chip		irq;		// chip descriptor for IRQs
 	int			num;
-	uint8_t			irq_num;                            // number of pins with IRQs
-	int			irq_base;                           // base IRQ allocated
+	uint8_t			irq_num;	// number of pins with IRQs
+	int			irq_base;	// base IRQ allocated
 	const struct cpumask	*aff_mask;
-	int			irq_types[5]; // IRQ types (irq_num elements)
-	bool			irq_enabled[5]; // IRQ enabled flag (irq_num elements)
+	int			irq_types[5];	// IRQ types (irq_num elements)
+	bool			irq_enabled[5];	// IRQ enabled flag (irq_num elements)
 	int			irq_gpio_map[5]; // IRQ to GPIO pin map (irq_num elements)
-	int			irq_hw;                             // IRQ for GPIO with hardware IRQ (default -1)
+	int			irq_hw;		// IRQ for GPIO with hardware IRQ (default -1)
 	int			irq_poll_interval;
 	struct work_struct	irq_work;
 
-	int		ftmodel;
-	int		numgpio;
-	u8		eeprom[FTDI_MAX_EEPROM_SIZE];
+	u8			eeprom[FTDI_MAX_EEPROM_SIZE];
 };
 
 /* Device info struct used for device specific init. */
@@ -221,8 +218,7 @@ struct ft232h_intf_info {
 	int (*probe)(struct usb_interface *intf, const void *plat_data);
 	int (*remove)(struct usb_interface *intf);
 	const void *plat_data; /* optional, passed to probe() */
-	int			ftmodel;
-	int 		numgpio;
+	int		numgpio;
 };
 
 struct ft232h_intf_device {
@@ -232,10 +228,8 @@ struct ft232h_intf_device {
 //dev_t dev =0;
 //static struct class *dev_class;
 
-static unsigned int gpio_no = 3;
 static int irqon;
 static int irqt = 2;
-static int poll_interval;
 static DEFINE_IDA(ftdi_devid_ida);
 static int ftdi_read_eeprom(struct ft232h_intf_priv *priv);
 static int ftdi_mpsse_gpio_to_irq(struct gpio_chip *chip, unsigned offset);
@@ -367,7 +361,7 @@ static int ftdi_ctrl_xfer(struct usb_interface *intf, struct ctrl_desc *desc)
 			      desc->value, desc->index, desc->data, desc->size,
 			      desc->timeout);
 	if (ret < 0)
-		dev_dbg(&udev->dev, "ctrl msg failed: %d\n", ret);
+		dev_err(&udev->dev, "ctrl msg failed: %d\n", ret);
 exit:
 	mutex_unlock(&priv->io_mutex);
 	return ret;
@@ -404,7 +398,7 @@ static int ftdi_bulk_xfer(struct usb_interface *intf, struct bulk_desc *desc)
 	ret = usb_bulk_msg(udev, pipe, desc->data, desc->len,
 			   &desc->act_len, desc->timeout);
 	if (ret)
-		dev_dbg(&udev->dev, "bulk msg failed: %d\n", ret);
+		dev_err(&udev->dev, "bulk msg failed: %d\n", ret);
 
 exit:
 	mutex_unlock(&priv->io_mutex);
@@ -446,7 +440,7 @@ static int ftdi_set_baudrate(struct usb_interface *intf, int baudrate)
 
 	ret = ftdi_ctrl_xfer(intf, &desc);
 	if (ret < 0) {
-		dev_dbg(&intf->dev, "failed to set baudrate: %d\n", ret);
+		dev_err(&intf->dev, "failed to set baudrate: %d\n", ret);
 		return ret;
 	}
 
@@ -533,7 +527,7 @@ static int ftdi_set_latency(struct usb_interface *intf, int latency_msec)
 
 	ret = ftdi_ctrl_xfer(intf, &desc);
 	if (ret < 0) {
-		dev_dbg(&intf->dev, "failed to set latency: %d\n", ret);
+		dev_err(&intf->dev, "failed to set latency: %d\n", ret);
 		return ret;
 	}
 
@@ -670,7 +664,7 @@ static int ftdi_disable_bitbang(struct usb_interface *intf)
 
 	ret = ftdi_set_bitmode(intf, 0, BITMODE_RESET);
 	if (ret < 0) {
-		dev_dbg(&intf->dev, "disable bitbang failed: %d\n", ret);
+		dev_err(&intf->dev, "disable bitbang failed: %d\n", ret);
 		return ret;
 	}
 
@@ -696,7 +690,7 @@ static int ftdi_read_eeprom(struct ft232h_intf_priv *priv)
 
 		ret = ftdi_ctrl_xfer(priv->intf, &desc);
 		if (ret < 0) {
-			dev_dbg(&priv->intf->dev, "EEPROM read failed: %d\n",
+			dev_err(&priv->intf->dev, "EEPROM read failed: %d\n",
 				ret);
 			return ret;
 		}
@@ -733,7 +727,7 @@ static int ftdi_cbus_gpio_read_pins(struct ft232h_intf_priv *priv,
 
 	ret = ftdi_ctrl_xfer(priv->intf, &desc);
 	if (ret < 0) {
-		dev_dbg(chip->parent, "failed to get pin values: %d\n", ret);
+		dev_err(chip->parent, "failed to get pin values: %d\n", ret);
 		return ret;
 	}
 
@@ -792,7 +786,7 @@ static int ftdi_cbus_gpio_set(struct gpio_chip *chip,
 
 	ret = ftdi_set_bitmode(priv->intf, priv->cbus_mask, BITMODE_CBUS);
 	if (ret < 0)
-		dev_dbg(chip->parent, "setting pin value failed: %d\n", ret);
+		dev_err(chip->parent, "setting pin value failed: %d\n", ret);
 
 	return ret;
 }
@@ -1190,9 +1184,7 @@ static void ftdix_read_gpios(struct work_struct *work)
 	printk(KERN_INFO  "start read gpios\n");
 
 	if (poll_period)
-	{
-	priv->irq_poll_interval = poll_period;
-    }
+		priv->irq_poll_interval = poll_period;
 
 loop:
 	new_value = ftdi_mpsse_gpio_get(&priv->mpsse_gpio, 3);
@@ -1245,7 +1237,6 @@ loop:
 	printk(KERN_INFO  "Leaving gpio irq poll loop \n");
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,18,0)
 static const struct irq_chip usb_gpio_irqchip = {
 	.name = "usbgpio-irq",
 	.irq_enable =  usb_gpio_irq_enable,
@@ -1253,7 +1244,6 @@ static const struct irq_chip usb_gpio_irqchip = {
 	.irq_set_type = usbirq_irq_set_type,
 	.flags = IRQCHIP_IMMUTABLE, GPIOCHIP_IRQ_RESOURCE_HELPERS,
 };
-#endif
 
 const char *gpio_names[] = { "CS", "ce", "csn", "irq", "GPIOL3" };
 const char *gpio_names2[] = { "CS", "ce", "csn", "irq", "GPIOL3", "GPIOH0", "GPIOH1", "GPIOH2", "GPIOH3", "GPIOH4", "GPIOH5", "GPIOH6", "GPIOH7" };
@@ -1262,18 +1252,12 @@ static int ft232h_intf_add_mpsse_gpio(struct ft232h_intf_priv *priv)
 {
 	struct device *dev = &priv->intf->dev;
 	struct gpio_irq_chip *girq;
-
-	int rc;
 	char **names, *label;
-	int MPSSE_GPIOS;
 	int ret;
-//    int status;
 
 	ret = ftdi_read_eeprom(priv);
 	if (ret < 0)
 		return ret;
-
-	MPSSE_GPIOS = ft232h_intf_get_numgpio(priv->intf);
 
 	label = devm_kasprintf(dev, GFP_KERNEL, "ftdi-mpsse-gpio.%d", priv->id);
 	if (!label)
@@ -1285,74 +1269,49 @@ static int ft232h_intf_add_mpsse_gpio(struct ft232h_intf_priv *priv)
 //	priv->mpsse_gpio.request= NULL;      //16ton?
 //	priv->mpsse_gpio.free   = NULL;          //16ton?
 	priv->mpsse_gpio.base = -1;
-	priv->mpsse_gpio.ngpio = MPSSE_GPIOS;
+	priv->mpsse_gpio.ngpio = ARRAY_SIZE(gpio_names);
 	priv->mpsse_gpio.can_sleep = true;
 	priv->mpsse_gpio.set = ftdi_mpsse_gpio_set;
 	priv->mpsse_gpio.get = ftdi_mpsse_gpio_get;
 	priv->mpsse_gpio.direction_input = ftdi_mpsse_gpio_direction_input;
- 	priv->mpsse_gpio.direction_output = ftdi_mpsse_gpio_direction_output;
-    #if LINUX_VERSION_CODE >= KERNEL_VERSION(5,18,0)
-    ;
-    #else
-	if (irqpoll) {
-	    priv->mpsse_gpio.to_irq = ftdi_mpsse_gpio_to_irq;
-    	priv->irq.name = "usbgpio-irq";
-    	priv->irq.irq_set_type = usbirq_irq_set_type;
-        priv->irq.irq_enable = usb_gpio_irq_enable;
-        priv->irq.irq_disable = usb_gpio_irq_disable;
-        .flags = IRQCHIP_IMMUTABLE, GPIOCHIP_IRQ_RESOURCE_HELPERS,
-	}
-	#endif
+	priv->mpsse_gpio.direction_output = ftdi_mpsse_gpio_direction_output;
 	names = devm_kcalloc(dev, priv->mpsse_gpio.ngpio, sizeof(char *),
 			     GFP_KERNEL);
 	if (!names)
 		return -ENOMEM;
 
-	if (MPSSE_GPIOS < 6) {
-	priv->mpsse_gpio.names = gpio_names;
-	}
-	if (MPSSE_GPIOS > 12) {
-	priv->mpsse_gpio.names = gpio_names2;
-	}
+	if (irqpoll) {
+		girq = &priv->mpsse_gpio.irq;
+		girq->chip = &priv->irq;
+		gpio_irq_chip_set_chip(girq, &usb_gpio_irqchip);
+		girq->parent_handler = NULL;
+		girq->num_parents = 0;
+		girq->parents = NULL;
+		girq->default_type = IRQ_TYPE_NONE;
+		girq->handler = handle_simple_irq;
 
-    if (irqpoll) {
-    	girq = &priv->mpsse_gpio.irq;
-    	girq->chip = &priv->irq;
-    	#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,18,0)
-    	gpio_irq_chip_set_chip(girq, &usb_gpio_irqchip);
-    	#endif
-       	girq->parent_handler = NULL;
-    	girq->num_parents = 0;
-    	girq->parents = NULL;
-    	girq->default_type = IRQ_TYPE_NONE;
-    	girq->handler = handle_simple_irq;
-
-
-	    rc = irq_alloc_desc(0);
-	    if (rc < 0) {
-	    	dev_err(dev, "Cannot allocate an IRQ desc");
-	    	return rc;
-	    }
-	    priv->irq_base = rc;
+		ret = irq_alloc_desc(0);
+		if (ret < 0) {
+			dev_err(dev, "Cannot allocate an IRQ desc");
+			return ret;
+		}
+		priv->irq_base = ret;
 	}
 
-    if (irqpoll) {
-    irq_clear_status_flags(priv->irq_base + 3, IRQ_NOREQUEST | IRQ_NOPROBE);
-    }
-
-    if (irqpoll) {
-    irq_set_status_flags(priv->irq_base + 3, IRQ_TYPE_EDGE_FALLING);
-    }
+	if (irqpoll) {
+		irq_clear_status_flags(priv->irq_base + 3, IRQ_NOREQUEST | IRQ_NOPROBE);
+		irq_set_status_flags(priv->irq_base + 3, IRQ_TYPE_EDGE_FALLING);
+	}
 
 	ret = ftdi_set_bitmode(priv->intf, 0x00, BITMODE_MPSSE);
 	if (ret < 0) {
-		dev_err(dev, "Failed to set MPSSE mode\n");
+		dev_err(dev, "Failed to set MPSSE mode: %pe\n", ERR_PTR(ret));
 		return ret;
 	}
 
 	ret = devm_gpiochip_add_data(dev, &priv->mpsse_gpio, priv);
 	if (ret < 0) {
-		dev_err(dev, "Failed to add MPSSE GPIO chip: %d\n", ret);
+		dev_err(dev, "Failed to add MPSSE GPIO chip: %pe\n", ERR_PTR(ret));
 		return ret;
 	}
 
@@ -1364,7 +1323,7 @@ static int ft232h_intf_add_mpsse_gpio(struct ft232h_intf_priv *priv)
 
 		priv->interrupt_gpio = devm_gpiod_get(dev, "irq", GPIOD_IN);
 
-		ret = devm_gpio_request_one(dev,  priv->mpsse_gpio.base + 3, GPIOD_IN, "irq");
+		ret = devm_gpio_request_one(dev, priv->mpsse_gpio.base + 3, GPIOD_IN, "irq");
 		if (ret) {
 			if (ret == -EPROBE_DEFER)
 				pr_info("failed request one  = %s\n", priv->interrupt_name);
@@ -1385,15 +1344,15 @@ static int ft232h_intf_add_mpsse_gpio(struct ft232h_intf_priv *priv)
 
 static void usb_gpio_irq_enable(struct irq_data *irqd)
 {
-    struct ft232h_intf_priv *priv = irq_data_get_irq_chip_data(irqd);
+	struct ft232h_intf_priv *priv = irq_data_get_irq_chip_data(irqd);
 
 	/* Is that needed? */
 	;
 
-    if (priv->irq_enabled[3]) {
-        printk(KERN_INFO  "IRQ already enabled returning\n");
+	if (priv->irq_enabled[3]) {
+		printk(KERN_INFO  "IRQ already enabled returning\n");
 		return;
-    }
+	}
 
     if (irqon == 0) {
     irqon = 1;
@@ -1509,14 +1468,6 @@ static int ft232h_intf_fpp_probe(struct usb_interface *intf,
 	char *cfgdone, *ncfg;    /* 16ton to replace line above*/
 	size_t lookup_size;
 
-
-	dev_dbg(dev, "%s: plat_data %p\n", __func__, pd);
-	if (!pd) {
-		dev_err(dev, "%s: Missing platform data\n", __func__);
-		return -EINVAL;
-	}
-
-
 	lookup_size = sizeof(*lookup) + 3 * sizeof(struct gpiod_lookup);
 	lookup = devm_kzalloc(dev, lookup_size, GFP_KERNEL);
 	if (!lookup)
@@ -1535,9 +1486,7 @@ static int ft232h_intf_fpp_probe(struct usb_interface *intf,
 	if (!cfgdone)
 		return -ENOMEM;
 
-
 	priv->lookup_fifo = lookup;
-
 
 	pdev = platform_device_register_data(dev, FPP_INTF_DEVNAME,
 					     priv->id, pd, sizeof(*pd));
@@ -1622,83 +1571,20 @@ static const struct property_entry w25q32_properties[] = {
 
 #include <dt-bindings/leds/common.h>
 
-static const struct property_entry worldsemi_properties[] = {
-    PROPERTY_ENTRY_U32("reg", 0),
-    PROPERTY_ENTRY_U32("color", LED_COLOR_ID_RGB),
-    PROPERTY_ENTRY_U32_ARRAY("function", LED_FUNCTION_STATUS),
-	{}
-};
-
-static const struct property_entry sx1276_properties[] = {
-    PROPERTY_ENTRY_U32("clock-frequency", 40000000),
-    PROPERTY_ENTRY_U32("center-carrier-frq", 915000000),
-//    PROPERTY_ENTRY_U32("minimal-RF-channel", 11),
-//    PROPERTY_ENTRY_U32("maximum-RF-channel", 11),
-	{}
-};
-
-static const struct software_node nrf24_node = {
-	.properties = nrf24_properties,
-};
-
-static const struct software_node mcp2515_node = {
-	.properties = mcp2515_properties,
-};
-
-static const struct software_node w25q32_node = {
-	.properties = w25q32_properties,
-};
-
-static const struct software_node sx1276_node = {
-	.properties = sx1276_properties,
-};
-
-static const struct software_node worldsemi_node = {
-	.properties = worldsemi_properties,
-};
-
 static struct spi_board_info ftdi_spi_bus_info[] = {
-    {
-//    .modalias	= "yx240qv29",
-//	.modalias	= "ili9341",
-    .modalias	= "max6662",
-//     .modalias	= "sx1278",
-//    .modalias	= "spi-nor",
-//	.modalias	= "mcp2515",
-//    .modalias	= "spi-petra",
-//    .modalias	= "nrf24",
-//	.modalias	= "ili9341",
-    .mode		= SPI_MODE_0,
-//    .mode		= SPI_MODE_0 | SPI_LSB_FIRST | SPI_CS_HIGH,
-//    .max_speed_hz	= 4000000,
-    .max_speed_hz	= 3000000,
-    .bus_num	= 0,
-    .chip_select	= 0,
-    .platform_data	= ftdi_spi_dev_data,
-// 	.swnode	= &nrf24_node,    //changed from properties to swnode i dunno aroun kernel 5.15ish
-//    .properties	= mcp2515_properties,
-//	.swnode  =  &worldsemi_node,
-//    .swnode = &sx1276_node,
- //   .swnode = &w25q32_node,
-//	.irq     = 0,
-    },
-   {
-//     .modalias	= "spi-petra",    //use instead of spidev for spidev no-longer enumerates
-    .modalias	= "spi-petra",
-//	  .modalias	= "spidev",
-    .mode		= SPI_MODE_0,
-//    .mode		= SPI_MODE_0 | SPI_LSB_FIRST | SPI_CS_HIGH,
-    .max_speed_hz	= 30000000,
-    .bus_num	= 0,
-    .chip_select	= 4, // GPIOH0 at ACBUS0
-    },
-
+	{
+		.modalias	= "spi-petra",
+		.mode		= SPI_MODE_2,
+		.max_speed_hz	= 3000000,
+		.bus_num	= 0,
+		.chip_select	= 0, // GPIOH0 at ACBUS0
+	},
 };
 
 static const struct mpsse_spi_platform_data ftdi_spi_bus_plat_data = {
-    .ops		= &ft232h_intf_ops,
-    .spi_info	= ftdi_spi_bus_info,
-    .spi_info_len	= ARRAY_SIZE(ftdi_spi_bus_info),
+	.ops		= &ft232h_intf_ops,
+	.spi_info	= ftdi_spi_bus_info,
+	.spi_info_len	= ARRAY_SIZE(ftdi_spi_bus_info),
 };
 
 static struct dev_io_desc_data fpga_cfg_spi_dev_io[3] = {
@@ -1709,20 +1595,20 @@ static struct dev_io_desc_data fpga_cfg_spi_dev_io[3] = {
 
 static const struct mpsse_spi_dev_data fpga_spi_dev_data[] = {
 	{
-	.magic		= FTDI_MPSSE_IO_DESC_MAGIC,
-	.desc		= fpga_cfg_fpp_dev_io,
-	.desc_len	= ARRAY_SIZE(fpga_cfg_spi_dev_io),
+		.magic		= FTDI_MPSSE_IO_DESC_MAGIC,
+		.desc		= fpga_cfg_fpp_dev_io,
+		.desc_len	= ARRAY_SIZE(fpga_cfg_spi_dev_io),
 	},
 };
 
 static struct spi_board_info fpga_cfg_spi_info[] = {
 	{
-	.modalias	= "fpga-passive-serial",
-	.mode		= SPI_MODE_0 | SPI_LSB_FIRST,
-	.max_speed_hz	= 30000000,
-	.bus_num	= 0,
-	.chip_select	= 0,
-	.platform_data	= fpga_spi_dev_data,
+		.modalias	= "fpga-passive-serial",
+		.mode		= SPI_MODE_0 | SPI_LSB_FIRST,
+		.max_speed_hz	= 30000000,
+		.bus_num	= 0,
+		.chip_select	= 0,
+		.platform_data	= fpga_spi_dev_data,
 	},
 };
 
@@ -1766,9 +1652,6 @@ mpsse_dev_register(struct ft232h_intf_priv *priv,
 	pdev->dev.parent = parent;
 	pdev->dev.fwnode = NULL;
 
-	if (irqpoll) {
-	printk(KERN_INFO "spi-info irq struct = %d\n", pd->spi_info[0].irq);
-	}
 	priv->spi_pdev = pdev;
 
 	tbl_size = pd->spi_info_len + 1;
@@ -1859,9 +1742,9 @@ static int ft232h_intf_spi_remove(struct usb_interface *intf)
 }
 
 static const struct ft232h_intf_info ftdi_spi_bus_intf_info = {
-    .probe  = ft232h_intf_spi_probe,
-    .remove  = ft232h_intf_spi_remove,
-    .plat_data  = &ftdi_spi_bus_plat_data,
+	.probe  = ft232h_intf_spi_probe,
+	.remove  = ft232h_intf_spi_remove,
+	.plat_data  = &ftdi_spi_bus_plat_data,
 };
 
 static const struct ft232h_intf_info fpga_cfg_spi_intf_info = {
@@ -1875,91 +1758,6 @@ static const struct ft232h_intf_info fpga_cfg_fifo_intf_info = {
 	.remove = ft232h_intf_fpp_remove,
 	.plat_data = &fpga_cfg_fpp_plat_data,
 };
-
-int ft232h_intf_get_model(struct usb_interface *intf)
-{
-	struct ft232h_intf_priv *priv;
-	struct device *dev = &intf->dev;
-
-	int ftmod1;
-	int ftmod2;
-	int ftmod4;
-	int ret;
-
-	ftmod2 = 2232;
-	ftmod4 = 4232;
-	ftmod1 = 232;
-
-	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
-	if (!priv)
-		return -ENOMEM;
-
-	priv->udev = usb_get_dev(interface_to_usbdev(intf));
-	if (priv->udev->product && !strcmp(priv->udev->product, "ft4232H-16ton")) {
-	priv->ftmodel = ftmod4;
-	}
-	if (priv->udev->product && !strcmp(priv->udev->product, "ft4233HPQ-16ton")) {
-	priv->ftmodel = ftmod4;
-	}
-	if (priv->udev->product && !strcmp(priv->udev->product, "ft2232H-16ton")) {
-	priv->ftmodel = ftmod2;
-	}
-	if (priv->udev->product && !strcmp(priv->udev->product, "ft232H-16ton")) {
-	priv->ftmodel = ftmod2;
-	}
-	if (priv->udev->product && !strcmp(priv->udev->product, "ft232H-16ton-spi")) {
-	priv->ftmodel = ftmod1;
-	}
-	if (bind232h) {
-	    if (priv->udev->product && !strcmp(priv->udev->product, "ft232H-16ton")) {
-	    priv->ftmodel = ftmod1;
-	    }
-	}
-	ret = priv->ftmodel;
-	return ret;
-}
-EXPORT_SYMBOL_GPL(ft232h_intf_get_model);
-
-int ft232h_intf_get_numgpio(struct usb_interface *intf)
-{
-	struct ft232h_intf_priv *priv;
-	struct device *dev = &intf->dev;
-
-	int ftgpio2;
-	int ftgpio4;
-	int ret;
-
-	ftgpio2 = 13;
-	ftgpio4 = 5;
-
-	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
-	if (!priv)
-		return -ENOMEM;
-
-	priv->udev = usb_get_dev(interface_to_usbdev(intf));
-	if (priv->udev->product && !strcmp(priv->udev->product, "ft4232H-16ton")) {
-	priv->numgpio = ftgpio4;
-	}
-	if (priv->udev->product && !strcmp(priv->udev->product, "ft4233HPQ-16ton")) {
-	priv->numgpio = ftgpio4;
-	}
-	if (priv->udev->product && !strcmp(priv->udev->product, "ft2232H-16ton")) {
-	priv->numgpio = ftgpio2;
-	}
-	if (priv->udev->product && !strcmp(priv->udev->product, "ft232H-16ton-spi")) {
-	priv->numgpio = ftgpio2;
-	}
-	if (bind232h) {
-	    if (priv->udev->product && !strcmp(priv->udev->product, "ft232H-16ton")) {
-	    priv->numgpio = ftgpio2;
-	    }
-	}
-
-	ret = priv->numgpio;
-//	kfree (priv);
-	return ret;
-}
-EXPORT_SYMBOL_GPL(ft232h_intf_get_numgpio);
 
 static int ftx232h_jtag_probe(struct usb_interface *intf)
 {
@@ -1987,15 +1785,14 @@ static int ft232h_intf_probe(struct usb_interface *intf,
 	int ret = 0;
 	int inf;
 
+	dev_err(dev, "%s: %d\n", __func__, __LINE__);
+
 	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
 	if (!priv)
 		return -ENOMEM;
 
 	priv->udev = usb_get_dev(interface_to_usbdev(intf));
 	inf = intf->cur_altsetting->desc.bInterfaceNumber;
-
-	ft232h_intf_get_model(intf);
-	ft232h_intf_get_numgpio(intf);
 
 	if (priv->udev->product && !strcmp(priv->udev->product, "ft4232H-16ton")) {
 		ret = ftx232h_jtag_probe(intf);
@@ -2027,11 +1824,8 @@ static int ft232h_intf_probe(struct usb_interface *intf,
 	} else if (priv->udev->product && !strcmp(priv->udev->product, "ft232H-16ton-i2c")) {
 		dev_info(&intf->dev, "Ignoring single I2C interface reserved\n");
 		return -ENODEV;
-	} else {
-		return -ENODEV;
 	}
-
-//	create_sysfs_attrs(intf);
+	/* Our priv->udev->product == "Quad RS232-HS" */
 
 	iface_desc = intf->cur_altsetting;
 
@@ -2141,13 +1935,13 @@ static struct usb_device_id ft232h_intf_table[] = {
 //	{ USB_DEVICE(FTDI_VID, ARRI_SPI_INTF_PRODUCT_ID),
 //		.driver_info = (kernel_ulong_t)&fpga_cfg_spi_intf_info },
 	{ USB_DEVICE(FTDI_VID, 0x6014),
-        .driver_info = (kernel_ulong_t)&ftdi_spi_bus_intf_info },
+		.driver_info = (kernel_ulong_t)&ftdi_spi_bus_intf_info },
 	{ USB_DEVICE(FTDI_VID, 0x6010),
-        .driver_info = (kernel_ulong_t)&ftdi_spi_bus_intf_info },
+		.driver_info = (kernel_ulong_t)&ftdi_spi_bus_intf_info },
 	{ USB_DEVICE(FTDI_VID, 0x6011),
-        .driver_info = (kernel_ulong_t)&ftdi_spi_bus_intf_info },
+		.driver_info = (kernel_ulong_t)&ftdi_spi_bus_intf_info },
 	{ USB_DEVICE(FTDI_VID, 0x6041),
-        .driver_info = (kernel_ulong_t)&ftdi_spi_bus_intf_info },
+		.driver_info = (kernel_ulong_t)&ftdi_spi_bus_intf_info },
 	{}
 };
 MODULE_DEVICE_TABLE(usb, ft232h_intf_table);

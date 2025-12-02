@@ -63,8 +63,6 @@ struct ftdi_spi {
 	u8 xfer_buf[SZ_64K];
 	u16 last_mode;
 	u32 last_speed_hz;
-	int ftmodel;
-	int gpionum;
 };
 
 static void ftdi_spi_set_cs(struct spi_device *spi, bool enable)
@@ -532,9 +530,6 @@ static int ftdi_spi_probe(struct platform_device *pdev)
 	u16 num_cs, max_cs = 0;   //removed dc, reset, interrupts, irq,
 	unsigned int i;
 	int ret;
-//	int ret2;
-	int model;
-	int numgpio;
 
 	pd = dev->platform_data;
 	if (!pd) {
@@ -548,7 +543,7 @@ static int ftdi_spi_probe(struct platform_device *pdev)
 	    !pd->ops->set_bitmode || !pd->ops->set_baudrate ||
 	    !pd->ops->disable_bitbang || !pd->ops->cfg_bus_pins ||
 	    !pd->ops->set_clock || !pd->ops->set_latency)
-	    	return -EINVAL;
+		return -EINVAL;
 
 	if (pd->spi_info_len > FTDI_MPSSE_GPIOS13)
 		return -EINVAL;
@@ -578,14 +573,6 @@ static int ftdi_spi_probe(struct platform_device *pdev)
 	priv->pdev = pdev;
 	priv->intf = to_usb_interface(dev->parent);
 	priv->iops = pd->ops;
-
-	model = ft232h_intf_get_model(priv->intf);
-	priv->ftmodel = model;
-	dev_info(dev, "model num %d\n", priv->ftmodel);
-
-	numgpio = ft232h_intf_get_numgpio(priv->intf);
-	priv->gpionum = numgpio;
-	dev_info(dev, "gpio num %d\n", priv->gpionum);
 
 	ctrl->bus_num = -1;
 	ctrl->mode_bits = SPI_CPOL | SPI_CPHA | SPI_LOOP |
