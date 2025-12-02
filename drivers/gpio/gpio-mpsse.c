@@ -443,7 +443,7 @@ static int gpio_mpsse_probe(struct usb_interface *interface,
 		return -ENOMEM;
 
 	priv->gpio.owner = THIS_MODULE;
-	priv->gpio.parent = interface->usb_dev;
+	priv->gpio.parent = &interface->dev;
 	priv->gpio.get_direction = gpio_mpsse_get_direction;
 	priv->gpio.direction_input = gpio_mpsse_direction_input;
 	priv->gpio.direction_output = gpio_mpsse_direction_output;
@@ -455,6 +455,7 @@ static int gpio_mpsse_probe(struct usb_interface *interface,
 	priv->gpio.ngpio = 16;
 	priv->gpio.offset = priv->intf_id * priv->gpio.ngpio;
 	priv->gpio.can_sleep = 1;
+	priv->gpio.fwnode = dev_fwnode(&interface->dev);
 
 	err = usb_find_common_endpoints(interface->cur_altsetting,
 					&priv->bulk_in, &priv->bulk_out,
