@@ -11,6 +11,8 @@
 #include <linux/of_graph.h>
 #include <linux/usb/of.h>
 
+#include "usb.h"
+
 /**
  * usb_of_get_device_node() - get a USB device node
  * @hub: hub to which device is connected
@@ -178,3 +180,15 @@ usb_of_get_interface_node(struct usb_device *udev, u8 config, u8 ifnum)
 	return NULL;
 }
 EXPORT_SYMBOL_GPL(usb_of_get_interface_node);
+
+struct usb_interface *find_usb_interface_by_of_node(struct device_node *np)
+{
+	struct device *dev;
+
+	dev = bus_find_device_by_of_node(&usb_bus_type, np);
+	if (!dev)
+		return ERR_PTR(-EPROBE_DEFER);
+
+	return to_usb_interface(dev);
+}
+EXPORT_SYMBOL_GPL(find_usb_interface_by_of_node);
