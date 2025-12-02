@@ -49,6 +49,7 @@ struct bulk_desc {
 
 static const struct usb_device_id gpio_mpsse_table[] = {
 	{ USB_DEVICE(0x0c52, 0xa064) },   /* SeaLevel Systems, Inc. */
+	{ USB_DEVICE(0x0403, 0x6011) },   /* FTDI FT4232H */
 	{ }                               /* Terminating entry */
 };
 
