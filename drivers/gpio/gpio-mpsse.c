@@ -11,6 +11,10 @@
 #include <linux/gpio/driver.h>
 #include <linux/mutex.h>
 #include <linux/usb.h>
+#include <linux/of.h>
+#include <linux/of_device.h>
+#include <linux/usb/mpsse.h>
+#include <linux/usb/of.h>
 
 struct mpsse_priv {
 	struct gpio_chip gpio;
@@ -129,6 +133,122 @@ static int mpsse_read(struct usb_interface *intf, u8 *buf, size_t len)
 
 	return ret;
 }
+
+struct mpsse_device *mpsse_get_by_phandle(struct device *consumer,
+					  const char *phandle_name)
+{
+	struct usb_interface *intf;
+	struct mpsse_priv *priv;
+	struct device_node *np;
+
+	np = of_parse_phandle(consumer->of_node, phandle_name, 0);
+	if (!np)
+		return ERR_PTR(-ENODEV);
+
+	intf = find_usb_interface_by_of_node(np);
+	of_node_put(np);
+	if (IS_ERR(intf))
+		return ERR_CAST(intf);
+
+	priv = usb_get_intfdata(intf);
+
+	return (struct mpsse_device *)priv;
+}
+EXPORT_SYMBOL_GPL(mpsse_get_by_phandle);
+
+void mpsse_put(struct mpsse_device *mpsse)
+{
+	struct mpsse_priv *priv = (struct mpsse_priv *)mpsse;
+	if (priv && priv->intf)
+		put_device(&priv->intf->dev);
+}
+EXPORT_SYMBOL_GPL(mpsse_put);
+
+void mpsse_lock(struct mpsse_device *mpsse)
+{
+	struct mpsse_priv *priv = (struct mpsse_priv *)mpsse;
+	mutex_lock(&priv->io_mutex);
+}
+EXPORT_SYMBOL_GPL(mpsse_lock);
+
+void mpsse_unlock(struct mpsse_device *mpsse)
+{
+	struct mpsse_priv *priv = (struct mpsse_priv *)mpsse;
+	mutex_unlock(&priv->io_mutex);
+}
+EXPORT_SYMBOL_GPL(mpsse_unlock);
+
+int mpsse_write_data(struct mpsse_device *mpsse, u8 *data, size_t len)
+{
+	struct mpsse_priv *priv = (struct mpsse_priv *)mpsse;
+
+	return mpsse_write(priv->intf, data, len);
+}
+EXPORT_SYMBOL_GPL(mpsse_write_data);
+
+int mpsse_read_data(struct mpsse_device *mpsse, u8 *data, size_t len)
+{
+	struct mpsse_priv *priv = (struct mpsse_priv *)mpsse;
+
+	return mpsse_read(priv->intf, data, len);
+}
+EXPORT_SYMBOL_GPL(mpsse_read_data);
+
+int mpsse_set_clock(struct mpsse_device *mpsse, u32 freq_hz)
+{
+	struct mpsse_priv *priv = (struct mpsse_priv *)mpsse;
+	u8 buf[3];
+	u32 value = 0;
+	int ret;
+
+	/* * Calculate divisor for 60MHz base clock.
+	 * TCK = 60MHz / ((1 + Divisor) * 2)
+	 */
+	if (freq_hz <= (30000000/65535)) {
+		buf[0] = MPSSE_EN_DIV_5; /* Enable /5 divisor (6MHz base) */
+		ret = mpsse_write(priv->intf, buf, 1);
+		if (ret) return ret;
+		value = (6000000/freq_hz) - 1;
+	} else {
+		buf[0] = MPSSE_DIS_DIV_5; /* Disable /5 divisor (30MHz base) */
+		ret = mpsse_write(priv->intf, buf, 1);
+		if (ret) return ret;
+		value = (30000000/freq_hz) - 1;
+	}
+
+	buf[0] = MPSSE_TCK_DIVISOR;
+	buf[1] = value & 0xFF;
+	buf[2] = (value >> 8) & 0xFF;
+
+	return mpsse_write(priv->intf, buf, 3);
+}
+EXPORT_SYMBOL_GPL(mpsse_set_clock);
+
+int mpsse_flush(struct mpsse_device *mpsse)
+{
+	struct mpsse_priv *priv = (struct mpsse_priv *)mpsse;
+	size_t bulk_in_sz = usb_endpoint_maxp(priv->bulk_in);
+	unsigned int pipe;
+	int ret, actual;
+	/* Use the existing bulk_in_buf */
+
+	pipe = usb_rcvbulkpipe(priv->udev, priv->bulk_in->bEndpointAddress);
+
+	/* Keep reading until empty or error */
+	while (true) {
+		ret = usb_bulk_msg(priv->udev, pipe, priv->bulk_in_buf,
+				   bulk_in_sz, &actual, 1); // 1ms timeout
+		if (ret && ret != -ETIMEDOUT)
+			return ret; /* Genuine error */
+
+		if (actual == 0 || ret == -ETIMEDOUT)
+			break; /* Buffer empty */
+	}
+
+        /* Note: We ignore 'actual' here because we are dumping data */
+	return 0;
+}
+EXPORT_SYMBOL_GPL(mpsse_flush);
 
 static int gpio_mpsse_set_bank(struct mpsse_priv *priv, u8 bank)
 {
