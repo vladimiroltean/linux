@@ -1767,6 +1767,11 @@ struct devlink_port_ops {
 				      struct netlink_ext_ack *extack);
 };
 
+struct devlink *devlink_get_by_name(struct net *net, const char *busname,
+				    const char *devname);
+struct devlink_port *devlink_port_get_by_index(struct devlink *devlink,
+					       unsigned int port_index);
+
 void devlink_port_init(struct devlink *devlink,
 		       struct devlink_port *devlink_port);
 void devlink_port_fini(struct devlink_port *devlink_port);

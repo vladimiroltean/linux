@@ -177,33 +177,44 @@ int devlink_nl_msg_reply_and_new(struct sk_buff **msg, struct genl_info *info)
 	return 0;
 }
 
-struct devlink *
-devlink_get_from_attrs_lock(struct net *net, struct nlattr **attrs,
-			    bool dev_lock)
+struct devlink *devlink_get_by_name(struct net *net, const char *busname,
+				    const char *devname)
 {
 	struct devlink *devlink;
 	unsigned long index;
-	char *busname;
-	char *devname;
-
-	if (!attrs[DEVLINK_ATTR_BUS_NAME] || !attrs[DEVLINK_ATTR_DEV_NAME])
-		return ERR_PTR(-EINVAL);
-
-	busname = nla_data(attrs[DEVLINK_ATTR_BUS_NAME]);
-	devname = nla_data(attrs[DEVLINK_ATTR_DEV_NAME]);
 
 	devlinks_xa_for_each_registered_get(net, index, devlink) {
 		if (strcmp(devlink->dev->bus->name, busname) == 0 &&
 		    strcmp(dev_name(devlink->dev), devname) == 0) {
-			devl_dev_lock(devlink, dev_lock);
+			devl_lock(devlink);
 			if (devl_is_registered(devlink))
 				return devlink;
-			devl_dev_unlock(devlink, dev_lock);
+			devl_unlock(devlink);
 		}
 		devlink_put(devlink);
 	}
 
 	return ERR_PTR(-ENODEV);
+}
+EXPORT_SYMBOL_GPL(devlink_get_by_name);
+
+struct devlink *
+devlink_get_from_attrs_lock(struct net *net, struct nlattr **attrs,
+			    bool dev_lock)
+{
+	struct devlink *devlink;
+
+	if (!attrs[DEVLINK_ATTR_BUS_NAME] || !attrs[DEVLINK_ATTR_DEV_NAME])
+		return ERR_PTR(-EINVAL);
+
+	devlink = devlink_get_by_name(net, nla_data(attrs[DEVLINK_ATTR_BUS_NAME]),
+				      nla_data(attrs[DEVLINK_ATTR_DEV_NAME]));
+
+	/* devlink_get_by_name returns it locked. If caller didn't ask for lock, unlock. */
+	if (!IS_ERR(devlink) && !dev_lock)
+		devl_unlock(devlink);
+
+	return devlink;
 }
 
 static int __devlink_nl_pre_doit(struct sk_buff *skb, struct genl_info *info,

@@ -29,6 +29,7 @@ struct devlink_port *devlink_port_get_by_index(struct devlink *devlink,
 {
 	return xa_load(&devlink->ports, port_index);
 }
+EXPORT_SYMBOL_GPL(devlink_port_get_by_index);
 
 struct devlink_port *devlink_port_get_from_attrs(struct devlink *devlink,
 						 struct nlattr **attrs)

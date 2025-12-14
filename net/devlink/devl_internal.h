@@ -266,8 +266,6 @@ void devlink_linecards_notify_unregister(struct devlink *devlink);
 #define ASSERT_DEVLINK_PORT_INITIALIZED(devlink_port)				\
 	WARN_ON_ONCE(!(devlink_port)->initialized)
 
-struct devlink_port *devlink_port_get_by_index(struct devlink *devlink,
-					       unsigned int port_index);
 int devlink_port_netdevice_event(struct notifier_block *nb,
 				 unsigned long event, void *ptr);
 struct devlink_port *
