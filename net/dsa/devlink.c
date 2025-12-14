@@ -181,6 +181,54 @@ static const struct devlink_ops dsa_devlink_ops = {
 	.sb_occ_tc_port_bind_get	= dsa_devlink_sb_occ_tc_port_bind_get,
 };
 
+static void dsa_dl_port_get_eth_phy_stats(struct devlink_port *dlp,
+					  struct ethtool_eth_phy_stats *phy_stats)
+{
+	struct dsa_switch *ds = dsa_devlink_port_to_ds(dlp);
+	int port = dsa_devlink_port_to_port(dlp);
+
+	if (ds->ops->get_eth_phy_stats)
+		ds->ops->get_eth_phy_stats(ds, port, phy_stats);
+}
+
+static void dsa_dl_port_get_eth_mac_stats(struct devlink_port *dlp,
+					  struct ethtool_eth_mac_stats *mac_stats)
+{
+	struct dsa_switch *ds = dsa_devlink_port_to_ds(dlp);
+	int port = dsa_devlink_port_to_port(dlp);
+
+	if (ds->ops->get_eth_mac_stats)
+		ds->ops->get_eth_mac_stats(ds, port, mac_stats);
+}
+
+static void dsa_dl_port_get_eth_ctrl_stats(struct devlink_port *dlp,
+					   struct ethtool_eth_ctrl_stats *ctrl_stats)
+{
+	struct dsa_switch *ds = dsa_devlink_port_to_ds(dlp);
+	int port = dsa_devlink_port_to_port(dlp);
+
+	if (ds->ops->get_eth_ctrl_stats)
+		ds->ops->get_eth_ctrl_stats(ds, port, ctrl_stats);
+}
+
+static void dsa_dl_port_get_rmon_stats(struct devlink_port *dlp,
+				       struct ethtool_rmon_stats *rmon_stats,
+				       const struct ethtool_rmon_hist_range **ranges)
+{
+	struct dsa_switch *ds = dsa_devlink_port_to_ds(dlp);
+	int port = dsa_devlink_port_to_port(dlp);
+
+	if (ds->ops->get_rmon_stats)
+		ds->ops->get_rmon_stats(ds, port, rmon_stats, ranges);
+}
+
+static const struct devlink_port_ops dsa_devlink_port_ops = {
+	.get_eth_phy_stats = dsa_dl_port_get_eth_phy_stats,
+	.get_eth_mac_stats = dsa_dl_port_get_eth_mac_stats,
+	.get_eth_ctrl_stats = dsa_dl_port_get_eth_ctrl_stats,
+	.get_rmon_stats = dsa_dl_port_get_rmon_stats,
+};
+
 int dsa_devlink_param_get(struct devlink *dl, u32 id,
 			  struct devlink_param_gset_ctx *ctx,
 			  struct netlink_ext_ack *extack)
@@ -342,7 +390,8 @@ int dsa_port_devlink_setup(struct dsa_port *dp)
 	}
 
 	devlink_port_attrs_set(dlp, &attrs);
-	err = devlink_port_register(dl, dlp, dp->index);
+	err = devlink_port_register_with_ops(dl, dlp, dp->index,
+					     &dsa_devlink_port_ops);
 	if (err) {
 		if (ds->ops->port_teardown)
 			ds->ops->port_teardown(ds, dp->index);
