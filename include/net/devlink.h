@@ -23,6 +23,11 @@
 
 struct devlink;
 struct devlink_linecard;
+struct ethtool_eth_phy_stats;
+struct ethtool_eth_mac_stats;
+struct ethtool_eth_ctrl_stats;
+struct ethtool_rmon_stats;
+struct ethtool_rmon_hist_range;
 
 struct devlink_port_phys_attrs {
 	u32 port_number; /* Same value as "split group".
@@ -1710,6 +1715,10 @@ void devlink_free(struct devlink *devlink);
  *			    of event queues. Should be used by device drivers to
  *			    configure maximum number of event queues
  *			    of a function managed by the devlink port.
+ * @get_eth_phy_stats: See %ethtool_ops.
+ * @get_eth_mac_stats: See %ethtool_ops.
+ * @get_eth_ctrl_stats: See %ethtool_ops.
+ * @get_rmon_stats: See %ethtool_ops.
  *
  * Note: Driver should return -EOPNOTSUPP if it doesn't support
  * port function (@port_fn_*) handling for a particular port.
@@ -1765,6 +1774,15 @@ struct devlink_port_ops {
 	int (*port_fn_max_io_eqs_set)(struct devlink_port *devlink_port,
 				      u32 max_eqs,
 				      struct netlink_ext_ack *extack);
+	void (*get_eth_phy_stats)(struct devlink_port *port,
+				  struct ethtool_eth_phy_stats *phy_stats);
+	void (*get_eth_mac_stats)(struct devlink_port *port,
+				  struct ethtool_eth_mac_stats *mac_stats);
+	void (*get_eth_ctrl_stats)(struct devlink_port *port,
+				   struct ethtool_eth_ctrl_stats *ctrl_stats);
+	void (*get_rmon_stats)(struct devlink_port *port,
+			       struct ethtool_rmon_stats *rmon_stats,
+			       const struct ethtool_rmon_hist_range **ranges);
 };
 
 struct devlink *devlink_get_by_name(struct net *net, const char *busname,

@@ -233,6 +233,15 @@ attribute-sets:
       -
         name: phy-index
         type: u32
+      -
+        name: devlink-bus-name
+        type: string
+      -
+        name: devlink-dev-name
+        type: string
+      -
+        name: devlink-port-index
+        type: u32
 
   -
     name: bitset-bit

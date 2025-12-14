@@ -2,6 +2,7 @@
 
 #include <linux/phy.h>
 #include <linux/phylib_stubs.h>
+#include <net/devlink.h>
 
 #include "netlink.h"
 #include "common.h"
@@ -92,7 +93,7 @@ const char stats_phy_names[__ETHTOOL_A_STATS_PHY_CNT][ETH_GSTRING_LEN] = {
 
 const struct nla_policy ethnl_stats_get_policy[ETHTOOL_A_STATS_SRC + 1] = {
 	[ETHTOOL_A_STATS_HEADER]	=
-		NLA_POLICY_NESTED(ethnl_header_policy),
+		NLA_POLICY_NESTED(ethnl_header_policy_devlink),
 	[ETHTOOL_A_STATS_GROUPS]	= { .type = NLA_NESTED },
 	[ETHTOOL_A_STATS_SRC]		=
 		NLA_POLICY_MAX(NLA_U32, ETHTOOL_MAC_STATS_SRC_PMAC),
@@ -132,6 +133,7 @@ static int stats_prepare_data(const struct ethnl_req_info *req_base,
 {
 	const struct stats_req_info *req_info = STATS_REQINFO(req_base);
 	struct stats_reply_data *data = STATS_REPDATA(reply_base);
+	struct devlink_port *dl_port = reply_base->dl_port;
 	enum ethtool_mac_stats_src src = req_info->src;
 	struct net_device *dev = reply_base->dev;
 	struct nlattr **tb = info->attrs;
@@ -143,13 +145,15 @@ static int stats_prepare_data(const struct ethnl_req_info *req_base,
 	if (IS_ERR(phydev))
 		return PTR_ERR(phydev);
 
-	ret = ethnl_ops_begin(dev);
-	if (ret < 0)
-		return ret;
+	if (dev) {
+		ret = ethnl_ops_begin(dev);
+		if (ret < 0)
+			return ret;
+	}
 
 	if ((src == ETHTOOL_MAC_STATS_SRC_EMAC ||
 	     src == ETHTOOL_MAC_STATS_SRC_PMAC) &&
-	    !__ethtool_dev_mm_supported(dev)) {
+	    (!dev || !__ethtool_dev_mm_supported(dev))) {
 		NL_SET_ERR_MSG_MOD(info->extack,
 				   "Device does not support MAC merge layer");
 		ethnl_ops_complete(dev);
@@ -174,21 +178,28 @@ static int stats_prepare_data(const struct ethnl_req_info *req_base,
 						  &data->phydev_stats);
 	}
 
-	if (test_bit(ETHTOOL_STATS_ETH_PHY, req_info->stat_mask) &&
-	    dev->ethtool_ops->get_eth_phy_stats)
-		dev->ethtool_ops->get_eth_phy_stats(dev, &data->phy_stats);
-	if (test_bit(ETHTOOL_STATS_ETH_MAC, req_info->stat_mask) &&
-	    dev->ethtool_ops->get_eth_mac_stats)
-		dev->ethtool_ops->get_eth_mac_stats(dev, &data->mac_stats);
-	if (test_bit(ETHTOOL_STATS_ETH_CTRL, req_info->stat_mask) &&
-	    dev->ethtool_ops->get_eth_ctrl_stats)
-		dev->ethtool_ops->get_eth_ctrl_stats(dev, &data->ctrl_stats);
-	if (test_bit(ETHTOOL_STATS_RMON, req_info->stat_mask) &&
-	    dev->ethtool_ops->get_rmon_stats)
-		dev->ethtool_ops->get_rmon_stats(dev, &data->rmon_stats,
-						 &data->rmon_ranges);
+#define CALL_OPS(dev, dl_port, ops_name, ...) \
+	do { \
+		if ((dev) && (dev)->ethtool_ops->ops_name) \
+			(dev)->ethtool_ops->ops_name((dev), __VA_ARGS__); \
+		if ((dl_port) && (dl_port)->ops->ops_name) \
+			(dl_port)->ops->ops_name((dl_port), __VA_ARGS__); \
+	} while (0)
 
-	ethnl_ops_complete(dev);
+	if (test_bit(ETHTOOL_STATS_ETH_PHY, req_info->stat_mask))
+		CALL_OPS(dev, dl_port, get_eth_phy_stats, &data->phy_stats);
+	if (test_bit(ETHTOOL_STATS_ETH_MAC, req_info->stat_mask))
+		CALL_OPS(dev, dl_port, get_eth_mac_stats, &data->mac_stats);
+	if (test_bit(ETHTOOL_STATS_ETH_CTRL, req_info->stat_mask))
+		CALL_OPS(dev, dl_port, get_eth_ctrl_stats, &data->ctrl_stats);
+	if (test_bit(ETHTOOL_STATS_RMON, req_info->stat_mask))
+		CALL_OPS(dev, dl_port, get_rmon_stats, &data->rmon_stats,
+			 &data->rmon_ranges);
+
+#undef CALL_OPS
+
+	if (dev)
+		ethnl_ops_complete(dev);
 	return 0;
 }
 

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 
+#include <net/devlink.h>
 #include <net/netdev_lock.h>
 #include <net/netdev_queues.h>
 #include <net/sock.h>
@@ -50,6 +51,18 @@ const struct nla_policy ethnl_header_policy_phy_stats[] = {
 	[ETHTOOL_A_HEADER_FLAGS]	= NLA_POLICY_MASK(NLA_U32,
 							  ETHTOOL_FLAGS_STATS),
 	[ETHTOOL_A_HEADER_PHY_INDEX]		= NLA_POLICY_MIN(NLA_U32, 1),
+};
+
+const struct nla_policy ethnl_header_policy_devlink[] = {
+	[ETHTOOL_A_HEADER_DEV_INDEX]	= { .type = NLA_U32 },
+	[ETHTOOL_A_HEADER_DEV_NAME]	= { .type = NLA_NUL_STRING,
+					    .len = ALTIFNAMSIZ - 1 },
+	[ETHTOOL_A_HEADER_FLAGS]	= NLA_POLICY_MASK(NLA_U32,
+							  ETHTOOL_FLAGS_BASIC),
+	/* Same as in devlink_nl_policy[] */
+	[ETHTOOL_A_HEADER_DEVLINK_BUS_NAME] = { .type = NLA_NUL_STRING },
+	[ETHTOOL_A_HEADER_DEVLINK_DEV_NAME] = { .type = NLA_NUL_STRING },
+	[ETHTOOL_A_HEADER_DEVLINK_PORT_INDEX] = { .type = NLA_U32 },
 };
 
 int ethnl_sock_priv_set(struct sk_buff *skb, struct net_device *dev, u32 portid,
@@ -128,6 +141,36 @@ void ethnl_ops_complete(struct net_device *dev)
 		pm_runtime_put(dev->dev.parent);
 }
 
+static int ethnl_parse_header_devlink(struct ethnl_req_info *req_info,
+				      const struct nlattr *devlink_bus_attr,
+				      const struct nlattr *devlink_dev_attr,
+				      const struct nlattr *devlink_port_attr,
+				      struct net *net,
+				      struct netlink_ext_ack *extack)
+{
+	const char *busname = nla_data(devlink_bus_attr);
+	const char *devname = nla_data(devlink_dev_attr);
+	u32 port_index = nla_get_u32(devlink_port_attr);
+	struct devlink_port *dl_port;
+	struct devlink *devlink;
+
+	devlink = devlink_get_by_name(net, busname, devname);
+	if (IS_ERR(devlink)) {
+		NL_SET_ERR_MSG(extack, "devlink instance not found");
+		return PTR_ERR(devlink);
+	}
+
+	dl_port = devlink_port_get_by_index(devlink, port_index);
+	if (IS_ERR(dl_port)) {
+		NL_SET_ERR_MSG(extack, "devlink port not found");
+		return PTR_ERR(dl_port);
+	}
+
+	req_info->dl_port = dl_port;
+
+	return 0;
+}
+
 /**
  * ethnl_parse_header_dev_get() - parse request header
  * @req_info:    structure to put results into
@@ -148,8 +191,9 @@ int ethnl_parse_header_dev_get(struct ethnl_req_info *req_info,
 			       const struct nlattr *header, struct net *net,
 			       struct netlink_ext_ack *extack, bool require_dev)
 {
+	const struct nlattr *devlink_bus_attr, *devlink_dev_attr, *devlink_port_attr;
+	const struct nlattr *devname_attr, *ifindex_attr;
 	struct nlattr *tb[ETHTOOL_A_HEADER_MAX + 1];
-	const struct nlattr *devname_attr;
 	struct net_device *dev = NULL;
 	u32 flags = 0;
 	int ret;
@@ -170,14 +214,28 @@ int ethnl_parse_header_dev_get(struct ethnl_req_info *req_info,
 		flags = nla_get_u32(tb[ETHTOOL_A_HEADER_FLAGS]);
 
 	devname_attr = tb[ETHTOOL_A_HEADER_DEV_NAME];
-	if (tb[ETHTOOL_A_HEADER_DEV_INDEX]) {
-		u32 ifindex = nla_get_u32(tb[ETHTOOL_A_HEADER_DEV_INDEX]);
+	ifindex_attr = tb[ETHTOOL_A_HEADER_DEV_INDEX];
+	devlink_bus_attr = tb[ETHTOOL_A_HEADER_DEVLINK_BUS_NAME];
+	devlink_dev_attr = tb[ETHTOOL_A_HEADER_DEVLINK_DEV_NAME];
+	devlink_port_attr = tb[ETHTOOL_A_HEADER_DEVLINK_PORT_INDEX];
+	if (devlink_bus_attr && devlink_dev_attr && devlink_port_attr) {
+		if (devname_attr || ifindex_attr) {
+			NL_SET_ERR_MSG(extack, "Can't specify both devlink attributes and net device attributes");
+			return -EINVAL;
+		}
+
+		ret = ethnl_parse_header_devlink(req_info, devlink_bus_attr,
+						 devlink_dev_attr, devlink_port_attr,
+						 net, extack);
+		if (ret)
+			return ret;
+	} else if (ifindex_attr) {
+		u32 ifindex = nla_get_u32(ifindex_attr);
 
 		dev = netdev_get_by_index(net, ifindex, &req_info->dev_tracker,
 					  GFP_KERNEL);
 		if (!dev) {
-			NL_SET_ERR_MSG_ATTR(extack,
-					    tb[ETHTOOL_A_HEADER_DEV_INDEX],
+			NL_SET_ERR_MSG_ATTR(extack, ifindex_attr,
 					    "no device matches ifindex");
 			return -ENODEV;
 		}
@@ -478,6 +536,7 @@ err_dev:
  * @reply_data: pointer to embedded struct ethnl_reply_data
  * @ops:        instance of struct ethnl_request_ops describing the layout
  * @dev:        network device to initialize the reply for
+ * @dl_port:    devlink port to initialize the reply for
  *
  * Fills the reply data part with zeros and sets the dev member. Must be called
  * before calling the ->fill_reply() callback (for each iteration when handling
@@ -485,10 +544,12 @@ err_dev:
  */
 static void ethnl_init_reply_data(struct ethnl_reply_data *reply_data,
 				  const struct ethnl_request_ops *ops,
-				  struct net_device *dev)
+				  struct net_device *dev,
+				  struct devlink_port *dl_port)
 {
 	memset(reply_data, 0, ops->reply_data_size);
 	reply_data->dev = dev;
+	reply_data->dl_port = dl_port;
 }
 
 /* default ->doit() handler for GET type requests */
@@ -521,7 +582,7 @@ static int ethnl_default_doit(struct sk_buff *skb, struct genl_info *info)
 	ret = ethnl_default_parse(req_info, info, ops, !ops->allow_nodev_do);
 	if (ret < 0)
 		goto err_free;
-	ethnl_init_reply_data(reply_data, ops, req_info->dev);
+	ethnl_init_reply_data(reply_data, ops, req_info->dev, req_info->dl_port);
 
 	rtnl_lock();
 	if (req_info->dev)
@@ -585,7 +646,7 @@ static int ethnl_default_dump_one(struct sk_buff *skb, struct net_device *dev,
 	if (!ehdr)
 		return -EMSGSIZE;
 
-	ethnl_init_reply_data(ctx->reply_data, ctx->ops, dev);
+	ethnl_init_reply_data(ctx->reply_data, ctx->ops, dev, NULL);
 	rtnl_lock();
 	netdev_lock_ops(dev);
 	ret = ctx->ops->prepare_data(ctx->req_info, ctx->reply_data, info);
@@ -1002,7 +1063,7 @@ static void ethnl_default_notify(struct net_device *dev, unsigned int cmd,
 
 	netdev_ops_assert_locked(dev);
 
-	ethnl_init_reply_data(reply_data, ops, dev);
+	ethnl_init_reply_data(reply_data, ops, dev, NULL);
 	ret = ops->prepare_data(req_info, reply_data, &info);
 	if (ret < 0)
 		goto err_rep;

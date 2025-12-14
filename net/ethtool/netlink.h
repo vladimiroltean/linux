@@ -253,6 +253,7 @@ static inline unsigned int ethnl_reply_header_size(void)
  * struct ethnl_req_info - base type of request information for GET requests
  * @dev:   network device the request is for (may be null)
  * @dev_tracker: refcount tracker for @dev reference
+ * @dl_port: devlink port the request is for (can be NULL)
  * @flags: request flags common for all request types
  * @phy_index: phy_device index connected to @dev this request is for. Can be
  *	       0 if the request doesn't target a phy, or if the @dev's attached
@@ -265,6 +266,7 @@ static inline unsigned int ethnl_reply_header_size(void)
 struct ethnl_req_info {
 	struct net_device	*dev;
 	netdevice_tracker	dev_tracker;
+	struct devlink_port	*dl_port;
 	u32			flags;
 	u32			phy_index;
 };
@@ -308,6 +310,7 @@ struct phy_device *ethnl_req_get_phydev(const struct ethnl_req_info *req_info,
  */
 struct ethnl_reply_data {
 	struct net_device		*dev;
+	struct devlink_port		*dl_port;
 };
 
 int ethnl_ops_begin(struct net_device *dev);
@@ -448,6 +451,7 @@ extern const struct nla_policy ethnl_header_policy[ETHTOOL_A_HEADER_FLAGS + 1];
 extern const struct nla_policy ethnl_header_policy_stats[ETHTOOL_A_HEADER_FLAGS + 1];
 extern const struct nla_policy ethnl_header_policy_phy[ETHTOOL_A_HEADER_PHY_INDEX + 1];
 extern const struct nla_policy ethnl_header_policy_phy_stats[ETHTOOL_A_HEADER_PHY_INDEX + 1];
+extern const struct nla_policy ethnl_header_policy_devlink[ETHTOOL_A_HEADER_DEVLINK_PORT_INDEX + 1];
 extern const struct nla_policy ethnl_strset_get_policy[ETHTOOL_A_STRSET_COUNTS_ONLY + 1];
 extern const struct nla_policy ethnl_linkinfo_get_policy[ETHTOOL_A_LINKINFO_HEADER + 1];
 extern const struct nla_policy ethnl_linkinfo_set_policy[ETHTOOL_A_LINKINFO_TP_MDIX_CTRL + 1];
