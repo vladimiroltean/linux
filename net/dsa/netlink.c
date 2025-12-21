@@ -42,12 +42,16 @@ static size_t dsa_get_size(const struct net_device *dev)
 	       nla_total_size(sizeof(u32)) +	/* IFLA_DSA_PORT_INDEX */
 	       nla_total_size(sizeof(u32)) +	/* IFLA_DSA_SWITCH_INDEX */
 	       nla_total_size(sizeof(u32)) +	/* IFLA_DSA_TREE_INDEX */
+	       nla_total_size(sizeof(u32)) +	/* IFLA_DSA_BRIDGE_ID */
+	       nla_total_size(sizeof(u32)) +	/* IFLA_DSA_BRIDGE_TX_FWD_OFFLOAD */
 	       0;
 }
 
 static int dsa_fill_info(struct sk_buff *skb, const struct net_device *dev)
 {
 	struct net_device *conduit = dsa_user_to_conduit(dev);
+	struct dsa_port *dp = dsa_user_to_port(dev);
+	struct dsa_bridge *bridge;
 
 	if (nla_put_u32(skb, IFLA_DSA_CONDUIT, conduit->ifindex))
 		return -EMSGSIZE;
@@ -60,6 +64,16 @@ static int dsa_fill_info(struct sk_buff *skb, const struct net_device *dev)
 
 	if (nla_put_u32(skb, IFLA_DSA_TREE_INDEX, dp->ds->dst->index))
 		return -EMSGSIZE;
+
+	bridge = dp->bridge;
+	if (bridge) {
+		if (nla_put_u32(skb, IFLA_DSA_BRIDGE_ID, bridge->num))
+			return -EMSGSIZE;
+
+		if (nla_put_u32(skb, IFLA_DSA_BRIDGE_TX_FWD_OFFLOAD,
+				bridge->tx_fwd_offload))
+			return -EMSGSIZE;
+	}
 
 	return 0;
 }
