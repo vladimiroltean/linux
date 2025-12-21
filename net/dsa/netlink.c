@@ -39,6 +39,9 @@ static int dsa_changelink(struct net_device *dev, struct nlattr *tb[],
 static size_t dsa_get_size(const struct net_device *dev)
 {
 	return nla_total_size(sizeof(u32)) +	/* IFLA_DSA_CONDUIT  */
+	       nla_total_size(sizeof(u32)) +	/* IFLA_DSA_PORT_INDEX */
+	       nla_total_size(sizeof(u32)) +	/* IFLA_DSA_SWITCH_INDEX */
+	       nla_total_size(sizeof(u32)) +	/* IFLA_DSA_TREE_INDEX */
 	       0;
 }
 
@@ -47,6 +50,15 @@ static int dsa_fill_info(struct sk_buff *skb, const struct net_device *dev)
 	struct net_device *conduit = dsa_user_to_conduit(dev);
 
 	if (nla_put_u32(skb, IFLA_DSA_CONDUIT, conduit->ifindex))
+		return -EMSGSIZE;
+
+	if (nla_put_u32(skb, IFLA_DSA_PORT_INDEX, dp->index))
+		return -EMSGSIZE;
+
+	if (nla_put_u32(skb, IFLA_DSA_SWITCH_INDEX, dp->ds->index))
+		return -EMSGSIZE;
+
+	if (nla_put_u32(skb, IFLA_DSA_TREE_INDEX, dp->ds->dst->index))
 		return -EMSGSIZE;
 
 	return 0;
