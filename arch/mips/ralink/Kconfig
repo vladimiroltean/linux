@@ -93,6 +93,11 @@ choice
 		depends on SOC_MT7620
 		select BUILTIN_DTB
 
+	config DTB_TPLINK_ARCHER_C5_V4
+		bool "TP-Link Archer C5 (v4)"
+		depends on SOC_MT7620
+		select BUILTIN_DTB
+
 	config DTB_VOCORE2
 		bool "VoCore2"
 		depends on SOC_MT7620
