@@ -496,9 +496,8 @@ void lynx_pcs_set_supported_interfaces(struct phylink_pcs *pcs,
 	 * driver what interfaces are supported based on the current PLL
 	 * configuration.
 	 */
-	for (int i = 0; i < ARRAY_SIZE(lynx_interfaces); i++) {
-		phy_interface_t iface = lynx_interfaces[i];
-
+	for (phy_interface_t iface = PHY_INTERFACE_MODE_NA + 1;
+	     iface < PHY_INTERFACE_MODE_MAX; iface++) {
 		err = phy_validate(lynx->serdes[PRIMARY_LANE],
 				   PHY_MODE_ETHERNET, iface, NULL);
 		if (err)
