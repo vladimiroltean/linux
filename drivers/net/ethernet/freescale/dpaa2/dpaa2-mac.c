@@ -532,8 +532,9 @@ static void dpaa2_mac_set_supported_interfaces(struct dpaa2_mac *mac)
 	 */
 	__set_bit(mac->if_mode, cfg->supported_interfaces);
 	if (mac->pcs)
-		lynx_pcs_set_supported_interfaces(mac->pcs, mac->if_mode,
-						  cfg->supported_interfaces);
+		phy_interface_or(cfg->supported_interfaces,
+				 cfg->supported_interfaces,
+				 mac->pcs->supported_interfaces);
 }
 
 void dpaa2_mac_start(struct dpaa2_mac *mac)

@@ -1233,27 +1233,23 @@ int memac_initialization(struct mac_device *mac_dev,
 	/* Note that half duplex is only supported on 10/100M interfaces. */
 
 	if (memac->sgmii_pcs)
-		lynx_pcs_set_supported_interfaces(memac->sgmii_pcs,
-						  mac_dev->phy_if,
-						  supported);
+		phy_interface_or(supported, supported,
+				 memac->sgmii_pcs->supported_interfaces);
 
 	if (memac->qsgmii_pcs &&
 	    mac_dev->phy_if == PHY_INTERFACE_MODE_QSGMII)
-		lynx_pcs_set_supported_interfaces(memac->qsgmii_pcs,
-						  mac_dev->phy_if,
-						  supported);
+		phy_interface_or(supported, supported,
+				 memac->qsgmii_pcs->supported_interfaces);
 	else if (mac_dev->phy_if == PHY_INTERFACE_MODE_QSGMII)
 		dev_warn(mac_dev->dev, "no QSGMII pcs specified\n");
 
 	if (memac->xfi_pcs)
-		lynx_pcs_set_supported_interfaces(memac->xfi_pcs,
-						  mac_dev->phy_if,
-						  supported);
+		phy_interface_or(supported, supported,
+				 memac->xfi_pcs->supported_interfaces);
 
 	if (memac->c73_pcs)
-		lynx_pcs_set_supported_interfaces(memac->c73_pcs,
-						  mac_dev->phy_if,
-						  supported);
+		phy_interface_or(supported, supported,
+				 memac->c73_pcs->supported_interfaces);
 
 	if (!memac->sgmii_pcs && !memac->qsgmii_pcs && !memac->xfi_pcs &&
 	    !memac->c73_pcs) {

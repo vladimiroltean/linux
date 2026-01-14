@@ -463,51 +463,6 @@ static int lynx_pcs_validate_addr(struct mdio_device *mdiodev,
 	return -ENODEV;
 }
 
-
-static const phy_interface_t lynx_interfaces[] = {
-	PHY_INTERFACE_MODE_SGMII,
-	PHY_INTERFACE_MODE_QSGMII,
-	PHY_INTERFACE_MODE_1000BASEX,
-	PHY_INTERFACE_MODE_2500BASEX,
-	PHY_INTERFACE_MODE_10GBASER,
-	PHY_INTERFACE_MODE_USXGMII,
-	PHY_INTERFACE_MODE_10G_QXGMII,
-};
-
-void lynx_pcs_set_supported_interfaces(struct phylink_pcs *pcs,
-				       phy_interface_t default_interface,
-				       unsigned long *supported_interfaces)
-{
-	struct lynx_pcs *lynx = phylink_pcs_to_lynx(pcs);
-	int err;
-
-	__set_bit(default_interface, supported_interfaces);
-
-	if (default_interface == PHY_INTERFACE_MODE_1000BASEX ||
-	    default_interface == PHY_INTERFACE_MODE_SGMII) {
-		__set_bit(PHY_INTERFACE_MODE_1000BASEX, supported_interfaces);
-		__set_bit(PHY_INTERFACE_MODE_SGMII, supported_interfaces);
-	}
-
-	if (!lynx->num_phys)
-		return;
-
-	/* In case we have access to the SerDes phy/lane, then ask the SerDes
-	 * driver what interfaces are supported based on the current PLL
-	 * configuration.
-	 */
-	for (phy_interface_t iface = PHY_INTERFACE_MODE_NA + 1;
-	     iface < PHY_INTERFACE_MODE_MAX; iface++) {
-		err = phy_validate(lynx->serdes[PRIMARY_LANE],
-				   PHY_MODE_ETHERNET, iface, NULL);
-		if (err)
-			continue;
-
-		__set_bit(iface, supported_interfaces);
-	}
-}
-EXPORT_SYMBOL(lynx_pcs_set_supported_interfaces);
-
 static struct phylink_pcs *lynx_pcs_create(struct mdio_device *mdio,
 					   struct phy **phys, size_t num_phys,
 					   enum mtip_model model)
@@ -550,8 +505,23 @@ static struct phylink_pcs *lynx_pcs_create(struct mdio_device *mdio,
 	lynx->num_phys = num_phys;
 	lynx->model = model;
 
-	for (i = 0; i < ARRAY_SIZE(lynx_interfaces); i++)
-		__set_bit(lynx_interfaces[i], lynx->pcs.supported_interfaces);
+	if (lynx->serdes[PRIMARY_LANE]) {
+		/* In case we have access to the SerDes phy/lane, then ask the SerDes
+		 * driver what interfaces are supported based on the current PLL
+		 * configuration.
+		 */
+		for (phy_interface_t iface = PHY_INTERFACE_MODE_NA + 1;
+		     iface < PHY_INTERFACE_MODE_MAX; iface++) {
+			err = phy_validate(lynx->serdes[PRIMARY_LANE],
+					   PHY_MODE_ETHERNET, iface, NULL);
+			if (err)
+				continue;
+
+			dev_dbg(&mdio->dev, "discovered SerDes protocol %s\n",
+				phy_modes(iface));
+			__set_bit(iface, lynx->pcs.supported_interfaces);
+		}
+	}
 
 	return lynx_to_phylink_pcs(lynx);
 
