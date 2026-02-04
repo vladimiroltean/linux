@@ -1880,9 +1880,6 @@ int phy_init_eee(struct phy_device *phydev, bool clk_stop_enable)
 {
 	int ret;
 
-	if (!phydev->drv)
-		return -EIO;
-
 	ret = genphy_c45_eee_is_active(phydev, NULL);
 	if (ret < 0)
 		return ret;
@@ -1905,16 +1902,8 @@ EXPORT_SYMBOL(phy_init_eee);
  */
 int phy_get_eee_err(struct phy_device *phydev)
 {
-	int ret;
-
-	if (!phydev->drv)
-		return -EIO;
-
-	mutex_lock(&phydev->lock);
-	ret = phy_read_mmd(phydev, MDIO_MMD_PCS, MDIO_PCS_EEE_WK_ERR);
-	mutex_unlock(&phydev->lock);
-
-	return ret;
+	scoped_guard(mutex, &phydev->lock)
+		return phy_read_mmd(phydev, MDIO_MMD_PCS, MDIO_PCS_EEE_WK_ERR);
 }
 EXPORT_SYMBOL(phy_get_eee_err);
 
@@ -1929,9 +1918,6 @@ EXPORT_SYMBOL(phy_get_eee_err);
 int phy_ethtool_get_eee(struct phy_device *phydev, struct ethtool_keee *data)
 {
 	int ret;
-
-	if (!phydev->drv)
-		return -EIO;
 
 	mutex_lock(&phydev->lock);
 	ret = genphy_c45_ethtool_get_eee(phydev, data);
@@ -1988,9 +1974,6 @@ int phy_ethtool_set_eee(struct phy_device *phydev, struct ethtool_keee *data)
 {
 	struct eee_config old_cfg;
 	int ret;
-
-	if (!phydev->drv)
-		return -EIO;
 
 	mutex_lock(&phydev->lock);
 
