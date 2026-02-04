@@ -2408,15 +2408,23 @@ int genphy_c45_oatc14_get_sqi(struct phy_device *phydev);
 /* The gen10g_* functions are the old Clause 45 stub */
 int gen10g_config_aneg(struct phy_device *phydev);
 
-static inline int phy_read_status(struct phy_device *phydev)
+static inline int __phy_read_status(struct phy_device *phydev)
 {
-	if (!phydev->drv)
+	const struct phy_driver *phydrv = phydev_drv(phydev);
+
+	if (!phydrv)
 		return -EIO;
 
-	if (phydev->drv->read_status)
-		return phydev->drv->read_status(phydev);
-	else
-		return genphy_read_status(phydev);
+	if (phydrv->read_status)
+		return phydrv->read_status(phydev);
+
+	return genphy_read_status(phydev);
+}
+
+static inline int phy_read_status(struct phy_device *phydev)
+{
+	scoped_guard(mutex, &phydev->lock)
+		return __phy_read_status(phydev);
 }
 
 void phy_drivers_unregister(struct phy_driver *drv, int n);

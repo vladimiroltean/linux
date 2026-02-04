@@ -1012,7 +1012,7 @@ static int phy_check_link_status(struct phy_device *phydev)
 	if (phydev->loopback_enabled)
 		return 0;
 
-	err = phy_read_status(phydev);
+	err = __phy_read_status(phydev);
 	if (err)
 		return err;
 
