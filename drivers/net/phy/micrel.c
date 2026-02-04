@@ -1767,8 +1767,8 @@ static int ksz9x31_cable_test_fault_length(struct phy_device *phydev, u16 stat)
 	 *
 	 * distance to fault = (VCT_DATA - 22) * 4 / cable propagation velocity
 	 */
-	if (phydev_id_compare(phydev, PHY_ID_KSZ9131) ||
-	    phydev_id_compare(phydev, PHY_ID_KSZ9477))
+	if (__phydev_id_compare(phydev, PHY_ID_KSZ9131) ||
+	    __phydev_id_compare(phydev, PHY_ID_KSZ9477))
 		dt = clamp(dt - 22, 0, 255);
 
 	return (dt * 400) / 10;

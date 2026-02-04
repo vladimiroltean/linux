@@ -1622,6 +1622,16 @@ static inline bool phy_id_compare_model(u32 id, u32 model_mask)
 	return phy_id_compare(id, model_mask, PHY_ID_MATCH_MODEL_MASK);
 }
 
+static inline bool __phydev_id_compare(struct phy_device *phydev, u32 id)
+{
+	const struct phy_driver *drv = phydev_drv(phydev);
+
+	if (!drv)
+		return false;
+
+	return phy_id_compare(id, phydev->phy_id, drv->phy_id_mask);
+}
+
 /**
  * phydev_id_compare - compare @id with the PHY's Clause 22 ID
  * @phydev: the PHY device
@@ -1633,7 +1643,11 @@ static inline bool phy_id_compare_model(u32 id, u32 model_mask)
  */
 static inline bool phydev_id_compare(struct phy_device *phydev, u32 id)
 {
-	return phy_id_compare(id, phydev->phy_id, phydev->drv->phy_id_mask);
+	if (!phydev)
+		return false;
+
+	scoped_guard(mutex, &phydev->lock)
+		return __phydev_id_compare(phydev, id);
 }
 
 const char *phy_speed_to_str(int speed);
