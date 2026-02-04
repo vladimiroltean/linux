@@ -554,7 +554,7 @@ static int bcm54140_get_base_addr_and_port(struct phy_device *phydev)
 
 		/* see if it is still the same PHY */
 		if ((phy_id & phydev->drv->phy_id_mask) !=
-		    (phydev->drv->phy_id & phydev->drv->phy_id_mask)) {
+		    __phydev_get_id(phydev)) {
 			addr = phydev->mdio.addr;
 			step++;
 		}

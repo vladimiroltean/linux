@@ -1843,7 +1843,7 @@ static int vsc85xx_config_init(struct phy_device *phydev)
 	if (rc)
 		return rc;
 
-	phy_id = phydev->drv->phy_id & phydev->drv->phy_id_mask;
+	phy_id = __phydev_get_id(phydev);
 	if (PHY_ID_VSC8531 == phy_id || PHY_ID_VSC8541 == phy_id ||
 	    PHY_ID_VSC8530 == phy_id || PHY_ID_VSC8540 == phy_id) {
 		rc = vsc8531_pre_init_seq_set(phydev);

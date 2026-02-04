@@ -161,9 +161,6 @@ struct bcm_ptp_capture {
 #define BCM_MAX_PULSE_8NS	((1U << 9) - 1)
 #define BCM_MAX_PERIOD_8NS	((1U << 30) - 1)
 
-#define BRCM_PHY_MODEL(phydev) \
-	((phydev)->drv->phy_id & (phydev)->drv->phy_id_mask)
-
 static struct bcm_ptp_private *mii2priv(struct mii_timestamper *mii_ts)
 {
 	return container_of(mii_ts, struct bcm_ptp_private, mii_ts);
@@ -922,7 +919,7 @@ struct bcm_ptp_private *bcm_ptp_probe(struct phy_device *phydev)
 	struct bcm_ptp_private *priv;
 	struct ptp_clock *clock;
 
-	switch (BRCM_PHY_MODEL(phydev)) {
+	switch (__phydev_get_id(phydev)) {
 	case PHY_ID_BCM54210E:
 		break;
 	default:

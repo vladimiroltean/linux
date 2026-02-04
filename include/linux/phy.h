@@ -1650,6 +1650,25 @@ static inline bool phydev_id_compare(struct phy_device *phydev, u32 id)
 		return __phydev_id_compare(phydev, id);
 }
 
+static inline u32 __phydev_get_id(struct phy_device *phydev)
+{
+	const struct phy_driver *phydrv = phydev_drv(phydev);
+
+	if (!phydrv)
+		return 0;
+
+	return phydrv->phy_id & phydrv->phy_id_mask;
+}
+
+static inline u32 phydev_get_id(struct phy_device *phydev)
+{
+	if (!phydev)
+		return 0;
+
+	scoped_guard(mutex, &phydev->lock)
+		return __phydev_get_id(phydev);
+}
+
 const char *phy_speed_to_str(int speed);
 const char *phy_duplex_to_str(unsigned int duplex);
 const char *phy_rate_matching_to_str(int rate_matching);

@@ -1412,11 +1412,11 @@ static int tg3_mdio_write(struct mii_bus *bp, int mii_id, int reg, u16 val)
 
 static void tg3_mdio_config_5785(struct tg3 *tp)
 {
-	u32 val;
 	struct phy_device *phydev;
+	u32 val;
 
 	phydev = mdiobus_get_phy(tp->mdio_bus, tp->phy_addr);
-	switch (phydev->drv->phy_id & phydev->drv->phy_id_mask) {
+	switch (phydev_get_id(phydev)) {
 	case PHY_ID_BCM50610:
 	case PHY_ID_BCM50610M:
 		val = MAC_PHYCFG2_50610_LED_MODES;
@@ -1571,7 +1571,7 @@ static int tg3_mdio_init(struct tg3 *tp)
 		return -ENODEV;
 	}
 
-	switch (phydev->drv->phy_id & phydev->drv->phy_id_mask) {
+	switch (phydev_get_id(phydev)) {
 	case PHY_ID_BCM57780:
 		phydev->interface = PHY_INTERFACE_MODE_GMII;
 		phydev->dev_flags |= PHY_BRCM_AUTO_PWRDWN_ENABLE;
@@ -4083,7 +4083,7 @@ static void tg3_power_down_prepare(struct tg3 *tp)
 			linkmode_copy(phydev->advertising, advertising);
 			phy_start_aneg(phydev);
 
-			phyid = phydev->drv->phy_id & phydev->drv->phy_id_mask;
+			phyid = phydev_get_id(phydev);
 			if (phyid != PHY_ID_BCMAC131) {
 				phyid &= PHY_BCM_OUI_MASK;
 				if (phyid == PHY_BCM_OUI_1 ||
