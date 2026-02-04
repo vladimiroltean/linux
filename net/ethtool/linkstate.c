@@ -29,18 +29,20 @@ const struct nla_policy ethnl_linkstate_get_policy[] = {
 
 static int linkstate_get_sqi(struct phy_device *phydev)
 {
+	const struct phy_driver *phydrv;
 	int ret;
 
 	if (!phydev)
 		return -EOPNOTSUPP;
 
 	mutex_lock(&phydev->lock);
-	if (!phydev->drv || !phydev->drv->get_sqi)
+	phydrv = phydev_drv(phydev);
+	if (!phydrv || !phydrv->get_sqi)
 		ret = -EOPNOTSUPP;
 	else if (!phydev->link)
 		ret = -ENETDOWN;
 	else
-		ret = phydev->drv->get_sqi(phydev);
+		ret = phydrv->get_sqi(phydev);
 	mutex_unlock(&phydev->lock);
 
 	return ret;
@@ -48,18 +50,20 @@ static int linkstate_get_sqi(struct phy_device *phydev)
 
 static int linkstate_get_sqi_max(struct phy_device *phydev)
 {
+	const struct phy_driver *phydrv;
 	int ret;
 
 	if (!phydev)
 		return -EOPNOTSUPP;
 
 	mutex_lock(&phydev->lock);
-	if (!phydev->drv || !phydev->drv->get_sqi_max)
+	phydrv = phydev_drv(phydev);
+	if (!phydrv || !phydrv->get_sqi_max)
 		ret = -EOPNOTSUPP;
 	else if (!phydev->link)
 		ret = -ENETDOWN;
 	else
-		ret = phydev->drv->get_sqi_max(phydev);
+		ret = phydrv->get_sqi_max(phydev);
 	mutex_unlock(&phydev->lock);
 
 	return ret;

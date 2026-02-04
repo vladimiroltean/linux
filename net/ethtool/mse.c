@@ -41,10 +41,11 @@ static int get_snapshot_if_supported(struct phy_device *phydev,
 				     unsigned int *idx, u32 cap_bit,
 				     enum phy_mse_channel channel)
 {
+	const struct phy_driver *phydrv = phydev_drv(phydev);
 	int ret;
 
 	if (data->capability.supported_caps & cap_bit) {
-		ret = phydev->drv->get_mse_snapshot(phydev, channel,
+		ret = phydrv->get_mse_snapshot(phydev, channel,
 					&data->snapshots[*idx].snapshot);
 		if (ret)
 			return ret;
@@ -121,6 +122,7 @@ static int mse_prepare_data(const struct ethnl_req_info *req_base,
 {
 	struct mse_reply_data *data = mse_repdata(reply_base);
 	struct net_device *dev = reply_base->dev;
+	const struct phy_driver *phydrv;
 	struct phy_device *phydev;
 	int ret;
 
@@ -137,8 +139,8 @@ static int mse_prepare_data(const struct ethnl_req_info *req_base,
 
 	mutex_lock(&phydev->lock);
 
-	if (!phydev->drv || !phydev->drv->get_mse_capability ||
-	    !phydev->drv->get_mse_snapshot) {
+	phydrv = phydev_drv(phydev);
+	if (!phydrv || !phydrv->get_mse_capability || !phydrv->get_mse_snapshot) {
 		ret = -EOPNOTSUPP;
 		goto out_unlock;
 	}
@@ -147,7 +149,7 @@ static int mse_prepare_data(const struct ethnl_req_info *req_base,
 		goto out_unlock;
 	}
 
-	ret = phydev->drv->get_mse_capability(phydev, &data->capability);
+	ret = phydrv->get_mse_capability(phydev, &data->capability);
 	if (ret)
 		goto out_unlock;
 

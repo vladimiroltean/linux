@@ -74,6 +74,7 @@ static int phy_prepare_data(const struct ethnl_req_info *req_info,
 	struct phy_link_topology *topo = reply_data->dev->link_topo;
 	struct phy_reply_data *rep_data = PHY_REPDATA(reply_data);
 	struct nlattr **tb = info->attrs;
+	const struct phy_driver *phydrv;
 	struct phy_device_node *pdn;
 	struct phy_device *phydev;
 
@@ -87,10 +88,14 @@ static int phy_prepare_data(const struct ethnl_req_info *req_info,
 	if (!pdn)
 		return -EOPNOTSUPP;
 
+	mutex_lock(&phydev->lock);
 	rep_data->phyindex = phydev->phyindex;
 	rep_data->name = kstrdup(dev_name(&phydev->mdio.dev), GFP_KERNEL);
-	rep_data->drvname = kstrdup(phydev->drv->name, GFP_KERNEL);
+	phydrv = phydev_drv(phydev);
+	if (phydrv)
+		rep_data->drvname = kstrdup(phydrv->name, GFP_KERNEL);
 	rep_data->upstream_type = pdn->upstream_type;
+	mutex_unlock(&phydev->lock);
 
 	if (pdn->upstream_type == PHY_UPSTREAM_PHY) {
 		struct phy_device *upstream = pdn->upstream.phydev;

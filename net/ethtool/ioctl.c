@@ -2842,6 +2842,9 @@ int ethtool_get_module_info_call(struct net_device *dev,
 {
 	const struct ethtool_ops *ops = dev->ethtool_ops;
 	struct phy_device *phydev = dev->phydev;
+	bool phydrv_has_module_info = false;
+	const struct phy_driver *phydrv;
+	int ret;
 
 	if (dev->ethtool->module_fw_flash_in_progress)
 		return -EBUSY;
@@ -2849,8 +2852,18 @@ int ethtool_get_module_info_call(struct net_device *dev,
 	if (dev->sfp_bus)
 		return sfp_get_module_info(dev->sfp_bus, modinfo);
 
-	if (phydev && phydev->drv && phydev->drv->module_info)
-		return phydev->drv->module_info(phydev, modinfo);
+	if (phydev) {
+		mutex_lock(&phydev->lock);
+		phydrv = phydev_drv(phydev);
+		if (phydrv && phydrv->module_info) {
+			ret = phydrv->module_info(phydev, modinfo);
+			phydrv_has_module_info = true;
+		}
+		mutex_unlock(&phydev->lock);
+
+		if (phydrv_has_module_info)
+			return ret;
+	}
 
 	if (ops->get_module_info)
 		return ops->get_module_info(dev, modinfo);
@@ -2882,6 +2895,9 @@ int ethtool_get_module_eeprom_call(struct net_device *dev,
 {
 	const struct ethtool_ops *ops = dev->ethtool_ops;
 	struct phy_device *phydev = dev->phydev;
+	bool phydrv_has_module_eeprom = false;
+	const struct phy_driver *phydrv;
+	int ret;
 
 	if (dev->ethtool->module_fw_flash_in_progress)
 		return -EBUSY;
@@ -2889,8 +2905,17 @@ int ethtool_get_module_eeprom_call(struct net_device *dev,
 	if (dev->sfp_bus)
 		return sfp_get_module_eeprom(dev->sfp_bus, ee, data);
 
-	if (phydev && phydev->drv && phydev->drv->module_eeprom)
-		return phydev->drv->module_eeprom(phydev, ee, data);
+	if (phydev) {
+		mutex_lock(&phydev->lock);
+		phydrv = phydev_drv(phydev);
+		if (phydrv && phydrv->module_eeprom) {
+			ret = phydrv->module_eeprom(phydev, ee, data);
+			phydrv_has_module_eeprom = true;
+		}
+		mutex_unlock(&phydev->lock);
+		if (phydrv_has_module_eeprom)
+			return ret;
+	}
 
 	if (ops->get_module_eeprom)
 		return ops->get_module_eeprom(dev, ee, data);
@@ -3128,29 +3153,42 @@ static int ethtool_phy_tunable_valid(const struct ethtool_tunable *tuna)
 static int get_phy_tunable(struct net_device *dev, void __user *useraddr)
 {
 	struct phy_device *phydev = dev->phydev;
+	const struct phy_driver *phydrv;
 	struct ethtool_tunable tuna;
 	bool phy_drv_tunable;
 	void *data;
 	int ret;
 
-	phy_drv_tunable = phydev && phydev->drv && phydev->drv->get_tunable;
-	if (!phy_drv_tunable && !dev->ethtool_ops->get_phy_tunable)
-		return -EOPNOTSUPP;
-	if (copy_from_user(&tuna, useraddr, sizeof(tuna)))
-		return -EFAULT;
+	if (phydev) {
+		mutex_lock(&phydev->lock);
+
+		phydrv = phydev_drv(phydev);
+		phy_drv_tunable = phydrv && phydrv->get_tunable;
+		if (!phy_drv_tunable && !dev->ethtool_ops->get_phy_tunable) {
+			ret = -EOPNOTSUPP;
+			goto out_unlock;
+		}
+	}
+
+	if (copy_from_user(&tuna, useraddr, sizeof(tuna))) {
+		ret = -EFAULT;
+		goto out_unlock;
+	}
+
 	ret = ethtool_phy_tunable_valid(&tuna);
 	if (ret)
-		return ret;
+		goto out_unlock;
+
 	data = kzalloc(tuna.len, GFP_USER);
-	if (!data)
-		return -ENOMEM;
-	if (phy_drv_tunable) {
-		mutex_lock(&phydev->lock);
-		ret = phydev->drv->get_tunable(phydev, &tuna, data);
-		mutex_unlock(&phydev->lock);
-	} else {
-		ret = dev->ethtool_ops->get_phy_tunable(dev, &tuna, data);
+	if (!data) {
+		ret = -ENOMEM;
+		goto out_unlock;
 	}
+
+	if (phy_drv_tunable)
+		ret = phydrv->get_tunable(phydev, &tuna, data);
+	else
+		ret = dev->ethtool_ops->get_phy_tunable(dev, &tuna, data);
 	if (ret)
 		goto out;
 	useraddr += sizeof(tuna);
@@ -3161,38 +3199,56 @@ static int get_phy_tunable(struct net_device *dev, void __user *useraddr)
 
 out:
 	kfree(data);
+out_unlock:
+	if (phydev)
+		mutex_unlock(&phydev->lock);
 	return ret;
 }
 
 static int set_phy_tunable(struct net_device *dev, void __user *useraddr)
 {
 	struct phy_device *phydev = dev->phydev;
+	const struct phy_driver *phydrv;
+	bool phy_drv_tunable = false;
 	struct ethtool_tunable tuna;
-	bool phy_drv_tunable;
 	void *data;
 	int ret;
 
-	phy_drv_tunable = phydev && phydev->drv && phydev->drv->get_tunable;
-	if (!phy_drv_tunable && !dev->ethtool_ops->set_phy_tunable)
-		return -EOPNOTSUPP;
-	if (copy_from_user(&tuna, useraddr, sizeof(tuna)))
-		return -EFAULT;
-	ret = ethtool_phy_tunable_valid(&tuna);
-	if (ret)
-		return ret;
-	useraddr += sizeof(tuna);
-	data = memdup_user(useraddr, tuna.len);
-	if (IS_ERR(data))
-		return PTR_ERR(data);
-	if (phy_drv_tunable) {
+	if (phydev) {
 		mutex_lock(&phydev->lock);
-		ret = phydev->drv->set_tunable(phydev, &tuna, data);
-		mutex_unlock(&phydev->lock);
-	} else {
-		ret = dev->ethtool_ops->set_phy_tunable(dev, &tuna, data);
+		phydrv = phydev_drv(phydev);
+		phy_drv_tunable = phydrv && phydrv->get_tunable;
+		if (!phy_drv_tunable && !dev->ethtool_ops->set_phy_tunable) {
+			ret = -EOPNOTSUPP;
+			goto out_unlock;
+		}
 	}
 
+	if (copy_from_user(&tuna, useraddr, sizeof(tuna))) {
+		ret = -EFAULT;
+		goto out_unlock;
+	}
+
+	ret = ethtool_phy_tunable_valid(&tuna);
+	if (ret)
+		goto out_unlock;
+
+	useraddr += sizeof(tuna);
+	data = memdup_user(useraddr, tuna.len);
+	if (IS_ERR(data)) {
+		ret = PTR_ERR(data);
+		goto out_unlock;
+	}
+
+	if (phy_drv_tunable)
+		ret = phydrv->set_tunable(phydev, &tuna, data);
+	else
+		ret = dev->ethtool_ops->set_phy_tunable(dev, &tuna, data);
+
 	kfree(data);
+out_unlock:
+	if (phydev)
+		mutex_unlock(&phydev->lock);
 	return ret;
 }
 
