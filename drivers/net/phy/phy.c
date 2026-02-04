@@ -1837,7 +1837,9 @@ int phy_eee_tx_clock_stop_capable(struct phy_device *phydev)
 {
 	int stat1;
 
+	mutex_lock(&phydev->lock);
 	stat1 = phy_read_mmd(phydev, MDIO_MMD_PCS, MDIO_STAT1);
+	mutex_unlock(&phydev->lock);
 	if (stat1 < 0)
 		return stat1;
 
