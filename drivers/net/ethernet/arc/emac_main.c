@@ -983,8 +983,7 @@ int arc_emac_probe(struct net_device *ndev, int interface)
 		goto out_mdio;
 	}
 
-	dev_info(dev, "connected to %s phy with id 0x%x\n",
-		 phydev->drv->name, phydev->phy_id);
+	phy_attached_info(phydev);
 
 	netif_napi_add_weight(ndev, &priv->napi, arc_emac_poll,
 			      ARC_EMAC_NAPI_WEIGHT);
