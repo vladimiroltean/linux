@@ -206,8 +206,8 @@ static int bgmac_probe(struct bcma_device *core)
 		bgmac->mii_bus = mii_bus;
 
 		phydev = mdiobus_get_phy(bgmac->mii_bus, bgmac->phyaddr);
-		if (ci->id == BCMA_CHIP_ID_BCM53573 && phydev &&
-		    (phydev->drv->phy_id & phydev->drv->phy_id_mask) == PHY_ID_BCM54210E)
+		if (ci->id == BCMA_CHIP_ID_BCM53573 &&
+		    phydev_id_compare(phydev, PHY_ID_BCM54210E))
 			phydev->dev_flags |= PHY_BRCM_EN_MASTER_MODE;
 	}
 
