@@ -1566,6 +1566,13 @@ struct phy_driver {
 #define to_phy_driver(d) container_of_const(to_mdio_common_driver(d),		\
 				      struct phy_driver, mdiodrv)
 
+static inline const struct phy_driver *phydev_drv(struct phy_device *phydev)
+{
+	lockdep_assert_held(&phydev->lock);
+
+	return phydev->drv;
+}
+
 #define PHY_ID_MATCH_EXTACT_MASK GENMASK(31, 0)
 #define PHY_ID_MATCH_MODEL_MASK GENMASK(31, 4)
 #define PHY_ID_MATCH_VENDOR_MASK GENMASK(31, 10)
