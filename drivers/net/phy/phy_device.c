@@ -2057,10 +2057,16 @@ EXPORT_SYMBOL(phy_resume);
  */
 int phy_reset_after_clk_enable(struct phy_device *phydev)
 {
-	if (!phydev || !phydev->drv)
+	const struct phy_driver *phydrv;
+
+	if (!phydev)
 		return -ENODEV;
 
-	if (phydev->drv->flags & PHY_RST_AFTER_CLK_EN) {
+	phydrv = phydev_drv(phydev);
+	if (!phydrv)
+		return -ENODEV;
+
+	if (phydrv->flags & PHY_RST_AFTER_CLK_EN) {
 		phy_device_reset(phydev, 1);
 		phy_device_reset(phydev, 0);
 		return 1;
@@ -3196,10 +3202,13 @@ static int phy_led_set_brightness(struct led_classdev *led_cdev,
 {
 	struct phy_led *phyled = to_phy_led(led_cdev);
 	struct phy_device *phydev = phyled->phydev;
-	int err;
+	const struct phy_driver *phydrv;
+	int err = -ENODEV;
 
 	mutex_lock(&phydev->lock);
-	err = phydev->drv->led_brightness_set(phydev, phyled->index, value);
+	phydrv = phydev_drv(phydev);
+	if (phydrv)
+		err = phydrv->led_brightness_set(phydev, phyled->index, value);
 	mutex_unlock(&phydev->lock);
 
 	return err;
@@ -3211,11 +3220,14 @@ static int phy_led_blink_set(struct led_classdev *led_cdev,
 {
 	struct phy_led *phyled = to_phy_led(led_cdev);
 	struct phy_device *phydev = phyled->phydev;
-	int err;
+	const struct phy_driver *phydrv;
+	int err = -ENODEV;
 
 	mutex_lock(&phydev->lock);
-	err = phydev->drv->led_blink_set(phydev, phyled->index,
-					 delay_on, delay_off);
+	phydrv = phydev_drv(phydev);
+	if (phydrv)
+		err = phydrv->led_blink_set(phydev, phyled->index,
+					    delay_on, delay_off);
 	mutex_unlock(&phydev->lock);
 
 	return err;
@@ -3238,10 +3250,13 @@ phy_led_hw_control_get(struct led_classdev *led_cdev,
 {
 	struct phy_led *phyled = to_phy_led(led_cdev);
 	struct phy_device *phydev = phyled->phydev;
-	int err;
+	const struct phy_driver *phydrv;
+	int err = -ENODEV;
 
 	mutex_lock(&phydev->lock);
-	err = phydev->drv->led_hw_control_get(phydev, phyled->index, rules);
+	phydrv = phydev_drv(phydev);
+	if (phydrv)
+		err = phydrv->led_hw_control_get(phydev, phyled->index, rules);
 	mutex_unlock(&phydev->lock);
 
 	return err;
@@ -3253,10 +3268,13 @@ phy_led_hw_control_set(struct led_classdev *led_cdev,
 {
 	struct phy_led *phyled = to_phy_led(led_cdev);
 	struct phy_device *phydev = phyled->phydev;
-	int err;
+	const struct phy_driver *phydrv;
+	int err = -ENODEV;
 
 	mutex_lock(&phydev->lock);
-	err = phydev->drv->led_hw_control_set(phydev, phyled->index, rules);
+	phydrv = phydev_drv(phydev);
+	if (phydev)
+		err = phydrv->led_hw_control_set(phydev, phyled->index, rules);
 	mutex_unlock(&phydev->lock);
 
 	return err;
@@ -3267,10 +3285,13 @@ static __maybe_unused int phy_led_hw_is_supported(struct led_classdev *led_cdev,
 {
 	struct phy_led *phyled = to_phy_led(led_cdev);
 	struct phy_device *phydev = phyled->phydev;
-	int err;
+	const struct phy_driver *phydrv;
+	int err = -ENODEV;
 
 	mutex_lock(&phydev->lock);
-	err = phydev->drv->led_hw_is_supported(phydev, phyled->index, rules);
+	phydrv = phydev_drv(phydev);
+	if (phydrv)
+		err = phydrv->led_hw_is_supported(phydev, phyled->index, rules);
 	mutex_unlock(&phydev->lock);
 
 	return err;

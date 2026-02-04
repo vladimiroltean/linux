@@ -64,12 +64,14 @@ static const char *phy_state_to_str(enum phy_state st)
 static void phy_process_state_change(struct phy_device *phydev,
 				     enum phy_state old_state)
 {
+	const struct phy_driver *drv = phydev_drv(phydev);
+
 	if (old_state != phydev->state) {
 		phydev_dbg(phydev, "PHY state change %s -> %s\n",
 			   phy_state_to_str(old_state),
 			   phy_state_to_str(phydev->state));
-		if (phydev->drv && phydev->drv->link_change_notify)
-			phydev->drv->link_change_notify(phydev);
+		if (drv && drv->link_change_notify)
+			drv->link_change_notify(phydev);
 	}
 }
 
@@ -146,15 +148,14 @@ EXPORT_SYMBOL(phy_print_status);
 int phy_get_rate_matching(struct phy_device *phydev,
 			  phy_interface_t iface)
 {
-	int ret = RATE_MATCH_NONE;
+	scoped_guard(mutex, &phydev->lock) {
+		const struct phy_driver *drv = phydev_drv(phydev);
 
-	if (phydev->drv->get_rate_matching) {
-		mutex_lock(&phydev->lock);
-		ret = phydev->drv->get_rate_matching(phydev, iface);
-		mutex_unlock(&phydev->lock);
+		if (drv && drv->get_rate_matching)
+			return drv->get_rate_matching(phydev, iface);
 	}
 
-	return ret;
+	return RATE_MATCH_NONE;
 }
 EXPORT_SYMBOL_GPL(phy_get_rate_matching);
 
@@ -167,9 +168,11 @@ EXPORT_SYMBOL_GPL(phy_get_rate_matching);
  */
 static int phy_config_interrupt(struct phy_device *phydev, bool interrupts)
 {
+	const struct phy_driver *drv = phydev_drv(phydev);
+
 	phydev->interrupts = interrupts ? 1 : 0;
-	if (phydev->drv->config_intr)
-		return phydev->drv->config_intr(phydev);
+	if (drv->config_intr)
+		return drv->config_intr(phydev);
 
 	return 0;
 }
@@ -204,8 +207,10 @@ EXPORT_SYMBOL_GPL(phy_restart_aneg);
  */
 int phy_aneg_done(struct phy_device *phydev)
 {
-	if (phydev->drv && phydev->drv->aneg_done)
-		return phydev->drv->aneg_done(phydev);
+	const struct phy_driver *drv = phydev_drv(phydev);
+
+	if (drv && drv->aneg_done)
+		return drv->aneg_done(phydev);
 	else if (phydev->is_c45)
 		return genphy_c45_aneg_done(phydev);
 	else
@@ -548,12 +553,14 @@ static void phy_abort_cable_test(struct phy_device *phydev)
  */
 int phy_ethtool_get_strings(struct phy_device *phydev, u8 *data)
 {
-	if (!phydev->drv)
-		return -EIO;
+	scoped_guard(mutex, &phydev->lock) {
+		const struct phy_driver *drv = phydev_drv(phydev);
 
-	mutex_lock(&phydev->lock);
-	phydev->drv->get_strings(phydev, data);
-	mutex_unlock(&phydev->lock);
+		if (!drv)
+			return -EIO;
+
+		drv->get_strings(phydev, data);
+	}
 
 	return 0;
 }
@@ -566,19 +573,14 @@ EXPORT_SYMBOL(phy_ethtool_get_strings);
  */
 int phy_ethtool_get_sset_count(struct phy_device *phydev)
 {
-	int ret;
+	scoped_guard(mutex, &phydev->lock) {
+		const struct phy_driver *drv = phydev_drv(phydev);
 
-	if (!phydev->drv)
-		return -EIO;
+		if (!drv)
+			return -EIO;
 
-	if (phydev->drv->get_sset_count &&
-	    phydev->drv->get_strings &&
-	    phydev->drv->get_stats) {
-		mutex_lock(&phydev->lock);
-		ret = phydev->drv->get_sset_count(phydev);
-		mutex_unlock(&phydev->lock);
-
-		return ret;
+		if (drv->get_sset_count && drv->get_strings && drv->get_stats)
+			return drv->get_sset_count(phydev);
 	}
 
 	return -EOPNOTSUPP;
@@ -595,12 +597,14 @@ EXPORT_SYMBOL(phy_ethtool_get_sset_count);
 int phy_ethtool_get_stats(struct phy_device *phydev,
 			  struct ethtool_stats *stats, u64 *data)
 {
-	if (!phydev->drv)
-		return -EIO;
+	scoped_guard(mutex, &phydev->lock) {
+		const struct phy_driver *drv = phydev_drv(phydev);
 
-	mutex_lock(&phydev->lock);
-	phydev->drv->get_stats(phydev, stats, data);
-	mutex_unlock(&phydev->lock);
+		if (!drv)
+			return -EIO;
+
+		drv->get_stats(phydev, stats, data);
+	}
 
 	return 0;
 }
@@ -620,12 +624,12 @@ void __phy_ethtool_get_phy_stats(struct phy_device *phydev,
 				 struct ethtool_eth_phy_stats *phy_stats,
 				 struct ethtool_phy_stats *phydev_stats)
 {
-	if (!phydev->drv || !phydev->drv->get_phy_stats)
-		return;
+	scoped_guard(mutex, &phydev->lock) {
+		const struct phy_driver *drv = phydev_drv(phydev);
 
-	mutex_lock(&phydev->lock);
-	phydev->drv->get_phy_stats(phydev, phy_stats, phydev_stats);
-	mutex_unlock(&phydev->lock);
+		if (drv && drv->get_phy_stats)
+			drv->get_phy_stats(phydev, phy_stats, phydev_stats);
+	}
 }
 
 /**
@@ -641,12 +645,12 @@ void __phy_ethtool_get_link_ext_stats(struct phy_device *phydev,
 {
 	link_stats->link_down_events = READ_ONCE(phydev->link_down_events);
 
-	if (!phydev->drv || !phydev->drv->get_link_stats)
-		return;
+	scoped_guard(mutex, &phydev->lock) {
+		const struct phy_driver *drv = phydev_drv(phydev);
 
-	mutex_lock(&phydev->lock);
-	phydev->drv->get_link_stats(phydev, link_stats);
-	mutex_unlock(&phydev->lock);
+		if (drv && drv->get_link_stats)
+			drv->get_link_stats(phydev, link_stats);
+	}
 }
 
 /**
@@ -660,24 +664,17 @@ void __phy_ethtool_get_link_ext_stats(struct phy_device *phydev,
 int phy_ethtool_get_plca_cfg(struct phy_device *phydev,
 			     struct phy_plca_cfg *plca_cfg)
 {
-	int ret;
+	scoped_guard(mutex, &phydev->lock) {
+		const struct phy_driver *drv = phydev_drv(phydev);
 
-	if (!phydev->drv) {
-		ret = -EIO;
-		goto out;
+		if (!drv)
+			return -EIO;
+
+		if (drv->get_plca_cfg)
+			return drv->get_plca_cfg(phydev, plca_cfg);
 	}
 
-	if (!phydev->drv->get_plca_cfg) {
-		ret = -EOPNOTSUPP;
-		goto out;
-	}
-
-	mutex_lock(&phydev->lock);
-	ret = phydev->drv->get_plca_cfg(phydev, plca_cfg);
-
-	mutex_unlock(&phydev->lock);
-out:
-	return ret;
+	return -EOPNOTSUPP;
 }
 
 /**
@@ -723,15 +720,18 @@ int phy_ethtool_set_plca_cfg(struct phy_device *phydev,
 			     struct netlink_ext_ack *extack)
 {
 	struct phy_plca_cfg *curr_plca_cfg;
+	const struct phy_driver *drv;
 	int ret;
 
-	if (!phydev->drv) {
+	mutex_lock(&phydev->lock);
+
+	drv = phydev_drv(phydev);
+	if (!drv) {
 		ret = -EIO;
 		goto out;
 	}
 
-	if (!phydev->drv->set_plca_cfg ||
-	    !phydev->drv->get_plca_cfg) {
+	if (!drv->set_plca_cfg || !drv->get_plca_cfg) {
 		ret = -EOPNOTSUPP;
 		goto out;
 	}
@@ -742,9 +742,7 @@ int phy_ethtool_set_plca_cfg(struct phy_device *phydev,
 		goto out;
 	}
 
-	mutex_lock(&phydev->lock);
-
-	ret = phydev->drv->get_plca_cfg(phydev, curr_plca_cfg);
+	ret = drv->get_plca_cfg(phydev, curr_plca_cfg);
 	if (ret)
 		goto out_drv;
 
@@ -801,12 +799,12 @@ int phy_ethtool_set_plca_cfg(struct phy_device *phydev,
 			goto out_drv;
 	}
 
-	ret = phydev->drv->set_plca_cfg(phydev, plca_cfg);
+	ret = drv->set_plca_cfg(phydev, plca_cfg);
 
 out_drv:
 	kfree(curr_plca_cfg);
-	mutex_unlock(&phydev->lock);
 out:
+	mutex_unlock(&phydev->lock);
 	return ret;
 }
 
@@ -821,24 +819,17 @@ out:
 int phy_ethtool_get_plca_status(struct phy_device *phydev,
 				struct phy_plca_status *plca_st)
 {
-	int ret;
+	scoped_guard(mutex, &phydev->lock) {
+		const struct phy_driver *drv = phydev_drv(phydev);
 
-	if (!phydev->drv) {
-		ret = -EIO;
-		goto out;
+		if (!drv)
+			return -EIO;
+
+		if (drv->get_plca_status)
+			return drv->get_plca_status(phydev, plca_st);
 	}
 
-	if (!phydev->drv->get_plca_status) {
-		ret = -EOPNOTSUPP;
-		goto out;
-	}
-
-	mutex_lock(&phydev->lock);
-	ret = phydev->drv->get_plca_status(phydev, plca_st);
-
-	mutex_unlock(&phydev->lock);
-out:
-	return ret;
+	return -EOPNOTSUPP;
 }
 
 /**
@@ -851,17 +842,19 @@ int phy_start_cable_test(struct phy_device *phydev,
 			 struct netlink_ext_ack *extack)
 {
 	struct net_device *dev = phydev->attached_dev;
+	const struct phy_driver *drv;
 	int err = -ENOMEM;
 
-	if (!(phydev->drv &&
-	      phydev->drv->cable_test_start &&
-	      phydev->drv->cable_test_get_status)) {
+	mutex_lock(&phydev->lock);
+
+	drv = phydev_drv(phydev);
+	if (!(drv && drv->cable_test_start && drv->cable_test_get_status)) {
 		NL_SET_ERR_MSG(extack,
 			       "PHY driver does not support cable testing");
-		return -EOPNOTSUPP;
+		err = -EOPNOTSUPP;
+		goto out;
 	}
 
-	mutex_lock(&phydev->lock);
 	if (phydev->state == PHY_CABLETEST) {
 		NL_SET_ERR_MSG(extack,
 			       "PHY already performing a test");
@@ -885,7 +878,7 @@ int phy_start_cable_test(struct phy_device *phydev,
 	phy_link_down(phydev);
 
 	netif_testing_on(dev);
-	err = phydev->drv->cable_test_start(phydev);
+	err = drv->cable_test_start(phydev);
 	if (err) {
 		netif_testing_off(dev);
 		phy_link_up(phydev);
@@ -922,17 +915,19 @@ int phy_start_cable_test_tdr(struct phy_device *phydev,
 			     const struct phy_tdr_config *config)
 {
 	struct net_device *dev = phydev->attached_dev;
+	const struct phy_driver *drv;
 	int err = -ENOMEM;
 
-	if (!(phydev->drv &&
-	      phydev->drv->cable_test_tdr_start &&
-	      phydev->drv->cable_test_get_status)) {
+	mutex_lock(&phydev->lock);
+
+	drv = phydev_drv(phydev);
+	if (!(drv && drv->cable_test_tdr_start && drv->cable_test_get_status)) {
 		NL_SET_ERR_MSG(extack,
 			       "PHY driver does not support cable test TDR");
-		return -EOPNOTSUPP;
+		err = -EOPNOTSUPP;
+		goto out;
 	}
 
-	mutex_lock(&phydev->lock);
 	if (phydev->state == PHY_CABLETEST) {
 		NL_SET_ERR_MSG(extack,
 			       "PHY already performing a test");
@@ -956,7 +951,7 @@ int phy_start_cable_test_tdr(struct phy_device *phydev,
 	phy_link_down(phydev);
 
 	netif_testing_on(dev);
-	err = phydev->drv->cable_test_tdr_start(phydev, config);
+	err = drv->cable_test_tdr_start(phydev, config);
 	if (err) {
 		netif_testing_off(dev);
 		phy_link_up(phydev);
@@ -983,8 +978,10 @@ EXPORT_SYMBOL(phy_start_cable_test_tdr);
 
 int phy_config_aneg(struct phy_device *phydev)
 {
-	if (phydev->drv->config_aneg)
-		return phydev->drv->config_aneg(phydev);
+	const struct phy_driver *drv = phydev_drv(phydev);
+
+	if (drv->config_aneg)
+		return drv->config_aneg(phydev);
 
 	/* Clause 45 PHYs that don't implement Clause 22 registers are not
 	 * allowed to call genphy_config_aneg()
@@ -1052,8 +1049,10 @@ static int phy_check_link_status(struct phy_device *phydev)
 unsigned int phy_inband_caps(struct phy_device *phydev,
 			     phy_interface_t interface)
 {
-	if (phydev->drv && phydev->drv->inband_caps)
-		return phydev->drv->inband_caps(phydev, interface);
+	const struct phy_driver *drv = phydev_drv(phydev);
+
+	if (drv && drv->inband_caps)
+		return drv->inband_caps(phydev, interface);
 
 	return 0;
 }
@@ -1071,6 +1070,8 @@ EXPORT_SYMBOL_GPL(phy_inband_caps);
  */
 int phy_config_inband(struct phy_device *phydev, unsigned int modes)
 {
+	const struct phy_driver *drv = phydev_drv(phydev);
+
 	lockdep_assert_held(&phydev->lock);
 
 	if (!!(modes & LINK_INBAND_DISABLE) +
@@ -1078,12 +1079,12 @@ int phy_config_inband(struct phy_device *phydev, unsigned int modes)
 	    !!(modes & LINK_INBAND_BYPASS) != 1)
 		return -EINVAL;
 
-	if (!phydev->drv)
+	if (!drv)
 		return -EIO;
-	else if (!phydev->drv->config_inband)
+	else if (!drv->config_inband)
 		return -EOPNOTSUPP;
 
-	return phydev->drv->config_inband(phydev, modes);
+	return drv->config_inband(phydev, modes);
 }
 EXPORT_SYMBOL(phy_config_inband);
 
@@ -1098,11 +1099,12 @@ EXPORT_SYMBOL(phy_config_inband);
  */
 int _phy_start_aneg(struct phy_device *phydev)
 {
+	const struct phy_driver *drv = phydev_drv(phydev);
 	int err;
 
 	lockdep_assert_held(&phydev->lock);
 
-	if (!phydev->drv)
+	if (!drv)
 		return -EIO;
 
 	if (AUTONEG_DISABLE == phydev->autoneg)
@@ -1388,7 +1390,6 @@ int phy_disable_interrupts(struct phy_device *phydev)
 static irqreturn_t phy_interrupt(int irq, void *phy_dat)
 {
 	struct phy_device *phydev = phy_dat;
-	irqreturn_t ret;
 
 	/* Wakeup interrupts may occur during a system sleep transition.
 	 * Postpone handling until the PHY has resumed.
@@ -1412,11 +1413,14 @@ static irqreturn_t phy_interrupt(int irq, void *phy_dat)
 		return IRQ_HANDLED;
 	}
 
-	mutex_lock(&phydev->lock);
-	ret = phydev->drv->handle_interrupt(phydev);
-	mutex_unlock(&phydev->lock);
+	scoped_guard(mutex, &phydev->lock) {
+		const struct phy_driver *drv = phydev_drv(phydev);
 
-	return ret;
+		if (drv)
+			return drv->handle_interrupt(phydev);
+	}
+
+	return IRQ_NONE;
 }
 
 /**
@@ -1439,10 +1443,12 @@ static int phy_enable_interrupts(struct phy_device *phydev)
  */
 static int phy_update_stats(struct phy_device *phydev)
 {
-	if (!phydev->drv->update_stats)
+	const struct phy_driver *drv = phydev_drv(phydev);
+
+	if (!drv->update_stats)
 		return 0;
 
-	return phydev->drv->update_stats(phydev);
+	return drv->update_stats(phydev);
 }
 
 /**
@@ -1502,8 +1508,10 @@ EXPORT_SYMBOL(phy_free_interrupt);
  */
 static unsigned int phy_get_next_update_time(struct phy_device *phydev)
 {
-	if (phydev->drv && phydev->drv->get_next_update_time)
-		return phydev->drv->get_next_update_time(phydev);
+	const struct phy_driver *drv = phydev_drv(phydev);
+
+	if (drv && drv->get_next_update_time)
+		return drv->get_next_update_time(phydev);
 
 	return PHY_STATE_TIME;
 }
@@ -1739,13 +1747,17 @@ EXPORT_SYMBOL(phy_mac_interrupt);
  */
 int phy_loopback(struct phy_device *phydev, bool enable, int speed)
 {
+	const struct phy_driver *drv;
 	bool link_up = false;
-	int ret = 0;
-
-	if (!phydev->drv)
-		return -EIO;
+	int ret;
 
 	mutex_lock(&phydev->lock);
+
+	drv = phydev_drv(phydev);
+	if (!drv) {
+		ret = -EIO;
+		goto out;
+	}
 
 	if (enable && phydev->loopback_enabled) {
 		ret = -EBUSY;
@@ -1782,16 +1794,16 @@ int phy_loopback(struct phy_device *phydev, bool enable, int speed)
 		}
 	}
 
-	if (phydev->drv->set_loopback)
-		ret = phydev->drv->set_loopback(phydev, enable, speed);
+	if (drv->set_loopback)
+		ret = drv->set_loopback(phydev, enable, speed);
 	else
 		ret = genphy_loopback(phydev, enable, speed);
 
 	if (ret) {
 		if (enable) {
 			/* try to restore link if enabling loopback fails */
-			if (phydev->drv->set_loopback)
-				phydev->drv->set_loopback(phydev, false, 0);
+			if (drv->set_loopback)
+				drv->set_loopback(phydev, false, 0);
 			else
 				genphy_loopback(phydev, false, 0);
 		}
@@ -2005,19 +2017,19 @@ EXPORT_SYMBOL(phy_ethtool_set_eee);
  */
 int phy_ethtool_set_wol(struct phy_device *phydev, struct ethtool_wolinfo *wol)
 {
-	int ret;
+	scoped_guard(mutex, &phydev->lock) {
+		const struct phy_driver *drv = phydev_drv(phydev);
 
-	if (phydev->drv && phydev->drv->set_wol) {
-		mutex_lock(&phydev->lock);
-		ret = phydev->drv->set_wol(phydev, wol);
-		mutex_unlock(&phydev->lock);
-
-		return ret;
+		if (drv && drv->set_wol)
+			return drv->set_wol(phydev, wol);
 	}
 
 	return -EOPNOTSUPP;
 }
 EXPORT_SYMBOL(phy_ethtool_set_wol);
+
+
+}
 
 /**
  * phy_ethtool_get_wol - Get the current Wake On LAN configuration
@@ -2068,18 +2080,15 @@ EXPORT_SYMBOL(phy_ethtool_set_link_ksettings);
 int phy_ethtool_nway_reset(struct net_device *ndev)
 {
 	struct phy_device *phydev = ndev->phydev;
-	int ret;
 
 	if (!phydev)
 		return -ENODEV;
 
-	if (!phydev->drv)
-		return -EIO;
+	scoped_guard(mutex, &phydev->lock) {
+		if (!phydev_drv(phydev))
+			return -EIO;
 
-	mutex_lock(&phydev->lock);
-	ret = phy_restart_aneg(phydev);
-	mutex_unlock(&phydev->lock);
-
-	return ret;
+		return phy_restart_aneg(phydev);
+	}
 }
 EXPORT_SYMBOL(phy_ethtool_nway_reset);
