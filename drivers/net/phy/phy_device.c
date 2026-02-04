@@ -240,6 +240,15 @@ static struct phy_driver genphy_driver;
 static LIST_HEAD(phy_fixup_list);
 static DEFINE_MUTEX(phy_fixup_lock);
 
+static bool __phy_drv_wol_enabled(struct phy_device *phydev)
+{
+	struct ethtool_wolinfo wol = { .cmd = ETHTOOL_GWOL };
+
+	__phy_ethtool_get_wol(phydev, &wol);
+
+	return wol.wolopts != 0;
+}
+
 static bool phy_drv_wol_enabled(struct phy_device *phydev)
 {
 	struct ethtool_wolinfo wol = { .cmd = ETHTOOL_GWOL };
@@ -247,6 +256,15 @@ static bool phy_drv_wol_enabled(struct phy_device *phydev)
 	phy_ethtool_get_wol(phydev, &wol);
 
 	return wol.wolopts != 0;
+}
+
+static bool __phy_may_wakeup(struct phy_device *phydev)
+{
+	/* If the PHY is using driver-model based wakeup, use that state. */
+	if (phy_can_wakeup(phydev))
+		return device_may_wakeup(&phydev->mdio.dev);
+
+	return __phy_drv_wol_enabled(phydev);
 }
 
 bool phy_may_wakeup(struct phy_device *phydev)
@@ -1428,7 +1446,7 @@ EXPORT_SYMBOL(phy_attached_info_irq);
 
 void phy_attached_print(struct phy_device *phydev, const char *fmt, ...)
 {
-	const char *unbound = phydev->drv ? "" : "[unbound] ";
+	const char *unbound = phydev_drv(phydev) ? "" : "[unbound] ";
 	char *irq_str = phy_attached_info_irq(phydev);
 
 	if (!fmt) {
@@ -1762,6 +1780,7 @@ int phy_attach_direct(struct net_device *dev, struct phy_device *phydev,
 	struct mii_bus *bus = phydev->mdio.bus;
 	struct device *d = &phydev->mdio.dev;
 	struct module *ndev_owner = NULL;
+	const struct phy_driver *phydrv;
 	int err;
 
 	/* For Ethernet device drivers that register their own MDIO bus, we
@@ -1858,8 +1877,12 @@ int phy_attach_direct(struct net_device *dev, struct phy_device *phydev,
 	if (phydev->dev_flags & PHY_F_NO_IRQ)
 		phydev->irq = PHY_POLL;
 
-	if (!phy_drv_supports_irq(phydev->drv) && phy_interrupt_is_valid(phydev))
+	mutex_lock(&phydev->lock);
+	phydrv = phydev_drv(phydev);
+	if ((!phydrv || !phy_drv_supports_irq(phydrv)) &&
+	    phy_interrupt_is_valid(phydev))
 		phydev->irq = PHY_POLL;
+	mutex_unlock(&phydev->lock);
 
 	/* Port is set to PORT_TP by default and the actual PHY driver will set
 	 * it to different value depending on the PHY configuration. If we have
@@ -1993,24 +2016,36 @@ EXPORT_SYMBOL(phy_detach);
 int phy_suspend(struct phy_device *phydev)
 {
 	struct net_device *netdev = phydev->attached_dev;
-	const struct phy_driver *phydrv = phydev->drv;
+	const struct phy_driver *phydrv;
 	int ret;
 
-	if (phydev->suspended || !phydrv)
-		return 0;
+	mutex_lock(&phydev->lock);
 
-	phydev->wol_enabled = phy_may_wakeup(phydev) ||
+	phydrv = phydev_drv(phydev);
+
+	if (phydev->suspended || !phydrv) {
+		mutex_unlock(&phydev->lock);
+		return 0;
+	}
+
+	phydev->wol_enabled = __phy_may_wakeup(phydev) ||
 			      (netdev && netdev->ethtool->wol_enabled);
 	/* If the device has WOL enabled, we cannot suspend the PHY */
-	if (phydev->wol_enabled && !(phydrv->flags & PHY_ALWAYS_CALL_SUSPEND))
+	if (phydev->wol_enabled && !(phydrv->flags & PHY_ALWAYS_CALL_SUSPEND)) {
+		mutex_unlock(&phydev->lock);
 		return -EBUSY;
+	}
 
-	if (!phydrv->suspend)
+	if (!phydrv->suspend) {
+		mutex_unlock(&phydev->lock);
 		return 0;
+	}
 
 	ret = phydrv->suspend(phydev);
 	if (!ret)
 		phydev->suspended = true;
+
+	mutex_unlock(&phydev->lock);
 
 	return ret;
 }
@@ -2018,7 +2053,7 @@ EXPORT_SYMBOL(phy_suspend);
 
 int __phy_resume(struct phy_device *phydev)
 {
-	const struct phy_driver *phydrv = phydev->drv;
+	const struct phy_driver *phydrv = phydev_drv(phydev);
 	int ret;
 
 	lockdep_assert_held(&phydev->lock);

@@ -1525,11 +1525,15 @@ enum phy_state_work {
 static enum phy_state_work _phy_state_machine(struct phy_device *phydev)
 {
 	enum phy_state_work state_work = PHY_STATE_WORK_NONE;
+	const struct phy_driver *drv = phydev_drv(phydev);
 	struct net_device *dev = phydev->attached_dev;
 	enum phy_state old_state = phydev->state;
 	const void *func = NULL;
 	bool finished = false;
 	int err = 0;
+
+	if (!drv)
+		return PHY_STATE_WORK_NONE;
 
 	switch (phydev->state) {
 	case PHY_DOWN:
@@ -1547,7 +1551,7 @@ static enum phy_state_work _phy_state_machine(struct phy_device *phydev)
 			err = phy_update_stats(phydev);
 		break;
 	case PHY_CABLETEST:
-		err = phydev->drv->cable_test_get_status(phydev, &finished);
+		err = drv->cable_test_get_status(phydev, &finished);
 		if (err) {
 			phy_abort_cable_test(phydev);
 			netif_testing_off(dev);
@@ -1652,14 +1656,20 @@ void phy_stop(struct phy_device *phydev)
 	enum phy_state_work state_work;
 	enum phy_state old_state;
 
+	mutex_lock(&phydev->lock);
+	if (!phydev_drv(phydev)) {
+		mutex_unlock(&phydev->lock);
+		return;
+	}
+
 	if (!phy_is_started(phydev) && phydev->state != PHY_DOWN &&
 	    phydev->state != PHY_ERROR) {
 		WARN(1, "called from state %s\n",
 		     phy_state_to_str(phydev->state));
+		mutex_unlock(&phydev->lock);
 		return;
 	}
 
-	mutex_lock(&phydev->lock);
 	old_state = phydev->state;
 
 	if (phydev->state == PHY_CABLETEST) {
@@ -1699,6 +1709,10 @@ EXPORT_SYMBOL(phy_stop);
 void phy_start(struct phy_device *phydev)
 {
 	mutex_lock(&phydev->lock);
+
+	/* Unbound PHYs are in PHY_DOWN state */
+	if (!phydev_drv(phydev))
+		goto out;
 
 	if (phydev->state != PHY_READY && phydev->state != PHY_HALTED) {
 		WARN(1, "called from state %s\n",
@@ -2013,7 +2027,12 @@ int phy_ethtool_set_wol(struct phy_device *phydev, struct ethtool_wolinfo *wol)
 }
 EXPORT_SYMBOL(phy_ethtool_set_wol);
 
+void __phy_ethtool_get_wol(struct phy_device *phydev, struct ethtool_wolinfo *wol)
+{
+	const struct phy_driver *phydrv = phydev_drv(phydev);
 
+	if (phydrv && phydrv->get_wol)
+		phydrv->get_wol(phydev, wol);
 }
 
 /**
@@ -2024,11 +2043,9 @@ EXPORT_SYMBOL(phy_ethtool_set_wol);
  */
 void phy_ethtool_get_wol(struct phy_device *phydev, struct ethtool_wolinfo *wol)
 {
-	if (phydev->drv && phydev->drv->get_wol) {
-		mutex_lock(&phydev->lock);
-		phydev->drv->get_wol(phydev, wol);
-		mutex_unlock(&phydev->lock);
-	}
+	mutex_lock(&phydev->lock);
+	__phy_ethtool_get_wol(phydev, wol);
+	mutex_unlock(&phydev->lock);
 }
 EXPORT_SYMBOL(phy_ethtool_get_wol);
 
