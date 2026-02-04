@@ -1340,40 +1340,56 @@ static int phy_poll_reset(struct phy_device *phydev)
 
 int phy_init_hw(struct phy_device *phydev)
 {
+	const struct phy_driver *drv;
 	int ret = 0;
+
+	mutex_lock(&phydev->lock);
 
 	/* Deassert the reset signal */
 	phy_device_reset(phydev, 0);
 
-	if (!phydev->drv)
+	drv = phydev_drv(phydev);
+	if (!drv) {
+		mutex_unlock(&phydev->lock);
 		return 0;
+	}
 
-	if (phydev->drv->soft_reset) {
-		ret = phydev->drv->soft_reset(phydev);
-		if (ret < 0)
+	if (drv->soft_reset) {
+		ret = drv->soft_reset(phydev);
+		if (ret < 0) {
+			mutex_unlock(&phydev->lock);
 			return ret;
+		}
 
 		/* see comment in genphy_soft_reset for an explanation */
 		phydev->suspended = 0;
 	}
 
 	ret = phy_scan_fixups(phydev);
-	if (ret < 0)
+	if (ret < 0) {
+		mutex_unlock(&phydev->lock);
 		return ret;
+	}
 
 	phy_interface_zero(phydev->possible_interfaces);
 
-	if (phydev->drv->config_init) {
-		ret = phydev->drv->config_init(phydev);
-		if (ret < 0)
+	if (drv->config_init) {
+		ret = drv->config_init(phydev);
+		if (ret < 0) {
+			mutex_unlock(&phydev->lock);
 			return ret;
+		}
 	}
 
-	if (phydev->drv->config_intr) {
-		ret = phydev->drv->config_intr(phydev);
-		if (ret < 0)
+	if (drv->config_intr) {
+		ret = drv->config_intr(phydev);
+		if (ret < 0) {
+			mutex_unlock(&phydev->lock);
 			return ret;
+		}
 	}
+
+	mutex_unlock(&phydev->lock);
 
 	return 0;
 }
