@@ -467,11 +467,13 @@ EXPORT_SYMBOL_GPL(mmd_phy_write);
  */
 int __phy_read_mmd(struct phy_device *phydev, int devad, u32 regnum)
 {
+	const struct phy_driver *phydrv = phydev_drv(phydev);
+
 	if (regnum > (u16)~0 || devad > 32)
 		return -EINVAL;
 
-	if (phydev->drv && phydev->drv->read_mmd)
-		return phydev->drv->read_mmd(phydev, devad, regnum);
+	if (phydrv && phydrv->read_mmd)
+		return phydrv->read_mmd(phydev, devad, regnum);
 
 	return mmd_phy_read(phydev->mdio.bus, phydev->mdio.addr,
 			    phydev->is_c45, devad, regnum);
@@ -511,11 +513,13 @@ EXPORT_SYMBOL(phy_read_mmd);
  */
 int __phy_write_mmd(struct phy_device *phydev, int devad, u32 regnum, u16 val)
 {
+	const struct phy_driver *phydrv = phydev_drv(phydev);
+
 	if (regnum > (u16)~0 || devad > 32)
 		return -EINVAL;
 
-	if (phydev->drv && phydev->drv->write_mmd)
-		return phydev->drv->write_mmd(phydev, devad, regnum, val);
+	if (phydrv && phydrv->write_mmd)
+		return phydrv->write_mmd(phydev, devad, regnum, val);
 
 	return mmd_phy_write(phydev->mdio.bus, phydev->mdio.addr,
 			     phydev->is_c45, devad, regnum, val);
@@ -722,18 +726,24 @@ EXPORT_SYMBOL_GPL(phy_modify_mmd);
 
 static int __phy_read_page(struct phy_device *phydev)
 {
-	if (WARN_ONCE(!phydev->drv->read_page, "read_page callback not available, PHY driver not loaded?\n"))
+	const struct phy_driver *phydrv = phydev_drv(phydev);
+
+	if (WARN_ONCE(!phydrv || !phydrv->read_page,
+		      "read_page callback not available, PHY driver not loaded?\n"))
 		return -EOPNOTSUPP;
 
-	return phydev->drv->read_page(phydev);
+	return phydrv->read_page(phydev);
 }
 
 static int __phy_write_page(struct phy_device *phydev, int page)
 {
-	if (WARN_ONCE(!phydev->drv->write_page, "write_page callback not available, PHY driver not loaded?\n"))
+	const struct phy_driver *phydrv = phydev_drv(phydev);
+
+	if (WARN_ONCE(!phydrv || !phydrv->write_page,
+		      "write_page callback not available, PHY driver not loaded?\n"))
 		return -EOPNOTSUPP;
 
-	return phydev->drv->write_page(phydev, page);
+	return phydrv->write_page(phydev, page);
 }
 
 /**
