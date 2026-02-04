@@ -1676,6 +1676,22 @@ const char *phy_rate_matching_to_str(int rate_matching);
 int phy_interface_num_ports(phy_interface_t interface);
 
 /**
+ * phy_is_probed - Convenience function to check whether PHY is probed
+ * @phydev: The phy_device struct
+ * Return: true if PHY exists and has a bound driver. Note that if a specific
+ *	model for the PHY is not found, this returns false until the late
+ *	genphy driver probe is initiated in phy_attach_direct()
+ */
+static inline bool phy_is_probed(struct phy_device *phydev)
+{
+	if (!phydev)
+		return false;
+
+	scoped_guard(mutex, &phydev->lock)
+		return !!phydev_drv(phydev);
+}
+
+/**
  * phy_is_started - Convenience function to check whether PHY is started
  * @phydev: The phy_device struct
  */

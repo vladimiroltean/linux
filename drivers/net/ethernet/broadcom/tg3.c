@@ -1564,7 +1564,7 @@ static int tg3_mdio_init(struct tg3 *tp)
 
 	phydev = mdiobus_get_phy(tp->mdio_bus, tp->phy_addr);
 
-	if (!phydev || !phydev->drv) {
+	if (!phy_is_probed(phydev)) {
 		dev_warn(&tp->pdev->dev, "No PHY devices\n");
 		mdiobus_unregister(tp->mdio_bus);
 		mdiobus_free(tp->mdio_bus);

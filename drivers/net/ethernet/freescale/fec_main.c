@@ -4172,7 +4172,7 @@ fec_enet_open(struct net_device *ndev)
 	 * sure the PHY is working correctly we check if we need to reset again
 	 * later when the PHY is probed
 	 */
-	if (ndev->phydev && ndev->phydev->drv)
+	if (phy_is_probed(ndev->phydev))
 		reset_again = false;
 	else
 		reset_again = true;

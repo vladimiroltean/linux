@@ -5465,7 +5465,7 @@ static int r8169_mdio_register(struct rtl8169_private *tp)
 	tp->phydev = mdiobus_get_phy(new_bus, 0);
 	if (!tp->phydev) {
 		return -ENODEV;
-	} else if (!tp->phydev->drv) {
+	} else if (!phy_is_probed(tp->phydev)) {
 		/* Most chip versions fail with the genphy driver.
 		 * Therefore ensure that the dedicated PHY driver is loaded.
 		 */

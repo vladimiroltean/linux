@@ -2628,7 +2628,7 @@ static struct phy_device *lan78xx_get_phy(struct lan78xx_net *dev)
 			dev->interface = PHY_INTERFACE_MODE_RGMII_ID;
 			phydev->is_internal = false;
 
-			if (!phydev->drv)
+			if (!phy_is_probed(phydev))
 				netdev_warn(dev->net,
 					    "PHY driver not found – assuming RGMII delays are on PCB or strapped for the PHY\n");
 
