@@ -698,8 +698,7 @@ static int hclge_get_sset_count(struct hnae3_handle *handle, int stringset)
 		count += 1;
 		handle->flags |= HNAE3_SUPPORT_EXTERNAL_LOOPBACK;
 
-		if ((hdev->hw.mac.phydev && hdev->hw.mac.phydev->drv &&
-		     hdev->hw.mac.phydev->drv->set_loopback) ||
+		if (phy_supports_loopback(hdev->hw.mac.phydev) ||
 		    hnae3_dev_phy_imp_supported(hdev)) {
 			count += 1;
 			handle->flags |= HNAE3_SUPPORT_PHY_LOOPBACK;

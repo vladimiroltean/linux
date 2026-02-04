@@ -11,6 +11,7 @@
 #ifndef __PHY_H
 #define __PHY_H
 
+#include <linux/cleanup.h>
 #include <linux/compiler.h>
 #include <linux/spinlock.h>
 #include <linux/ethtool.h>
@@ -1697,6 +1698,18 @@ bool phy_may_wakeup(struct phy_device *phydev);
 
 void phy_resolve_aneg_pause(struct phy_device *phydev);
 void phy_resolve_aneg_linkmode(struct phy_device *phydev);
+
+static inline bool phy_supports_loopback(struct phy_device *phydev)
+{
+	if (!phydev)
+		return false;
+
+	scoped_guard(mutex, &phydev->lock) {
+		const struct phy_driver *phydrv = phydev_drv(phydev);
+
+		return phydrv && phydrv->set_loopback;
+	}
+}
 
 /**
  * phy_read - Convenience function for reading a given PHY register
