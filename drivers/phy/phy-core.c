@@ -140,17 +140,19 @@ EXPORT_SYMBOL_GPL(phy_remove_lookup);
 static struct phy *phy_find(struct device *dev, const char *con_id)
 {
 	const char *dev_id = dev_name(dev);
-	struct phy_lookup *p, *pl = NULL;
+	struct phy *phy = NULL;
+	struct phy_lookup *p;
 
 	mutex_lock(&phy_provider_mutex);
 	list_for_each_entry(p, &phys, node)
 		if (!strcmp(p->dev_id, dev_id) && !strcmp(p->con_id, con_id)) {
-			pl = p;
+			phy = p->phy;
+			get_device(&phy->dev);
 			break;
 		}
 	mutex_unlock(&phy_provider_mutex);
 
-	return pl ? pl->phy : ERR_PTR(-ENODEV);
+	return phy ? phy : ERR_PTR(-ENODEV);
 }
 
 static struct phy_provider *of_phy_provider_lookup(struct device_node *node)
@@ -701,6 +703,7 @@ static struct phy *_of_phy_get(struct device_node *np, int index)
 	}
 
 	phy = phy_provider->of_xlate(phy_provider->dev, &args);
+	get_device(&phy->dev);
 
 out_put_module:
 	module_put(phy_provider->owner);
@@ -734,10 +737,10 @@ struct phy *of_phy_get(struct device_node *np, const char *con_id)
 	if (IS_ERR(phy))
 		return phy;
 
-	if (!try_module_get(phy->ops->owner))
+	if (!try_module_get(phy->ops->owner)) {
+		put_device(&phy->dev);
 		return ERR_PTR(-EPROBE_DEFER);
-
-	get_device(&phy->dev);
+	}
 
 	return phy;
 }
@@ -855,10 +858,10 @@ struct phy *phy_get(struct device *dev, const char *string)
 	if (IS_ERR(phy))
 		return phy;
 
-	if (!try_module_get(phy->ops->owner))
+	if (!try_module_get(phy->ops->owner)) {
+		put_device(&phy->dev);
 		return ERR_PTR(-EPROBE_DEFER);
-
-	get_device(&phy->dev);
+	}
 
 	link = device_link_add(dev, &phy->dev, DL_FLAG_STATELESS);
 	if (!link)
@@ -1021,10 +1024,9 @@ struct phy *devm_of_phy_get_by_index(struct device *dev, struct device_node *np,
 
 	if (!try_module_get(phy->ops->owner)) {
 		devres_free(ptr);
+		put_device(&phy->dev);
 		return ERR_PTR(-EPROBE_DEFER);
 	}
-
-	get_device(&phy->dev);
 
 	*ptr = phy;
 	devres_add(dev, ptr);
