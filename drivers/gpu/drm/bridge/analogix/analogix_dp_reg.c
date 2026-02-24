@@ -11,7 +11,7 @@
 #include <linux/gpio/consumer.h>
 #include <linux/io.h>
 #include <linux/iopoll.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 
 #include <drm/bridge/analogix_dp.h>
 

@@ -5,7 +5,7 @@
 
 #include <linux/delay.h>
 #include <linux/iopoll.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/pm_runtime.h>
 #include <drm/drm_print.h>
 

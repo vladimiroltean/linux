@@ -17,7 +17,7 @@
 #include <linux/of_platform.h>
 #include <linux/of.h>
 #include <linux/of_graph.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
 

@@ -18,7 +18,7 @@
 #include <linux/irq.h>
 #include <linux/media-bus-format.h>
 #include <linux/of.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/units.h>

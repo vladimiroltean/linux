@@ -24,7 +24,7 @@
 #include <linux/regmap.h>
 #include <linux/suspend.h>
 #include <linux/units.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 
 #include <drm/display/drm_hdmi_helper.h>
 #include <drm/display/drm_hdmi_state_helper.h>

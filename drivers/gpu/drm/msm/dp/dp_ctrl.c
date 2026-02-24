@@ -10,7 +10,7 @@
 #include <linux/completion.h>
 #include <linux/delay.h>
 #include <linux/iopoll.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/phy/phy-dp.h>
 #include <linux/pm_opp.h>
 #include <linux/rational.h>

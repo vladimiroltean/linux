@@ -20,7 +20,7 @@
 #include <linux/i2c.h>
 #include <linux/mfd/syscon.h>
 #include <linux/mutex.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/platform_device.h>
 
 #include <sound/hdmi-codec.h>

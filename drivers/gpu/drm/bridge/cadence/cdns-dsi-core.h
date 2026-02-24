@@ -13,7 +13,7 @@
 
 #include <linux/bits.h>
 #include <linux/completion.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 
 struct clk;
 struct reset_control;
