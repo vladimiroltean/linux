@@ -22,7 +22,7 @@
 #include <linux/firmware/xlnx-zynqmp.h>
 #include <linux/io.h>
 
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 
 /* USB phy reset mask register */
 #define XLNX_USB_PHY_RST_EN			0x001C

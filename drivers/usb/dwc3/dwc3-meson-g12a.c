@@ -25,7 +25,7 @@
 #include <linux/bitfield.h>
 #include <linux/bitops.h>
 #include <linux/reset.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/usb/otg.h>
 #include <linux/usb/role.h>
 #include <linux/regulator/consumer.h>

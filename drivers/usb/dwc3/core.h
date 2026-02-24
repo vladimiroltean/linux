@@ -29,7 +29,7 @@
 #include <linux/usb/role.h>
 #include <linux/ulpi/interface.h>
 
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 
 #include <linux/power_supply.h>
 

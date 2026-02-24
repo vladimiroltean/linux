@@ -34,7 +34,7 @@
 #include <linux/io.h>
 #include <linux/kcov.h>
 
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/usb.h>
 #include <linux/usb/hcd.h>
 #include <linux/usb/otg.h>

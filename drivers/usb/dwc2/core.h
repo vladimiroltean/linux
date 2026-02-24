@@ -9,7 +9,7 @@
 #define __DWC2_CORE_H__
 
 #include <linux/acpi.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/regulator/consumer.h>
 #include <linux/usb/gadget.h>
 #include <linux/usb/otg.h>

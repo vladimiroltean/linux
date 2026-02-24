@@ -9,7 +9,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/module.h>
 #include <linux/of.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/platform_device.h>
 #include <linux/property.h>
 #include <linux/usb/chipidea.h>

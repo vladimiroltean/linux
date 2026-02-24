@@ -6,7 +6,7 @@
  * Copyright (C) 2019 Renesas Electronics Corporation
  */
 
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include "common.h"
 #include "rcar2.h"
 

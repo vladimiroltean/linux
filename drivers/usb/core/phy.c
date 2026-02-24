@@ -9,7 +9,7 @@
 
 #include <linux/device.h>
 #include <linux/list.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/of.h>
 
 #include "phy.h"

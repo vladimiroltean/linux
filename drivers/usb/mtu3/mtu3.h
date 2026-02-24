@@ -17,7 +17,7 @@
 #include <linux/interrupt.h>
 #include <linux/list.h>
 #include <linux/of.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/regulator/consumer.h>
 #include <linux/usb.h>
 #include <linux/usb/ch9.h>

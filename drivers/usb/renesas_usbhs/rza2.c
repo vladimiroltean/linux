@@ -8,7 +8,7 @@
 
 #include <linux/delay.h>
 #include <linux/io.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include "common.h"
 #include "rza.h"
 

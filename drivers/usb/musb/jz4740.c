@@ -11,7 +11,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/of.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/platform_device.h>
 #include <linux/usb/role.h>
 #include <linux/usb/usb_phy_generic.h>

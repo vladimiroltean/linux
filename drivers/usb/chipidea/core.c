@@ -18,7 +18,7 @@
 #include <linux/device.h>
 #include <linux/dma-mapping.h>
 #include <linux/extcon.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/platform_device.h>
 #include <linux/module.h>
 #include <linux/idr.h>

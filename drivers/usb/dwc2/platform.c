@@ -14,7 +14,7 @@
 #include <linux/of.h>
 #include <linux/mutex.h>
 #include <linux/platform_device.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/platform_data/s3c-hsotg.h>
 #include <linux/reset.h>
 

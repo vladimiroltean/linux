@@ -9,7 +9,7 @@
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
 #include <linux/platform_device.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/module.h>
 #include <linux/dmapool.h>
 #include <linux/interrupt.h>

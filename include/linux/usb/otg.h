@@ -10,7 +10,7 @@
 #ifndef __LINUX_USB_OTG_H
 #define __LINUX_USB_OTG_H
 
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/usb/phy.h>
 
 struct usb_otg {

@@ -16,7 +16,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/of.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/phy/tegra/xusb.h>
 #include <linux/pm_domain.h>
 #include <linux/platform_device.h>
