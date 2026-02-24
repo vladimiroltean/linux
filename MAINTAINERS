@@ -10713,6 +10713,7 @@ F:	Documentation/devicetree/bindings/phy/
 F:	drivers/phy/
 F:	include/dt-bindings/phy/
 F:	include/linux/phy/
+K:	phy-consumer\.h|phy-props\.h|phy-provider\.h|struct\s+phy|struct\s+phy_ops|phy_configure_opts|phy_(create|destroy|init|exit|reset|power_on|power_off|configure|validate|calibrate|(get|set)_mode|set_media|set_speed|pm_runtime(_get|_put)(_sync)|notify_((dis)connect|state)|(get|set)_bus_width)|(of_)phy_(get|put)|(of_)phy_optional_get(_by_index)|(of_)phy_provider_(un)register
 
 GENERIC PINCTRL I2C DEMULTIPLEXER DRIVER
 M:	Wolfram Sang <wsa+renesas@sang-engineering.com>
