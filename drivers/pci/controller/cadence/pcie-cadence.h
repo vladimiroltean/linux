@@ -10,7 +10,7 @@
 #include <linux/module.h>
 #include <linux/pci.h>
 #include <linux/pci-epf.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include "pcie-cadence-lga-regs.h"
 #include "pcie-cadence-hpa-regs.h"
 

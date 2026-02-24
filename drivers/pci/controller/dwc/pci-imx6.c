@@ -29,7 +29,7 @@
 #include <linux/interrupt.h>
 #include <linux/reset.h>
 #include <linux/phy/pcie.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/pm_domain.h>
 #include <linux/pm_runtime.h>
 

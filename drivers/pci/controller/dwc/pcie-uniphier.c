@@ -16,7 +16,7 @@
 #include <linux/irqdomain.h>
 #include <linux/of_irq.h>
 #include <linux/pci.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/platform_device.h>
 #include <linux/reset.h>
 

@@ -14,7 +14,7 @@
 #include <linux/reset.h>
 #include <linux/resource.h>
 #include <linux/types.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/mod_devicetable.h>
 #include <linux/module.h>
 
