@@ -4,7 +4,7 @@
  * Author: Paul Kocialkowski <paul.kocialkowski@bootlin.com>
  */
 
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-provider.h>
 #include <linux/regmap.h>
 
 #include "sun8i_a83t_dphy.h"

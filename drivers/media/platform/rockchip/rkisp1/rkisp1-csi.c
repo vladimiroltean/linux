@@ -12,7 +12,7 @@
 #include <linux/delay.h>
 #include <linux/device.h>
 #include <linux/lockdep.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/phy/phy-mipi-dphy.h>
 
 #include <media/v4l2-ctrls.h>

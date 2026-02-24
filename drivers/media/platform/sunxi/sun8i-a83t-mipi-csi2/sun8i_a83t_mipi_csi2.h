@@ -8,7 +8,7 @@
 #ifndef _SUN8I_A83T_MIPI_CSI2_H_
 #define _SUN8I_A83T_MIPI_CSI2_H_
 
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/regmap.h>
 #include <linux/reset.h>
 #include <media/v4l2-device.h>
