@@ -6,7 +6,7 @@
 #include <linux/of_net.h>
 #include <linux/platform_device.h>
 #include <linux/phy.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 
 #include "stmmac.h"
 #include "stmmac_platform.h"

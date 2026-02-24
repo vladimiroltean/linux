@@ -26,7 +26,7 @@
 #include <linux/of_address.h>
 #include <linux/phy.h>
 #include <linux/phylink.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/ptp_classify.h>
 #include <linux/clk.h>
 #include <linux/hrtimer.h>

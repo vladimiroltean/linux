@@ -7,7 +7,7 @@
 #include <linux/dsa/ocelot.h>
 #include <linux/if_bridge.h>
 #include <linux/iopoll.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <net/pkt_sched.h>
 #include <soc/mscc/ocelot_hsio.h>
 #include <soc/mscc/ocelot_vcap.h>

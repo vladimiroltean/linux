@@ -28,7 +28,7 @@
 #include <linux/types.h>
 #include <linux/can/dev.h>
 #include <linux/can/error.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/pm_runtime.h>
 #include <linux/reset.h>
 #include <linux/u64_stats_sync.h>

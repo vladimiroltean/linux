@@ -8,7 +8,7 @@
 #define __SPARX5_MAIN_H__
 
 #include <linux/types.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/netdevice.h>
 #include <linux/phy.h>
 #include <linux/if_vlan.h>

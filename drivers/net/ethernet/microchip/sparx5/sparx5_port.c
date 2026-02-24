@@ -5,7 +5,7 @@
  */
 
 #include <linux/module.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <net/dcbnl.h>
 
 #include "sparx5_main_regs.h"

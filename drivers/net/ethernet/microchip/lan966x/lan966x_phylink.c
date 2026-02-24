@@ -4,7 +4,7 @@
 #include <linux/phylink.h>
 #include <linux/device.h>
 #include <linux/netdevice.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 
 #include "lan966x_main.h"
 

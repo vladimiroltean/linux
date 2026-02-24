@@ -14,7 +14,7 @@
 #include <linux/pcs-lynx.h>
 #include <linux/phy.h>
 #include <linux/phy_fixed.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/of_mdio.h>
 
 /* Num of additional exact match MAC adr regs */

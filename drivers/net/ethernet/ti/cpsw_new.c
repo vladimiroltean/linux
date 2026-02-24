@@ -16,7 +16,7 @@
 #include <linux/etherdevice.h>
 #include <linux/net_tstamp.h>
 #include <linux/phy.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/delay.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/pm_runtime.h>

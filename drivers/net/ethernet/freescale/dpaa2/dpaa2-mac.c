@@ -3,7 +3,7 @@
 
 #include <linux/acpi.h>
 #include <linux/pcs-lynx.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/property.h>
 
 #include "dpaa2-eth.h"
