@@ -10,7 +10,7 @@
 #include <linux/platform_device.h>
 #include <linux/property.h>
 #include <linux/slab.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-provider.h>
 #include <linux/of.h>
 #include <linux/clk.h>
 #include <linux/err.h>

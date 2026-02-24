@@ -9,7 +9,7 @@
 #include <linux/module.h>
 #include <linux/mfd/syscon.h>
 #include <linux/of.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-provider.h>
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
 

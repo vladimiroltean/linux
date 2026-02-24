@@ -13,7 +13,7 @@
 #include <linux/module.h>
 #include <linux/nvmem-consumer.h>
 #include <linux/platform_device.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-provider.h>
 #include <linux/slab.h>
 
 struct mtk_mipitx_data {

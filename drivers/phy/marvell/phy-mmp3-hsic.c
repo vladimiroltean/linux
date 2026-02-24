@@ -7,7 +7,7 @@
 #include <linux/io.h>
 #include <linux/mod_devicetable.h>
 #include <linux/module.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-provider.h>
 #include <linux/platform_device.h>
 
 #define HSIC_CTRL	0x08

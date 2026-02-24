@@ -17,7 +17,7 @@
 #include <linux/clk.h>
 #include <linux/reset.h>
 #include <linux/phy.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-provider.h>
 
 #include "phy-mtk-io.h"
 

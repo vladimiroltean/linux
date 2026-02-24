@@ -8,7 +8,7 @@
 #include <linux/mod_devicetable.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-provider.h>
 #include <linux/reset.h>
 
 struct ath79_usb_phy {

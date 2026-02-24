@@ -5,7 +5,7 @@
 #include <linux/of.h>
 #include <linux/of_platform.h>
 #include <linux/phy.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-provider.h>
 #include <linux/platform_device.h>
 
 #include <dt-bindings/phy/phy-lan966x-serdes.h>

@@ -14,7 +14,7 @@
 #include <linux/regmap.h>
 #include <linux/reset.h>
 
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-provider.h>
 #include <linux/phy/phy-mipi-dphy.h>
 
 #define SUN6I_DPHY_GCTL_REG		0x00

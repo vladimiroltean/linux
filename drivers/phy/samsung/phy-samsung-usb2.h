@@ -10,7 +10,7 @@
 #define _PHY_EXYNOS_USB2_H
 
 #include <linux/clk.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-provider.h>
 #include <linux/device.h>
 #include <linux/regmap.h>
 #include <linux/spinlock.h>

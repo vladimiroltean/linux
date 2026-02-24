@@ -8,7 +8,7 @@
 
 #include <linux/delay.h>
 #include <linux/io.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-provider.h>
 #include "phy-samsung-usb2.h"
 
 /* Exynos USB PHY registers */

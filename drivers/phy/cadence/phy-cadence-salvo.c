@@ -10,7 +10,7 @@
 #include <linux/clk.h>
 #include <linux/io.h>
 #include <linux/module.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-provider.h>
 #include <linux/platform_device.h>
 #include <linux/delay.h>
 #include <linux/of.h>

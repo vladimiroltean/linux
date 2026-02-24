@@ -20,7 +20,7 @@
 #include <linux/io.h>
 #include <linux/delay.h>
 #include <linux/usb/otg.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-provider.h>
 #include <linux/pm_runtime.h>
 #include <linux/usb/musb.h>
 #include <linux/usb/ulpi.h>

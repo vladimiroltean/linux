@@ -11,7 +11,7 @@
 #include <linux/mfd/da8xx-cfgchip.h>
 #include <linux/mfd/syscon.h>
 #include <linux/module.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-provider.h>
 #include <linux/platform_data/phy-da8xx-usb.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>

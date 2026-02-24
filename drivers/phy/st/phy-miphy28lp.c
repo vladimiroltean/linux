@@ -16,7 +16,7 @@
 #include <linux/of_platform.h>
 #include <linux/of_address.h>
 #include <linux/clk.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-provider.h>
 #include <linux/delay.h>
 #include <linux/mfd/syscon.h>
 #include <linux/regmap.h>

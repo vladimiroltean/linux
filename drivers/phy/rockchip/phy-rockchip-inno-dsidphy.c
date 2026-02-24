@@ -20,7 +20,7 @@
 #include <linux/reset.h>
 #include <linux/time64.h>
 
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-provider.h>
 #include <linux/phy/phy-mipi-dphy.h>
 
 #define UPDATE(x, h, l)	(((x) << (l)) & GENMASK((h), (l)))

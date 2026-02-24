@@ -13,7 +13,7 @@
 #include <linux/platform_device.h>
 #include <linux/reset.h>
 
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-provider.h>
 #include <linux/phy/phy-mipi-dphy.h>
 
 #define REG_WAKEUP_TIME_NS		800

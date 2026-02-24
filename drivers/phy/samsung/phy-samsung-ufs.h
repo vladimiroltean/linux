@@ -10,7 +10,7 @@
 #ifndef _PHY_SAMSUNG_UFS_
 #define _PHY_SAMSUNG_UFS_
 
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-provider.h>
 #include <linux/regmap.h>
 
 #define PHY_COMN_BLK	1

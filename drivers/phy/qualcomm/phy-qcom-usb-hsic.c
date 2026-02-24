@@ -5,7 +5,7 @@
 #include <linux/module.h>
 #include <linux/ulpi/driver.h>
 #include <linux/ulpi/regs.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-provider.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/pinctrl/pinctrl-state.h>
 #include <linux/delay.h>

@@ -10,7 +10,7 @@
 #include <linux/clk.h>
 #include <linux/mfd/syscon.h>
 #include <linux/platform_device.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-provider.h>
 #include <linux/pm_runtime.h>
 #include <linux/regmap.h>
 #include <linux/reset.h>

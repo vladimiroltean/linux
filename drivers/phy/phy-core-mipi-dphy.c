@@ -9,7 +9,7 @@
 #include <linux/kernel.h>
 #include <linux/time64.h>
 
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-provider.h>
 #include <linux/phy/phy-mipi-dphy.h>
 
 /*

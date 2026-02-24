@@ -14,7 +14,7 @@
 #include <linux/of_address.h>
 #include <linux/of_net.h>
 #include <linux/phy.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-provider.h>
 #include <linux/regmap.h>
 
 /* AM33xx SoC specific definitions for the CONTROL port */

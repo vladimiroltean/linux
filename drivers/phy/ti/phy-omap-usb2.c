@@ -16,7 +16,7 @@
 #include <linux/of_platform.h>
 #include <linux/phy/omap_control_phy.h>
 #include <linux/phy/omap_usb.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-provider.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/property.h>

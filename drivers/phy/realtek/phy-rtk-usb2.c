@@ -16,7 +16,7 @@
 #include <linux/regmap.h>
 #include <linux/sys_soc.h>
 #include <linux/mfd/syscon.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-provider.h>
 #include <linux/usb.h>
 
 /* GUSB2PHYACCn register */

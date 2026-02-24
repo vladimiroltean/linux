@@ -17,7 +17,8 @@
 #include <linux/of.h>
 #include <linux/regmap.h>
 #include <linux/reset.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
+#include <linux/phy/phy-provider.h>
 #include <linux/platform_device.h>
 
 #define PHY_CTRL_R0						0x0
