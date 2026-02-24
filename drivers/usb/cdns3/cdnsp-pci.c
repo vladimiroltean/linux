@@ -14,6 +14,7 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/pci.h>
+#include <linux/property.h>
 
 #include "core.h"
 
