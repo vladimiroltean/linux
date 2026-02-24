@@ -22,7 +22,7 @@
 #include <linux/pci.h>
 #include <linux/clk.h>
 #include <linux/libata.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/regulator/consumer.h>
 #include <linux/bits.h>
 

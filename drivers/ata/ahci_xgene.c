@@ -14,7 +14,7 @@
 #include <linux/platform_device.h>
 #include <linux/ahci_platform.h>
 #include <linux/of.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include "ahci.h"
 
 #define DRV_NAME "xgene-ahci"

@@ -21,7 +21,7 @@
 #include <linux/of.h>
 #include <linux/of_irq.h>
 #include <linux/platform_device.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/libata.h>
 #include <linux/slab.h>
 #include <trace/events/libata.h>

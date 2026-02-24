@@ -19,7 +19,7 @@
 #include <linux/libata.h>
 #include <linux/hwmon.h>
 #include <linux/hwmon-sysfs.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/thermal.h>
 #include "ahci.h"
 

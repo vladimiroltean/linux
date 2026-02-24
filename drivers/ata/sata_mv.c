@@ -47,7 +47,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/device.h>
 #include <linux/clk.h>
-#include <linux/phy/phy.h>
+#include <linux/phy/phy-consumer.h>
 #include <linux/platform_device.h>
 #include <linux/ata_platform.h>
 #include <linux/mbus.h>
