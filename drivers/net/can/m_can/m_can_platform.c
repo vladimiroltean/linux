@@ -132,7 +132,7 @@ static int m_can_plat_probe(struct platform_device *pdev)
 	}
 
 	if (transceiver)
-		mcan_class->can.bitrate_max = transceiver->attrs.max_link_rate;
+		mcan_class->can.bitrate_max = phy_get_max_link_rate(transceiver);
 
 	priv->base = addr;
 	priv->mram_base = mram_addr;
