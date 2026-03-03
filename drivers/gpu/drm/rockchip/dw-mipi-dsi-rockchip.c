@@ -26,6 +26,7 @@
 #include <drm/drm_of.h>
 #include <drm/drm_print.h>
 
+#include "../../../phy/phy-provider.h" /* FIXME */
 #include "rockchip_drm_drv.h"
 
 #define DSI_PHY_RSTZ			0xa0
