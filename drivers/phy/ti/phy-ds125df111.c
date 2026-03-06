@@ -8,8 +8,9 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/phy.h>
-#include <linux/phy/phy.h>
 #include <linux/slab.h>
+
+#include "../phy-provider.h"
 
 #define DS125DF111_NUM_CH			2
 #define DS125DF111_NUM_VCO_GROUP_REG		5

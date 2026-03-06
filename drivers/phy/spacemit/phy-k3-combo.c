@@ -13,10 +13,10 @@
 #include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
-#include <linux/phy/phy.h>
 
 #include <dt-bindings/phy/phy.h>
 
+#include "../phy-provider.h"
 #include "phy-k3-common.h"
 
 /*

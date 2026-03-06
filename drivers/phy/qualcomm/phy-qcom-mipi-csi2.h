@@ -8,7 +8,7 @@
 #ifndef __PHY_QCOM_MIPI_CSI2_H__
 #define __PHY_QCOM_MIPI_CSI2_H__
 
-#include <linux/phy/phy.h>
+#include "../phy-provider.h"
 
 #define CSI2_MAX_DATA_LANES	4
 #define CSI2_DEFAULT_CLK_LANE	7

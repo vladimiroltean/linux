@@ -8,8 +8,9 @@
 #include <linux/regulator/consumer.h>
 #include <linux/regmap.h>
 #include <linux/of.h>
-#include <linux/phy/phy.h>
 #include <linux/spmi.h>
+
+#include "../phy-provider.h"
 
 /* eUSB2 status registers */
 #define EUSB2_RPTR_STATUS		0x08

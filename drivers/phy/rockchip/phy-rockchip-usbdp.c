@@ -18,7 +18,6 @@
 #include <linux/mfd/syscon.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
-#include <linux/phy/phy.h>
 #include <linux/platform_device.h>
 #include <linux/property.h>
 #include <linux/regmap.h>
@@ -27,6 +26,8 @@
 #include <linux/usb/ch9.h>
 #include <linux/usb/typec_dp.h>
 #include <linux/usb/typec_mux.h>
+
+#include "../phy-provider.h"
 
 /* USBDP PHY Register Definitions */
 #define UDPHY_PCS				0x4000

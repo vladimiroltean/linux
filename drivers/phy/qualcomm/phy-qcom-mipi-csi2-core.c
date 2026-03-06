@@ -12,7 +12,6 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/pm_opp.h>
-#include <linux/phy/phy.h>
 #include <linux/phy/phy-mipi-dphy.h>
 #include <linux/platform_device.h>
 #include <linux/pm_domain.h>
@@ -22,6 +21,7 @@
 #include <linux/reset.h>
 #include <linux/slab.h>
 
+#include "../phy-provider.h"
 #include "phy-qcom-mipi-csi2.h"
 
 static int

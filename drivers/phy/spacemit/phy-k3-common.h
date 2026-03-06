@@ -3,7 +3,7 @@
 #ifndef _PHY_K3_COMMON_H
 #define _PHY_K3_COMMON_H
 
-#include <linux/phy/phy.h>
+#include "../phy-provider.h"
 
 struct k3_phy_lane_group_data {
 	u32 lanes;
