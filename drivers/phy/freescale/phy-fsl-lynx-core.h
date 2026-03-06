@@ -4,9 +4,10 @@
 #ifndef _PHY_FSL_LYNX_CORE_H
 #define _PHY_FSL_LYNX_CORE_H
 
-#include <linux/phy/phy.h>
 #include <linux/phy.h>
 #include <soc/fsl/phy-fsl-lynx.h>
+
+#include "../phy-provider.h"
 
 #define LYNX_NUM_PLL				2
 #define LYNX_QUIRK_HAS_HARDCODED_USXGMII	BIT(0)

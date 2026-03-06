@@ -5,8 +5,9 @@
 #include <linux/module.h>
 #include <linux/regmap.h>
 
-#include <linux/phy/phy.h>
 #include <linux/spi/spi.h>
+
+#include "phy-provider.h"
 
 #define TJA1145_MODE_CTRL		0x01
 #define TJA1145_MODE_CTRL_MC		GENMASK(2, 0)

@@ -14,9 +14,10 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/phy.h>
-#include <linux/phy/phy.h>
 #include <linux/slab.h>
 #include <linux/types.h>
+
+#include "phy-provider.h"
 
 #define EQ5_PHY_COUNT	2
 

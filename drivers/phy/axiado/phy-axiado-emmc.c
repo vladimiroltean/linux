@@ -14,8 +14,9 @@
 #include <linux/iopoll.h>
 #include <linux/module.h>
 #include <linux/of.h>
-#include <linux/phy/phy.h>
 #include <linux/platform_device.h>
+
+#include "../phy-provider.h"
 
 /* Arasan eMMC 5.1 - PHY configuration registers */
 #define CAP_REG_IN_S1_MSB		0x04

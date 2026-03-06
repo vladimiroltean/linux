@@ -7,8 +7,9 @@
 #include <linux/mfd/syscon.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
-#include <linux/phy/phy.h>
 #include <linux/regmap.h>
+
+#include "../phy-provider.h"
 
 #define SC_PERIPH_CTRL4			0x00c
 

@@ -9,9 +9,10 @@
 #include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/module.h>
-#include <linux/phy/phy.h>
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
+
+#include "../phy-provider.h"
 
 /* USS (USB Subsystem) clock control registers */
 #define USS_CPR_CLK_EN		0x00

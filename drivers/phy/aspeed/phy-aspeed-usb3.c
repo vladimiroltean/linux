@@ -9,9 +9,10 @@
 #include <linux/iopoll.h>
 #include <linux/module.h>
 #include <linux/of.h>
-#include <linux/phy/phy.h>
 #include <linux/platform_device.h>
 #include <linux/reset.h>
+
+#include "../phy-provider.h"
 
 #define PHY3S00				0x00
 #define  PHY3S00_INIT_DONE		BIT(15)

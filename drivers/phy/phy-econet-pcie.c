@@ -7,11 +7,12 @@
 #include <linux/bitfield.h>
 #include <linux/module.h>
 #include <linux/of.h>
-#include <linux/phy/phy.h>
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
 #include <linux/bits.h>
 #include <linux/delay.h>
+
+#include "phy-provider.h"
 
 /* Rx detection timing for EN751221: 16*8 clock cycles  */
 #define EN751221_RXDET_VAL		16

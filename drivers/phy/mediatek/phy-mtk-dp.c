@@ -16,10 +16,11 @@
 #include <linux/mfd/syscon.h>
 #include <linux/nvmem-consumer.h>
 #include <linux/of.h>
-#include <linux/phy/phy.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/regmap.h>
+
+#include "../phy-provider.h"
 
 #define MTK_DP_PHY_MAX_LANES		4
 

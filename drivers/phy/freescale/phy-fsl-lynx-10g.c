@@ -5,11 +5,11 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/phy.h>
-#include <linux/phy/phy.h>
 #include <linux/platform_device.h>
 #include <linux/workqueue.h>
 #include <linux/fsl/guts.h>
 
+#include "../phy-provider.h"
 #include "phy-fsl-lynx-core.h"
 
 /* SoC IP wrapper for protocol converters */

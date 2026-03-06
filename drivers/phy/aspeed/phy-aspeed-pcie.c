@@ -11,7 +11,8 @@
 #include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/phy/pcie.h>
-#include <linux/phy/phy.h>
+
+#include "../phy-provider.h"
 
 /* AST2600 PCIe Host Controller Registers */
 #define PEHR_GLOBAL		0x30

@@ -15,12 +15,13 @@
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/of.h>
-#include <linux/phy/phy.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/regmap.h>
 #include <linux/reset.h>
 #include <linux/usb/typec_mux.h>
+
+#include "phy-provider.h"
 
 /* USB_CFG_CSR */
 #define USBCS_USB2PHY_CFG19_OFFSET 0x0

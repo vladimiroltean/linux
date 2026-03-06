@@ -10,10 +10,11 @@
 #include <linux/clk.h>
 #include <linux/iopoll.h>
 #include <linux/module.h>
-#include <linux/phy/phy.h>
 #include <linux/platform_device.h>
 #include <linux/property.h>
 #include <linux/reset.h>
+
+#include "../phy-provider.h"
 
 #define CIX_DP_PHY_ID_REV_REG			0xfc
 #define CIX_DP_PHY_ID				0x4d
