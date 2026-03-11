@@ -3644,6 +3644,7 @@ static int phy_probe(struct device *dev)
 	struct phy_driver *phydrv = to_phy_driver(drv);
 	int err = 0;
 
+	mutex_lock(&phydev->lock);
 	phydev->drv = phydrv;
 
 	/* Disable the interrupt if the PHY doesn't support it
@@ -3763,6 +3764,7 @@ static int phy_probe(struct device *dev)
 		if (err)
 			goto out;
 	}
+	mutex_unlock(&phydev->lock);
 
 	return 0;
 
@@ -3772,6 +3774,7 @@ out:
 
 	/* Re-assert the reset signal on error */
 	phy_device_reset(phydev, 1);
+	mutex_unlock(&phydev->lock);
 
 	return err;
 }
@@ -3782,6 +3785,7 @@ static int phy_remove(struct device *dev)
 
 	cancel_delayed_work_sync(&phydev->state_queue);
 
+	mutex_lock(&phydev->lock);
 	if (IS_ENABLED(CONFIG_PHYLIB_LEDS) && !phy_driver_is_genphy(phydev))
 		phy_leds_unregister(phydev);
 
@@ -3802,6 +3806,7 @@ static int phy_remove(struct device *dev)
 	phy_device_reset(phydev, 1);
 
 	phydev->drv = NULL;
+	mutex_unlock(&phydev->lock);
 
 	return 0;
 }
