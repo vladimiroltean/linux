@@ -1457,6 +1457,7 @@ void phy_request_interrupt(struct phy_device *phydev)
 {
 	int err;
 
+	mutex_lock(&phydev->lock);
 	err = request_threaded_irq(phydev->irq, NULL, phy_interrupt,
 				   IRQF_ONESHOT | IRQF_SHARED,
 				   phydev_name(phydev), phydev);
@@ -1471,6 +1472,7 @@ void phy_request_interrupt(struct phy_device *phydev)
 			phydev->irq = PHY_POLL;
 		}
 	}
+	mutex_unlock(&phydev->lock);
 }
 EXPORT_SYMBOL(phy_request_interrupt);
 
