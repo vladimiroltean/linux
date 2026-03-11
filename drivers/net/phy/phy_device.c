@@ -1295,8 +1295,10 @@ void phy_disconnect(struct phy_device *phydev)
 	if (phy_is_started(phydev))
 		phy_stop(phydev);
 
+	mutex_lock(&phydev->lock);
 	if (phy_interrupt_is_valid(phydev))
 		phy_free_interrupt(phydev);
+	mutex_unlock(&phydev->lock);
 
 	phydev->adjust_link = NULL;
 
