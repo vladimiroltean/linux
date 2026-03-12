@@ -157,9 +157,16 @@ static int ksz8_reset_switch(struct ksz_device *dev)
 	return 0;
 }
 
-static int ksz8863_change_mtu(struct ksz_device *dev, int frame_size)
+static int ksz88xx_change_mtu(struct dsa_switch *ds, int port, int mtu)
 {
+	struct ksz_device *dev = ds->priv;
+	int frame_size;
 	u8 ctrl2 = 0;
+
+	if (!dsa_is_cpu_port(dev->ds, port))
+		return 0;
+
+	frame_size = mtu + VLAN_ETH_HLEN + ETH_FCS_LEN;
 
 	if (frame_size <= KSZ8_LEGAL_PACKET_SIZE)
 		ctrl2 |= KSZ8863_LEGAL_PACKET_ENABLE;
@@ -170,10 +177,17 @@ static int ksz8863_change_mtu(struct ksz_device *dev, int frame_size)
 			KSZ8863_HUGE_PACKET_ENABLE, ctrl2);
 }
 
-static int ksz8795_change_mtu(struct ksz_device *dev, int frame_size)
+static int ksz87xx_change_mtu(struct dsa_switch *ds, int port, int mtu)
 {
+	struct ksz_device *dev = ds->priv;
 	u8 ctrl1 = 0, ctrl2 = 0;
+	u16 frame_size;
 	int ret;
+
+	if (!dsa_is_cpu_port(dev->ds, port))
+		return 0;
+
+	frame_size = mtu + VLAN_ETH_HLEN + ETH_FCS_LEN;
 
 	if (frame_size > KSZ8_LEGAL_PACKET_SIZE)
 		ctrl2 |= SW_LEGAL_PACKET_DISABLE;
@@ -185,31 +199,6 @@ static int ksz8795_change_mtu(struct ksz_device *dev, int frame_size)
 		return ret;
 
 	return ksz_rmw8(dev, REG_SW_CTRL_2, SW_LEGAL_PACKET_DISABLE, ctrl2);
-}
-
-static int ksz8_change_mtu(struct dsa_switch *ds, int port, int mtu)
-{
-	struct ksz_device *dev = ds->priv;
-	u16 frame_size;
-
-	if (!dsa_is_cpu_port(dev->ds, port))
-		return 0;
-
-	frame_size = mtu + VLAN_ETH_HLEN + ETH_FCS_LEN;
-
-	switch (dev->chip_id) {
-	case KSZ8795_CHIP_ID:
-	case KSZ8794_CHIP_ID:
-	case KSZ8765_CHIP_ID:
-		return ksz8795_change_mtu(dev, frame_size);
-	case KSZ8463_CHIP_ID:
-	case KSZ88X3_CHIP_ID:
-	case KSZ8864_CHIP_ID:
-	case KSZ8895_CHIP_ID:
-		return ksz8863_change_mtu(dev, frame_size);
-	}
-
-	return -EOPNOTSUPP;
 }
 
 static int ksz8_port_queue_split(struct ksz_device *dev, int port, int queues)
@@ -2298,7 +2287,7 @@ const struct dsa_switch_ops ksz8463_switch_ops = {
 	.port_mirror_del	= ksz_port_mirror_del,
 	.get_stats64		= ksz_get_stats64,
 	.get_pause_stats	= ksz_get_pause_stats,
-	.port_change_mtu	= ksz8_change_mtu,
+	.port_change_mtu	= ksz88xx_change_mtu,
 	.port_max_mtu		= ksz_max_mtu,
 	.get_wol		= ksz_get_wol,
 	.set_wol		= ksz_set_wol,
@@ -2358,7 +2347,7 @@ const struct dsa_switch_ops ksz87xx_switch_ops = {
 	.port_mirror_del	= ksz_port_mirror_del,
 	.get_stats64		= ksz_get_stats64,
 	.get_pause_stats	= ksz_get_pause_stats,
-	.port_change_mtu	= ksz8_change_mtu,
+	.port_change_mtu	= ksz87xx_change_mtu,
 	.port_max_mtu		= ksz_max_mtu,
 	.get_wol		= ksz_get_wol,
 	.set_wol		= ksz_set_wol,
@@ -2418,7 +2407,7 @@ const struct dsa_switch_ops ksz88xx_switch_ops = {
 	.port_mirror_del	= ksz_port_mirror_del,
 	.get_stats64		= ksz_get_stats64,
 	.get_pause_stats	= ksz_get_pause_stats,
-	.port_change_mtu	= ksz8_change_mtu,
+	.port_change_mtu	= ksz88xx_change_mtu,
 	.port_max_mtu		= ksz_max_mtu,
 	.get_wol		= ksz_get_wol,
 	.set_wol		= ksz_set_wol,
