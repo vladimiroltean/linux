@@ -2114,6 +2114,32 @@ static void ksz8_switch_exit(struct ksz_device *dev)
 	ksz8_reset_switch(dev);
 }
 
+static enum dsa_tag_protocol ksz8463_get_tag_protocol(struct dsa_switch *ds,
+						      int port,
+						      enum dsa_tag_protocol mp)
+{
+	return DSA_TAG_PROTO_KSZ9893;
+}
+
+static enum dsa_tag_protocol ksz87xx_get_tag_protocol(struct dsa_switch *ds,
+						      int port,
+						      enum dsa_tag_protocol mp)
+{
+	return DSA_TAG_PROTO_KSZ8795;
+}
+
+static enum dsa_tag_protocol ksz88xx_get_tag_protocol(struct dsa_switch *ds,
+						      int port,
+						      enum dsa_tag_protocol mp)
+{
+	struct ksz_device *dev = ds->priv;
+
+	if (ksz_is_8895_family(dev)) /* KSZ8864, KSZ8895 */
+		return DSA_TAG_PROTO_KSZ8795;
+
+	return DSA_TAG_PROTO_KSZ9893;
+}
+
 static void ksz88x3_phylink_mac_config(struct phylink_config *config,
 				       unsigned int mode,
 				       const struct phylink_link_state *state)
@@ -2240,7 +2266,7 @@ const struct ksz_dev_ops ksz88xx_dev_ops = {
 };
 
 const struct dsa_switch_ops ksz8463_switch_ops = {
-	.get_tag_protocol	= ksz_get_tag_protocol,
+	.get_tag_protocol	= ksz8463_get_tag_protocol,
 	.connect_tag_protocol   = ksz_connect_tag_protocol,
 	.get_phy_flags		= ksz_get_phy_flags,
 	.setup			= ksz_setup,
@@ -2300,7 +2326,7 @@ const struct dsa_switch_ops ksz8463_switch_ops = {
 };
 
 const struct dsa_switch_ops ksz87xx_switch_ops = {
-	.get_tag_protocol	= ksz_get_tag_protocol,
+	.get_tag_protocol	= ksz87xx_get_tag_protocol,
 	.connect_tag_protocol   = ksz_connect_tag_protocol,
 	.get_phy_flags		= ksz_get_phy_flags,
 	.setup			= ksz_setup,
@@ -2360,7 +2386,7 @@ const struct dsa_switch_ops ksz87xx_switch_ops = {
 };
 
 const struct dsa_switch_ops ksz88xx_switch_ops = {
-	.get_tag_protocol	= ksz_get_tag_protocol,
+	.get_tag_protocol	= ksz88xx_get_tag_protocol,
 	.connect_tag_protocol   = ksz_connect_tag_protocol,
 	.get_phy_flags		= ksz_get_phy_flags,
 	.setup			= ksz_setup,
