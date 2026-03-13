@@ -43,7 +43,7 @@ static void ksz9477_port_cfg32(struct ksz_device *dev, int port, int offset,
 			   bits, set ? bits : 0);
 }
 
-int ksz9477_change_mtu(struct ksz_device *dev, int port, int mtu)
+static int ksz9477_change_mtu(struct ksz_device *dev, int port, int mtu)
 {
 	u16 frame_size;
 
@@ -308,7 +308,7 @@ static int ksz9477_pcs_write(struct mii_bus *bus, int phy, int mmd, int reg,
 	return 0;
 }
 
-int ksz9477_pcs_create(struct ksz_device *dev)
+static int ksz9477_pcs_create(struct ksz_device *dev)
 {
 	/* This chip has a SGMII port. */
 	if (ksz_has_sgmii_port(dev)) {
@@ -344,7 +344,7 @@ int ksz9477_pcs_create(struct ksz_device *dev)
 	return 0;
 }
 
-int ksz9477_reset_switch(struct ksz_device *dev)
+static int ksz9477_reset_switch(struct ksz_device *dev)
 {
 	u8 data8;
 	u32 data32;
@@ -415,7 +415,7 @@ void ksz9477_r_mib_pkt(struct ksz_device *dev, int port, u16 addr,
 	ksz9477_r_mib_cnt(dev, port, addr, cnt);
 }
 
-void ksz9477_freeze_mib(struct ksz_device *dev, int port, bool freeze)
+static void ksz9477_freeze_mib(struct ksz_device *dev, int port, bool freeze)
 {
 	u32 val = freeze ? MIB_COUNTER_FLUSH_FREEZE : 0;
 	struct ksz_port *p = &dev->ports[port];
@@ -477,8 +477,8 @@ static int ksz9477_half_duplex_monitor(struct ksz_device *dev, int port,
 	return ret;
 }
 
-int ksz9477_errata_monitor(struct ksz_device *dev, int port,
-			   u64 tx_late_col)
+static int ksz9477_errata_monitor(struct ksz_device *dev, int port,
+				  u64 tx_late_col)
 {
 	u8 status;
 	int ret;
@@ -496,7 +496,7 @@ int ksz9477_errata_monitor(struct ksz_device *dev, int port,
 	return ret;
 }
 
-void ksz9477_port_init_cnt(struct ksz_device *dev, int port)
+static void ksz9477_port_init_cnt(struct ksz_device *dev, int port)
 {
 	struct ksz_port_mib *mib = &dev->ports[port].mib;
 
@@ -519,7 +519,7 @@ static void ksz9477_r_phy_quirks(struct ksz_device *dev, u16 addr, u16 reg,
 		*data &= ~(BMSR_ESTATEN | BMSR_ERCAP);
 }
 
-int ksz9477_r_phy(struct ksz_device *dev, u16 addr, u16 reg, u16 *data)
+static int ksz9477_r_phy(struct ksz_device *dev, u16 addr, u16 reg, u16 *data)
 {
 	u16 val = 0xffff;
 	int ret;
@@ -575,7 +575,7 @@ int ksz9477_r_phy(struct ksz_device *dev, u16 addr, u16 reg, u16 *data)
 	return 0;
 }
 
-int ksz9477_w_phy(struct ksz_device *dev, u16 addr, u16 reg, u16 val)
+static int ksz9477_w_phy(struct ksz_device *dev, u16 addr, u16 reg, u16 val)
 {
 	u32 mask, val32;
 
@@ -605,7 +605,7 @@ void ksz9477_cfg_port_member(struct ksz_device *dev, int port, u8 member)
 	ksz_pwrite32(dev, port, REG_PORT_VLAN_MEMBERSHIP__4, member);
 }
 
-void ksz9477_flush_dyn_mac_table(struct ksz_device *dev, int port)
+static void ksz9477_flush_dyn_mac_table(struct ksz_device *dev, int port)
 {
 	const u16 *regs = dev->info->regs;
 	u8 data;
@@ -628,8 +628,8 @@ void ksz9477_flush_dyn_mac_table(struct ksz_device *dev, int port)
 	}
 }
 
-int ksz9477_port_vlan_filtering(struct ksz_device *dev, int port,
-				bool flag, struct netlink_ext_ack *extack)
+static int ksz9477_port_vlan_filtering(struct ksz_device *dev, int port,
+				       bool flag, struct netlink_ext_ack *extack)
 {
 	if (flag) {
 		ksz_port_cfg(dev, port, REG_PORT_LUE_CTRL,
@@ -644,9 +644,9 @@ int ksz9477_port_vlan_filtering(struct ksz_device *dev, int port,
 	return 0;
 }
 
-int ksz9477_port_vlan_add(struct ksz_device *dev, int port,
-			  const struct switchdev_obj_port_vlan *vlan,
-			  struct netlink_ext_ack *extack)
+static int ksz9477_port_vlan_add(struct ksz_device *dev, int port,
+				 const struct switchdev_obj_port_vlan *vlan,
+				 struct netlink_ext_ack *extack)
 {
 	u32 vlan_table[3];
 	bool untagged = vlan->flags & BRIDGE_VLAN_INFO_UNTAGGED;
@@ -680,8 +680,8 @@ int ksz9477_port_vlan_add(struct ksz_device *dev, int port,
 	return 0;
 }
 
-int ksz9477_port_vlan_del(struct ksz_device *dev, int port,
-			  const struct switchdev_obj_port_vlan *vlan)
+static int ksz9477_port_vlan_del(struct ksz_device *dev, int port,
+				 const struct switchdev_obj_port_vlan *vlan)
 {
 	bool untagged = vlan->flags & BRIDGE_VLAN_INFO_UNTAGGED;
 	u32 vlan_table[3];
@@ -713,8 +713,8 @@ int ksz9477_port_vlan_del(struct ksz_device *dev, int port,
 	return 0;
 }
 
-int ksz9477_fdb_add(struct ksz_device *dev, int port,
-		    const unsigned char *addr, u16 vid, struct dsa_db db)
+static int ksz9477_fdb_add(struct ksz_device *dev, int port,
+			   const unsigned char *addr, u16 vid, struct dsa_db db)
 {
 	u32 alu_table[4];
 	u32 data;
@@ -769,8 +769,8 @@ exit:
 	return ret;
 }
 
-int ksz9477_fdb_del(struct ksz_device *dev, int port,
-		    const unsigned char *addr, u16 vid, struct dsa_db db)
+static int ksz9477_fdb_del(struct ksz_device *dev, int port,
+			   const unsigned char *addr, u16 vid, struct dsa_db db)
 {
 	u32 alu_table[4];
 	u32 data;
@@ -858,8 +858,8 @@ static void ksz9477_convert_alu(struct alu_struct *alu, u32 *alu_table)
 	alu->mac[5] = alu_table[3] & 0xFF;
 }
 
-int ksz9477_fdb_dump(struct ksz_device *dev, int port,
-		     dsa_fdb_dump_cb_t *cb, void *data)
+static int ksz9477_fdb_dump(struct ksz_device *dev, int port,
+			    dsa_fdb_dump_cb_t *cb, void *data)
 {
 	int ret = 0;
 	u32 ksz_data;
@@ -912,8 +912,9 @@ exit:
 	return ret;
 }
 
-int ksz9477_mdb_add(struct ksz_device *dev, int port,
-		    const struct switchdev_obj_port_mdb *mdb, struct dsa_db db)
+static int ksz9477_mdb_add(struct ksz_device *dev, int port,
+			   const struct switchdev_obj_port_mdb *mdb,
+			   struct dsa_db db)
 {
 	u32 static_table[4];
 	const u8 *shifts;
@@ -991,8 +992,9 @@ exit:
 	return err;
 }
 
-int ksz9477_mdb_del(struct ksz_device *dev, int port,
-		    const struct switchdev_obj_port_mdb *mdb, struct dsa_db db)
+static int ksz9477_mdb_del(struct ksz_device *dev, int port,
+			   const struct switchdev_obj_port_mdb *mdb,
+			   struct dsa_db db)
 {
 	u32 static_table[4];
 	const u8 *shifts;
@@ -1070,9 +1072,9 @@ exit:
 	return ret;
 }
 
-int ksz9477_port_mirror_add(struct ksz_device *dev, int port,
-			    struct dsa_mall_mirror_tc_entry *mirror,
-			    bool ingress, struct netlink_ext_ack *extack)
+static int ksz9477_port_mirror_add(struct ksz_device *dev, int port,
+				   struct dsa_mall_mirror_tc_entry *mirror,
+				   bool ingress, struct netlink_ext_ack *extack)
 {
 	u8 data;
 	int p;
@@ -1109,8 +1111,8 @@ int ksz9477_port_mirror_add(struct ksz_device *dev, int port,
 	return 0;
 }
 
-void ksz9477_port_mirror_del(struct ksz_device *dev, int port,
-			     struct dsa_mall_mirror_tc_entry *mirror)
+static void ksz9477_port_mirror_del(struct ksz_device *dev, int port,
+				    struct dsa_mall_mirror_tc_entry *mirror)
 {
 	bool in_use = false;
 	u8 data;
@@ -1153,8 +1155,8 @@ static phy_interface_t ksz9477_get_interface(struct ksz_device *dev, int port)
 	return interface;
 }
 
-void ksz9477_get_caps(struct ksz_device *dev, int port,
-		      struct phylink_config *config)
+static void ksz9477_get_caps(struct ksz_device *dev, int port,
+			     struct phylink_config *config)
 {
 	config->mac_capabilities = MAC_10 | MAC_100 | MAC_ASYM_PAUSE |
 				   MAC_SYM_PAUSE;
@@ -1171,7 +1173,7 @@ void ksz9477_get_caps(struct ksz_device *dev, int port,
 	}
 }
 
-int ksz9477_set_ageing_time(struct ksz_device *dev, unsigned int msecs)
+static int ksz9477_set_ageing_time(struct ksz_device *dev, unsigned int msecs)
 {
 	u32 secs = msecs / 1000;
 	u8 data, mult, value;
@@ -1221,7 +1223,7 @@ int ksz9477_set_ageing_time(struct ksz_device *dev, unsigned int msecs)
 	return ksz_write8(dev, REG_SW_LUE_CTRL_3, value);
 }
 
-void ksz9477_port_queue_split(struct ksz_device *dev, int port)
+static void ksz9477_port_queue_split(struct ksz_device *dev, int port)
 {
 	u8 data;
 
@@ -1237,7 +1239,7 @@ void ksz9477_port_queue_split(struct ksz_device *dev, int port)
 	ksz_prmw8(dev, port, REG_PORT_CTRL_0, PORT_QUEUE_SPLIT_MASK, data);
 }
 
-void ksz9477_port_setup(struct ksz_device *dev, int port, bool cpu_port)
+static void ksz9477_port_setup(struct ksz_device *dev, int port, bool cpu_port)
 {
 	const u16 *regs = dev->info->regs;
 	struct dsa_switch *ds = dev->ds;
@@ -1292,7 +1294,7 @@ void ksz9477_port_setup(struct ksz_device *dev, int port, bool cpu_port)
 	ksz_pwrite8(dev, port, regs[REG_PORT_PME_CTRL], 0);
 }
 
-void ksz9477_config_cpu_port(struct dsa_switch *ds)
+static void ksz9477_config_cpu_port(struct dsa_switch *ds)
 {
 	struct ksz_device *dev = ds->priv;
 	struct ksz_port *p;
@@ -1358,7 +1360,7 @@ void ksz9477_config_cpu_port(struct dsa_switch *ds)
 
 static u8 reserved_mcast_map[RESV_MCAST_CNT] = { 0, 1, 3, 16, 32, 33, 2, 17 };
 
-int ksz9477_enable_stp_addr(struct ksz_device *dev)
+static int ksz9477_enable_stp_addr(struct ksz_device *dev)
 {
 	u8 i, ports, update;
 	const u32 *masks;
@@ -1457,7 +1459,7 @@ int ksz9477_enable_stp_addr(struct ksz_device *dev)
 	return 0;
 }
 
-int ksz9477_setup(struct dsa_switch *ds)
+static int ksz9477_setup(struct dsa_switch *ds)
 {
 	struct ksz_device *dev = ds->priv;
 	const u16 *regs = dev->info->regs;
@@ -1503,7 +1505,7 @@ u32 ksz9477_get_port_addr(int port, int offset)
 	return PORT_CTRL_ADDR(port, offset);
 }
 
-int ksz9477_tc_cbs_set_cinc(struct ksz_device *dev, int port, u32 val)
+static int ksz9477_tc_cbs_set_cinc(struct ksz_device *dev, int port, u32 val)
 {
 	val = val >> 8;
 
@@ -1534,7 +1536,8 @@ int ksz9477_tc_cbs_set_cinc(struct ksz_device *dev, int port, u32 val)
  */
 #define KSZ9477_SUPPORTED_HSR_FEATURES (NETIF_F_HW_HSR_DUP | NETIF_F_HW_HSR_FWD)
 
-void ksz9477_hsr_join(struct dsa_switch *ds, int port, struct net_device *hsr)
+static void ksz9477_hsr_join(struct dsa_switch *ds, int port,
+			     struct net_device *hsr)
 {
 	struct ksz_device *dev = ds->priv;
 	struct net_device *user;
@@ -1573,7 +1576,8 @@ void ksz9477_hsr_join(struct dsa_switch *ds, int port, struct net_device *hsr)
 	user->features |= KSZ9477_SUPPORTED_HSR_FEATURES;
 }
 
-void ksz9477_hsr_leave(struct dsa_switch *ds, int port, struct net_device *hsr)
+static void ksz9477_hsr_leave(struct dsa_switch *ds, int port,
+			      struct net_device *hsr)
 {
 	struct ksz_device *dev = ds->priv;
 
@@ -1587,7 +1591,7 @@ void ksz9477_hsr_leave(struct dsa_switch *ds, int port, struct net_device *hsr)
 	ksz_port_cfg(dev, port, REG_PORT_LUE_CTRL, PORT_SRC_ADDR_FILTER, false);
 }
 
-int ksz9477_switch_init(struct ksz_device *dev)
+static int ksz9477_switch_init(struct ksz_device *dev)
 {
 	u8 data8;
 	int ret;
@@ -1607,10 +1611,48 @@ int ksz9477_switch_init(struct ksz_device *dev)
 	return 0;
 }
 
-void ksz9477_switch_exit(struct ksz_device *dev)
+static void ksz9477_switch_exit(struct ksz_device *dev)
 {
 	ksz9477_reset_switch(dev);
 }
+
+const struct ksz_dev_ops ksz9477_dev_ops = {
+	.setup = ksz9477_setup,
+	.get_port_addr = ksz9477_get_port_addr,
+	.cfg_port_member = ksz9477_cfg_port_member,
+	.flush_dyn_mac_table = ksz9477_flush_dyn_mac_table,
+	.port_setup = ksz9477_port_setup,
+	.set_ageing_time = ksz9477_set_ageing_time,
+	.r_phy = ksz9477_r_phy,
+	.w_phy = ksz9477_w_phy,
+	.r_mib_cnt = ksz9477_r_mib_cnt,
+	.r_mib_pkt = ksz9477_r_mib_pkt,
+	.r_mib_stat64 = ksz_r_mib_stats64,
+	.freeze_mib = ksz9477_freeze_mib,
+	.port_init_cnt = ksz9477_port_init_cnt,
+	.vlan_filtering = ksz9477_port_vlan_filtering,
+	.vlan_add = ksz9477_port_vlan_add,
+	.vlan_del = ksz9477_port_vlan_del,
+	.mirror_add = ksz9477_port_mirror_add,
+	.mirror_del = ksz9477_port_mirror_del,
+	.get_caps = ksz9477_get_caps,
+	.fdb_dump = ksz9477_fdb_dump,
+	.fdb_add = ksz9477_fdb_add,
+	.fdb_del = ksz9477_fdb_del,
+	.mdb_add = ksz9477_mdb_add,
+	.mdb_del = ksz9477_mdb_del,
+	.change_mtu = ksz9477_change_mtu,
+	.pme_write8 = ksz_write8,
+	.pme_pread8 = ksz_pread8,
+	.pme_pwrite8 = ksz_pwrite8,
+	.config_cpu_port = ksz9477_config_cpu_port,
+	.tc_cbs_set_cinc = ksz9477_tc_cbs_set_cinc,
+	.enable_stp_addr = ksz9477_enable_stp_addr,
+	.reset = ksz9477_reset_switch,
+	.init = ksz9477_switch_init,
+	.exit = ksz9477_switch_exit,
+	.pcs_create = ksz9477_pcs_create,
+};
 
 MODULE_AUTHOR("Woojung Huh <Woojung.Huh@microchip.com>");
 MODULE_DESCRIPTION("Microchip KSZ9477 Series Switch DSA Driver");
