@@ -2006,9 +2006,11 @@ static int ksz8_setup(struct dsa_switch *ds)
 		return ret;
 }
 
-static void ksz8_get_caps(struct ksz_device *dev, int port,
-			  struct phylink_config *config)
+static void ksz8_phylink_get_caps(struct dsa_switch *ds, int port,
+				  struct phylink_config *config)
 {
+	struct ksz_device *dev = ds->priv;
+
 	config->mac_capabilities = MAC_10 | MAC_100;
 
 	/* Silicon Errata Sheet (DS80000830A):
@@ -2022,6 +2024,8 @@ static void ksz8_get_caps(struct ksz_device *dev, int port,
 	/* Asym pause is not supported on KSZ8863 and KSZ8873 */
 	if (!ksz_is_ksz88x3(dev))
 		config->mac_capabilities |= MAC_ASYM_PAUSE;
+
+	ksz_phylink_get_caps(ds, port, config);
 }
 
 static u32 ksz8_get_port_addr(int port, int offset)
@@ -2185,7 +2189,6 @@ const struct ksz_dev_ops ksz8463_dev_ops = {
 	.r_mib_stat64 = ksz88xx_r_mib_stats64,
 	.freeze_mib = ksz8_freeze_mib,
 	.port_init_cnt = ksz8_port_init_cnt,
-	.get_caps = ksz8_get_caps,
 	.config_cpu_port = ksz8_config_cpu_port,
 	.enable_stp_addr = ksz8_enable_stp_addr,
 	.reset = ksz8_reset_switch,
@@ -2205,7 +2208,6 @@ const struct ksz_dev_ops ksz87xx_dev_ops = {
 	.r_mib_stat64 = ksz_r_mib_stats64,
 	.freeze_mib = ksz8_freeze_mib,
 	.port_init_cnt = ksz8_port_init_cnt,
-	.get_caps = ksz8_get_caps,
 	.config_cpu_port = ksz8_config_cpu_port,
 	.enable_stp_addr = ksz8_enable_stp_addr,
 	.reset = ksz8_reset_switch,
@@ -2228,7 +2230,6 @@ const struct ksz_dev_ops ksz88xx_dev_ops = {
 	.r_mib_stat64 = ksz88xx_r_mib_stats64,
 	.freeze_mib = ksz8_freeze_mib,
 	.port_init_cnt = ksz8_port_init_cnt,
-	.get_caps = ksz8_get_caps,
 	.config_cpu_port = ksz8_config_cpu_port,
 	.enable_stp_addr = ksz8_enable_stp_addr,
 	.reset = ksz8_reset_switch,
@@ -2247,7 +2248,7 @@ const struct dsa_switch_ops ksz8463_switch_ops = {
 	.teardown		= ksz_teardown,
 	.phy_read		= ksz_phy_read16,
 	.phy_write		= ksz_phy_write16,
-	.phylink_get_caps	= ksz_phylink_get_caps,
+	.phylink_get_caps	= ksz8_phylink_get_caps,
 	.port_setup		= ksz_port_setup,
 	.get_strings		= ksz_get_strings,
 	.get_ethtool_stats	= ksz_get_ethtool_stats,
@@ -2304,7 +2305,7 @@ const struct dsa_switch_ops ksz87xx_switch_ops = {
 	.teardown		= ksz_teardown,
 	.phy_read		= ksz_phy_read16,
 	.phy_write		= ksz_phy_write16,
-	.phylink_get_caps	= ksz_phylink_get_caps,
+	.phylink_get_caps	= ksz8_phylink_get_caps,
 	.port_setup		= ksz_port_setup,
 	.get_strings		= ksz_get_strings,
 	.get_ethtool_stats	= ksz_get_ethtool_stats,
@@ -2364,7 +2365,7 @@ const struct dsa_switch_ops ksz88xx_switch_ops = {
 	.teardown		= ksz_teardown,
 	.phy_read		= ksz_phy_read16,
 	.phy_write		= ksz_phy_write16,
-	.phylink_get_caps	= ksz_phylink_get_caps,
+	.phylink_get_caps	= ksz8_phylink_get_caps,
 	.port_setup		= ksz_port_setup,
 	.get_strings		= ksz_get_strings,
 	.get_ethtool_stats	= ksz_get_ethtool_stats,

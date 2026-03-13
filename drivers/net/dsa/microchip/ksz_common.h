@@ -426,8 +426,6 @@ struct ksz_dev_ops {
 	int (*mdb_del)(struct ksz_device *dev, int port,
 		       const struct switchdev_obj_port_mdb *mdb,
 		       struct dsa_db db);
-	void (*get_caps)(struct ksz_device *dev, int port,
-			 struct phylink_config *config);
 	int (*pme_write8)(struct ksz_device *dev, u32 reg, u8 value);
 	int (*pme_pread8)(struct ksz_device *dev, int port, int offset,
 			  u8 *data);
