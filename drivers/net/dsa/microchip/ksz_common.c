@@ -3306,40 +3306,6 @@ int ksz_connect_tag_protocol(struct dsa_switch *ds,
 	}
 }
 
-int ksz_port_vlan_filtering(struct dsa_switch *ds, int port,
-			    bool flag, struct netlink_ext_ack *extack)
-{
-	struct ksz_device *dev = ds->priv;
-
-	if (!dev->dev_ops->vlan_filtering)
-		return -EOPNOTSUPP;
-
-	return dev->dev_ops->vlan_filtering(dev, port, flag, extack);
-}
-
-int ksz_port_vlan_add(struct dsa_switch *ds, int port,
-		      const struct switchdev_obj_port_vlan *vlan,
-		      struct netlink_ext_ack *extack)
-{
-	struct ksz_device *dev = ds->priv;
-
-	if (!dev->dev_ops->vlan_add)
-		return -EOPNOTSUPP;
-
-	return dev->dev_ops->vlan_add(dev, port, vlan, extack);
-}
-
-int ksz_port_vlan_del(struct dsa_switch *ds, int port,
-		      const struct switchdev_obj_port_vlan *vlan)
-{
-	struct ksz_device *dev = ds->priv;
-
-	if (!dev->dev_ops->vlan_del)
-		return -EOPNOTSUPP;
-
-	return dev->dev_ops->vlan_del(dev, port, vlan);
-}
-
 int ksz_port_mirror_add(struct dsa_switch *ds, int port,
 			struct dsa_mall_mirror_tc_entry *mirror,
 			bool ingress, struct netlink_ext_ack *extack)
