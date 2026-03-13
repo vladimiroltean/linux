@@ -506,20 +506,6 @@ int ksz_port_pre_bridge_flags(struct dsa_switch *ds, int port,
 int ksz_port_bridge_flags(struct dsa_switch *ds, int port,
 			  struct switchdev_brport_flags flags,
 			  struct netlink_ext_ack *extack);
-int ksz_port_fdb_add(struct dsa_switch *ds, int port,
-		     const unsigned char *addr, u16 vid,
-		     struct dsa_db db);
-int ksz_port_fdb_del(struct dsa_switch *ds, int port,
-		     const unsigned char *addr,
-		     u16 vid, struct dsa_db db);
-int ksz_port_fdb_dump(struct dsa_switch *ds, int port,
-		      dsa_fdb_dump_cb_t *cb, void *data);
-int ksz_port_mdb_add(struct dsa_switch *ds, int port,
-		     const struct switchdev_obj_port_mdb *mdb,
-		     struct dsa_db db);
-int ksz_port_mdb_del(struct dsa_switch *ds, int port,
-		     const struct switchdev_obj_port_mdb *mdb,
-		     struct dsa_db db);
 
 void ksz_phylink_get_caps(struct dsa_switch *ds, int port,
 			  struct phylink_config *config);
