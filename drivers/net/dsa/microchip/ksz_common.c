@@ -3247,27 +3247,6 @@ int ksz_connect_tag_protocol(struct dsa_switch *ds,
 	}
 }
 
-int ksz_port_mirror_add(struct dsa_switch *ds, int port,
-			struct dsa_mall_mirror_tc_entry *mirror,
-			bool ingress, struct netlink_ext_ack *extack)
-{
-	struct ksz_device *dev = ds->priv;
-
-	if (!dev->dev_ops->mirror_add)
-		return -EOPNOTSUPP;
-
-	return dev->dev_ops->mirror_add(dev, port, mirror, ingress, extack);
-}
-
-void ksz_port_mirror_del(struct dsa_switch *ds, int port,
-			 struct dsa_mall_mirror_tc_entry *mirror)
-{
-	struct ksz_device *dev = ds->priv;
-
-	if (dev->dev_ops->mirror_del)
-		dev->dev_ops->mirror_del(dev, port, mirror);
-}
-
 /**
  * ksz_support_eee - Determine Energy Efficient Ethernet (EEE) support for a
  *                   port
