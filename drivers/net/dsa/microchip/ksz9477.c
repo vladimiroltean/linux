@@ -1633,11 +1633,6 @@ static int ksz9477_switch_init(struct ksz_device *dev)
 	return 0;
 }
 
-static void ksz9477_switch_exit(struct ksz_device *dev)
-{
-	ksz9477_reset_switch(dev);
-}
-
 static enum dsa_tag_protocol ksz9477_get_tag_protocol(struct dsa_switch *ds,
 						      int port,
 						      enum dsa_tag_protocol mp)
@@ -1797,7 +1792,6 @@ const struct ksz_dev_ops ksz9477_dev_ops = {
 	.enable_stp_addr = ksz9477_enable_stp_addr,
 	.reset = ksz9477_reset_switch,
 	.init = ksz9477_switch_init,
-	.exit = ksz9477_switch_exit,
 	.pcs_create = ksz9477_pcs_create,
 };
 
