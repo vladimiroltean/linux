@@ -13,6 +13,8 @@
 #include <linux/regmap.h>
 #include <linux/usb/of.h>
 
+#include "../phy-provider.h"
+
 #define PHY_RST_MODE_CTRL		0x04
 #define  PHY_PLL_RDY			BIT(0)
 #define  PHY_CLK_CDR_EN			BIT(1)
