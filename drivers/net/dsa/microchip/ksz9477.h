@@ -86,6 +86,14 @@ void ksz9477_acl_match_process_l2(struct ksz_device *dev, int port,
 
 int ksz9477_pcs_create(struct ksz_device *dev);
 
+void ksz9477_phylink_mac_link_up(struct phylink_config *config,
+				 struct phy_device *phydev,
+				 unsigned int mode,
+				 phy_interface_t interface,
+				 int speed, int duplex, bool tx_pause,
+				 bool rx_pause);
+
 extern const struct ksz_dev_ops ksz9477_dev_ops;
+extern const struct phylink_mac_ops ksz9477_phylink_mac_ops;
 
 #endif

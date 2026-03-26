@@ -21,5 +21,7 @@ int ksz8_all_queues_split(struct ksz_device *dev, int queues);
 extern const struct ksz_dev_ops ksz8463_dev_ops;
 extern const struct ksz_dev_ops ksz87xx_dev_ops;
 extern const struct ksz_dev_ops ksz88xx_dev_ops;
+extern const struct phylink_mac_ops ksz88x3_phylink_mac_ops;
+extern const struct phylink_mac_ops ksz8_phylink_mac_ops;
 
 #endif
