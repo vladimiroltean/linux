@@ -1470,8 +1470,8 @@ static int dsa_switch_parse(struct dsa_switch *ds, struct dsa_chip_data *cd)
 	/* We don't support interconnected switches nor multiple trees via
 	 * platform data, so this is the unique switch of the tree.
 	 */
-	ds->index = 0;
-	ds->dst = dsa_tree_touch(0);
+	ds->index = cd->index;
+	ds->dst = dsa_tree_touch(cd->tree);
 	if (!ds->dst)
 		return -ENOMEM;
 

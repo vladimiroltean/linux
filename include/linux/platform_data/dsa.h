@@ -12,6 +12,10 @@ struct dsa_chip_data {
 	 */
 	struct device	*netdev[DSA_MAX_PORTS];
 
+	/* DSA switch tree index and switch index */
+	unsigned int	tree;
+	unsigned int	index;
+
 	/* set to size of eeprom if supported by the switch */
 	int		eeprom_len;
 
