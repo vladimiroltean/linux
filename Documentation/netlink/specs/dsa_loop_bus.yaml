@@ -1,0 +1,79 @@
+# SPDX-License-Identifier: ((GPL-2.0 WITH Linux-syscall-note) OR BSD-3-Clause)
+---
+name: dsa-loop-bus
+
+doc: Netlink protocol for DSA loopback driver configuration.
+uapi-header: linux/dsa_loop_bus.h
+
+definitions:
+  -
+    name: port-type
+    type: enum
+    entries: [user, cpu]
+
+attribute-sets:
+  -
+    name: dsa-loop-bus
+    attributes:
+      -
+        name: tree-index
+        type: u32
+        doc: DSA switch tree index.
+      -
+        name: switch-id
+        type: u32
+        doc: DSA switch ID.
+      -
+        name: port
+        type: nest
+        nested-attributes: port
+        multi-attr: true
+        doc: Port configuration.
+  -
+    name: port
+    attributes:
+      -
+        name: index
+        type: u32
+        doc: Port index.
+      -
+        name: type
+        type: u32
+        enum: port-type
+        doc: Port type.
+      -
+        name: label
+        type: string
+        doc: User port label.
+      -
+        name: conduit-ifindex
+        type: u32
+        doc: CPU port conduit ifindex.
+
+operations:
+  list:
+    -
+      name: new
+      doc: Instantiate a new DSA loopback switch.
+      attribute-set: dsa-loop-bus
+      flags: [ admin-perm ]
+      do:
+        request:
+          attributes:
+            - tree-index
+            - switch-id
+            - port
+    -
+      name: del
+      doc: Remove an instantiated DSA loopback switch.
+      attribute-set: dsa-loop-bus
+      flags: [ admin-perm ]
+      do:
+        request:
+          attributes:
+            - tree-index
+            - switch-id
+
+kernel-family:
+  headers: ["\"dsa_loop_bus_main.h\""]
+  sock-priv: struct dsa_loop_bus_priv
