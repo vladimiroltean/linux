@@ -19,6 +19,7 @@
 #include <net/dsa.h>
 
 #include "dsa_loop.h"
+#include "dsa_loop_bus_main.h"
 
 #define DSA_LOOP_NUM_PORTS	6
 #define DSA_LOOP_CPU_PORT	(DSA_LOOP_NUM_PORTS - 1)
@@ -52,7 +53,6 @@ struct dsa_loop_priv {
 	struct mii_bus	*bus;
 	unsigned int	port_base;
 	struct dsa_loop_vlan vlans[VLAN_N_VID];
-	struct net_device *netdev;
 	struct dsa_loop_port ports[DSA_MAX_PORTS];
 };
 
@@ -64,7 +64,6 @@ static struct dsa_loop_mib_entry dsa_loop_mibs[] = {
 };
 
 static struct phy_device *phydevs[PHY_MAX_ADDR];
-static struct mdio_device *switch_mdiodev;
 
 enum dsa_loop_devlink_resource_id {
 	DSA_LOOP_DEVLINK_PARAM_ID_VTU,
@@ -322,7 +321,7 @@ static void dsa_loop_phylink_get_caps(struct dsa_switch *dsa, int port,
 	config->mac_capabilities = ~0;
 }
 
-static const struct dsa_switch_ops dsa_loop_driver = {
+static const struct dsa_switch_ops dsa_loop_ops = {
 	.get_tag_protocol	= dsa_loop_get_protocol,
 	.setup			= dsa_loop_setup,
 	.teardown		= dsa_loop_teardown,
@@ -343,51 +342,43 @@ static const struct dsa_switch_ops dsa_loop_driver = {
 	.phylink_get_caps	= dsa_loop_phylink_get_caps,
 };
 
-static int dsa_loop_drv_probe(struct mdio_device *mdiodev)
+static int dsa_loop_drv_probe(struct dsa_loop_device *dld)
 {
-	struct dsa_loop_pdata *pdata = mdiodev->dev.platform_data;
+	const struct dsa_loop_pdata *pdata = dld->dev.platform_data;
 	struct dsa_loop_priv *ps;
 	struct dsa_switch *ds;
 	int ret;
 
-	if (!pdata)
-		return -ENODEV;
-
-	ds = devm_kzalloc(&mdiodev->dev, sizeof(*ds), GFP_KERNEL);
+	ds = devm_kzalloc(&dld->dev, sizeof(*ds), GFP_KERNEL);
 	if (!ds)
 		return -ENOMEM;
 
-	ds->dev = &mdiodev->dev;
-	ds->num_ports = DSA_LOOP_NUM_PORTS;
+	ds->dev = &dld->dev;
+	ds->num_ports = pdata->num_ports;
 
-	ps = devm_kzalloc(&mdiodev->dev, sizeof(*ps), GFP_KERNEL);
+	ps = devm_kzalloc(&dld->dev, sizeof(*ps), GFP_KERNEL);
 	if (!ps)
 		return -ENOMEM;
 
-	ps->netdev = dev_get_by_name(&init_net, pdata->netdev);
-	if (!ps->netdev)
+	ds->dev = &dld->dev;
+	ds->ops = &dsa_loop_ops;
+	ds->priv = ps;
+	ps->bus = mdio_find_bus("fixed-0");
+	if (!ps->bus)
 		return -EPROBE_DEFER;
 
-	pdata->cd.netdev[DSA_LOOP_CPU_PORT] = &ps->netdev->dev;
-
-	ds->dev = &mdiodev->dev;
-	ds->ops = &dsa_loop_driver;
-	ds->priv = ps;
-	ps->bus = mdiodev->bus;
-
-	dev_set_drvdata(&mdiodev->dev, ds);
+	dev_set_drvdata(&dld->dev, ds);
 
 	ret = dsa_register_switch(ds);
-	if (!ret)
-		dev_info(&mdiodev->dev, "%s: 0x%0x\n",
-			 pdata->name, pdata->enabled_ports);
+	if (ret)
+		put_device(&ps->bus->dev);
 
 	return ret;
 }
 
-static void dsa_loop_drv_remove(struct mdio_device *mdiodev)
+static void dsa_loop_drv_remove(struct dsa_loop_device *dld)
 {
-	struct dsa_switch *ds = dev_get_drvdata(&mdiodev->dev);
+	struct dsa_switch *ds = dev_get_drvdata(&dld->dev);
 	struct dsa_loop_priv *ps;
 
 	if (!ds)
@@ -396,35 +387,29 @@ static void dsa_loop_drv_remove(struct mdio_device *mdiodev)
 	ps = ds->priv;
 
 	dsa_unregister_switch(ds);
-	dev_put(ps->netdev);
+	put_device(&ps->bus->dev);
 }
 
-static void dsa_loop_drv_shutdown(struct mdio_device *mdiodev)
+static void dsa_loop_drv_shutdown(struct dsa_loop_device *dld)
 {
-	struct dsa_switch *ds = dev_get_drvdata(&mdiodev->dev);
+	struct dsa_switch *ds = dev_get_drvdata(&dld->dev);
 
 	if (!ds)
 		return;
 
 	dsa_switch_shutdown(ds);
 
-	dev_set_drvdata(&mdiodev->dev, NULL);
+	dev_set_drvdata(&dld->dev, NULL);
 }
 
-static struct mdio_driver dsa_loop_drv = {
-	.mdiodrv.driver	= {
+static struct dsa_loop_driver dsa_loop_drv = {
+	.driver	= {
 		.name	= "dsa-loop",
 	},
 	.probe	= dsa_loop_drv_probe,
 	.remove	= dsa_loop_drv_remove,
 	.shutdown = dsa_loop_drv_shutdown,
 };
-
-static int dsa_loop_bus_match(struct device *dev,
-			      const struct device_driver *drv)
-{
-	return drv == &dsa_loop_drv.mdiodrv.driver;
-}
 
 static void dsa_loop_phydevs_unregister(void)
 {
@@ -434,59 +419,19 @@ static void dsa_loop_phydevs_unregister(void)
 	}
 }
 
-static int __init dsa_loop_create_switch_mdiodev(void)
-{
-	static struct dsa_loop_pdata dsa_loop_pdata = {
-		.cd = {
-			.port_names[0] = "lan1",
-			.port_names[1] = "lan2",
-			.port_names[2] = "lan3",
-			.port_names[3] = "lan4",
-			.port_names[DSA_LOOP_CPU_PORT] = "cpu",
-		},
-		.name = "DSA mockup driver",
-		.enabled_ports = 0x1f,
-		.netdev = "eth0",
-	};
-	struct mii_bus *bus;
-	int ret = -ENODEV;
-
-	bus = mdio_find_bus("fixed-0");
-	if (WARN_ON(!bus))
-		return ret;
-
-	switch_mdiodev = mdio_device_create(bus, 31);
-	if (IS_ERR(switch_mdiodev))
-		goto out;
-
-	switch_mdiodev->bus_match = dsa_loop_bus_match;
-	switch_mdiodev->dev.platform_data = &dsa_loop_pdata;
-
-	ret = mdio_device_register(switch_mdiodev);
-	if (ret)
-		mdio_device_free(switch_mdiodev);
-out:
-	put_device(&bus->dev);
-	return ret;
-}
-
 static int __init dsa_loop_init(void)
 {
 	unsigned int i;
 	int ret;
 
-	ret = dsa_loop_create_switch_mdiodev();
-	if (ret)
-		return ret;
-
 	for (i = 0; i < NUM_FIXED_PHYS; i++)
 		phydevs[i] = fixed_phy_register_100fd();
 
-	ret = mdio_driver_register(&dsa_loop_drv);
+	ret = dsa_loop_driver_register(&dsa_loop_drv);
 	if (ret) {
+		pr_err("Failed to register dsa-loop driver: %pe\n",
+		       ERR_PTR(ret));
 		dsa_loop_phydevs_unregister();
-		mdio_device_remove(switch_mdiodev);
-		mdio_device_free(switch_mdiodev);
 	}
 
 	return ret;
@@ -495,10 +440,8 @@ module_init(dsa_loop_init);
 
 static void __exit dsa_loop_exit(void)
 {
-	mdio_driver_unregister(&dsa_loop_drv);
+	dsa_loop_driver_unregister(&dsa_loop_drv);
 	dsa_loop_phydevs_unregister();
-	mdio_device_remove(switch_mdiodev);
-	mdio_device_free(switch_mdiodev);
 }
 module_exit(dsa_loop_exit);
 

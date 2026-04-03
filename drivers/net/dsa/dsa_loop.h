@@ -10,6 +10,7 @@ struct dsa_loop_pdata {
 	 */
 	struct dsa_chip_data cd;
 	const char *name;
+	unsigned int num_ports;
 	unsigned int enabled_ports;
 	const char *netdev;
 };

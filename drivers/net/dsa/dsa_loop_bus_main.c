@@ -96,6 +96,7 @@ static int dsa_loop_device_get_ports(struct dsa_loop_device *dld,
 				     struct genl_info *info)
 {
 	struct netlink_ext_ack *extack = info->extack;
+	unsigned int num_ports = 0;
 	bool cpu_port_seen = false;
 	struct nlattr *attr, *nla;
 	int rem;
@@ -176,7 +177,10 @@ static int dsa_loop_device_get_ports(struct dsa_loop_device *dld,
 		}
 
 		dld->pdata.enabled_ports |= BIT(index);
+		num_ports++;
 	}
+
+	dld->pdata.num_ports = num_ports;
 
 	return 0;
 }
