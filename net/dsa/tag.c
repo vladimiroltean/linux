@@ -242,3 +242,19 @@ void dsa_tag_driver_put(const struct dsa_device_ops *ops)
 	}
 	mutex_unlock(&dsa_tag_drivers_lock);
 }
+
+int dsa_tag_protocol_by_name(const char *name, enum dsa_tag_protocol *proto)
+{
+	const struct dsa_device_ops *ops;
+
+	ops = dsa_tag_driver_get_by_name(name);
+	if (!ops)
+		return -ENOPROTOOPT;
+
+	*proto = ops->proto;
+
+	dsa_tag_driver_put(ops);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(dsa_tag_protocol_by_name);
