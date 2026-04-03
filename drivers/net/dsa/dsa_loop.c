@@ -18,6 +18,8 @@
 #include <linux/types.h>
 #include <net/dsa.h>
 
+#include "dsa_loop.h"
+
 #define DSA_LOOP_NUM_PORTS	6
 #define DSA_LOOP_CPU_PORT	(DSA_LOOP_NUM_PORTS - 1)
 #define NUM_FIXED_PHYS		(DSA_LOOP_NUM_PORTS - 2)
@@ -52,16 +54,6 @@ struct dsa_loop_priv {
 	struct dsa_loop_vlan vlans[VLAN_N_VID];
 	struct net_device *netdev;
 	struct dsa_loop_port ports[DSA_MAX_PORTS];
-};
-
-struct dsa_loop_pdata {
-	/* Must be first, such that dsa_register_switch() can access this
-	 * without gory pointer manipulations
-	 */
-	struct dsa_chip_data cd;
-	const char *name;
-	unsigned int enabled_ports;
-	const char *netdev;
 };
 
 static struct dsa_loop_mib_entry dsa_loop_mibs[] = {
