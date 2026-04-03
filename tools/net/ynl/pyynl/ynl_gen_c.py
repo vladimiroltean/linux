@@ -3511,7 +3511,10 @@ def main():
     seen_header = []
     for one in headers:
         if one not in seen_header:
-            cw.p(f"#include <{one}>")
+            if one.startswith('"'):
+                cw.p(f"#include {one}")
+            else:
+                cw.p(f"#include <{one}>")
             seen_header.append(one)
     cw.nl()
 
