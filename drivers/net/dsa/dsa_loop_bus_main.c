@@ -203,6 +203,28 @@ static int dsa_loop_device_parse_identifiers(struct dsa_loop_device *dld,
 	return 0;
 }
 
+static int dsa_loop_device_parse_proto(struct dsa_loop_device *dld,
+				       struct genl_info *info)
+{
+	struct dsa_loop_pdata *pdata = &dld->pdata;
+	struct nlattr *nla;
+	const char *name;
+	int ret;
+
+	nla = info->attrs[DSA_LOOP_BUS_A_TAG_PROTO];
+	if (!nla)
+		return -EINVAL;
+
+	name = nla_memdup(nla, GFP_KERNEL);
+	if (!name)
+		return -ENOMEM;
+
+	ret = dsa_tag_protocol_by_name(name, &pdata->tag_proto);
+	kfree(name);
+
+	return ret;
+}
+
 int dsa_loop_bus_nl_new_doit(struct sk_buff *skb, struct genl_info *info)
 {
 	struct netlink_ext_ack *extack = info->extack;
@@ -230,6 +252,10 @@ int dsa_loop_bus_nl_new_doit(struct sk_buff *skb, struct genl_info *info)
 		goto put_ports;
 
 	ret = dsa_loop_device_parse_identifiers(dld, info);
+	if (ret)
+		goto put_ports;
+
+	ret = dsa_loop_device_parse_proto(dld, info);
 	if (ret)
 		goto put_ports;
 

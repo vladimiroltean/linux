@@ -24,6 +24,7 @@ const struct nla_policy dsa_loop_bus_port_nl_policy[DSA_LOOP_BUS_A_PORT_CONDUIT_
 static const struct nla_policy dsa_loop_bus_new_nl_policy[DSA_LOOP_BUS_A_PORT + 1] = {
 	[DSA_LOOP_BUS_A_TREE_INDEX] = { .type = NLA_U32, },
 	[DSA_LOOP_BUS_A_SWITCH_ID] = { .type = NLA_U32, },
+	[DSA_LOOP_BUS_A_TAG_PROTO] = { .type = NLA_NUL_STRING, },
 	[DSA_LOOP_BUS_A_PORT] = NLA_POLICY_NESTED(dsa_loop_bus_port_nl_policy),
 };
 

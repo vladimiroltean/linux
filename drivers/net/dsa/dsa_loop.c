@@ -116,9 +116,10 @@ static enum dsa_tag_protocol dsa_loop_get_protocol(struct dsa_switch *ds,
 						   int port,
 						   enum dsa_tag_protocol mp)
 {
-	dev_dbg(ds->dev, "%s: port: %d\n", __func__, port);
+	struct dsa_loop_device *dld = to_dsa_loop_device(ds->dev);
+	const struct dsa_loop_pdata *pdata = dld->dev.platform_data;
 
-	return DSA_TAG_PROTO_NONE;
+	return pdata->tag_proto;
 }
 
 static int dsa_loop_setup(struct dsa_switch *ds)

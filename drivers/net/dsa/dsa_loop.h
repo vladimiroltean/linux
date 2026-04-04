@@ -13,6 +13,7 @@ struct dsa_loop_pdata {
 	unsigned int num_ports;
 	unsigned int enabled_ports;
 	const char *netdev;
+	enum dsa_tag_protocol tag_proto;
 };
 
 #endif /* DSA_LOOP_H */

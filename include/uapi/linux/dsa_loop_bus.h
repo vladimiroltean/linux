@@ -18,6 +18,7 @@ enum dsa_loop_bus_port_type {
 enum {
 	DSA_LOOP_BUS_A_TREE_INDEX = 1,
 	DSA_LOOP_BUS_A_SWITCH_ID,
+	DSA_LOOP_BUS_A_TAG_PROTO,
 	DSA_LOOP_BUS_A_PORT,
 
 	__DSA_LOOP_BUS_A_MAX,

@@ -24,6 +24,10 @@ attribute-sets:
         type: u32
         doc: DSA switch ID.
       -
+        name: tag-proto
+        type: string
+        doc: see Documentation/ABI/testing/sysfs-class-net-dsa
+      -
         name: port
         type: nest
         nested-attributes: port
@@ -62,6 +66,7 @@ operations:
           attributes:
             - tree-index
             - switch-id
+            - tag-proto
             - port
     -
       name: del
