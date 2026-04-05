@@ -192,12 +192,17 @@ static void nsim_set_rx_mode(struct net_device *dev)
 static int nsim_change_mtu(struct net_device *dev, int new_mtu)
 {
 	struct netdevsim *ns = netdev_priv(dev);
+	struct netdevsim *peer;
 
 	if (ns->xdp.prog && !ns->xdp.prog->aux->xdp_has_frags &&
 	    new_mtu > NSIM_XDP_MAX_MTU)
 		return -EBUSY;
 
 	WRITE_ONCE(dev->mtu, new_mtu);
+
+	peer = rtnl_dereference(ns->peer);
+	if (peer)
+		WRITE_ONCE(peer->netdev->mtu, new_mtu);
 
 	return 0;
 }
