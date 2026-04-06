@@ -114,6 +114,8 @@ struct dsa_device_ops {
 	 * its RX filter.
 	 */
 	bool promisc_on_conduit;
+	unsigned int max_switch_id;
+	unsigned int max_num_ports;
 };
 
 struct dsa_lag {

@@ -158,6 +158,8 @@ static const struct dsa_device_ops ocelot_netdev_ops = {
 	.rcv			= ocelot_rcv,
 	.needed_headroom	= OCELOT_TOTAL_TAG_LEN,
 	.promisc_on_conduit	= true,
+	.max_switch_id		= 0,
+	.max_num_ports		= 12,
 };
 
 DSA_TAG_DRIVER(ocelot_netdev_ops);
@@ -170,6 +172,8 @@ static const struct dsa_device_ops seville_netdev_ops = {
 	.rcv			= ocelot_rcv,
 	.needed_headroom	= OCELOT_TOTAL_TAG_LEN,
 	.promisc_on_conduit	= true,
+	.max_switch_id		= 0,
+	.max_num_ports		= 11,
 };
 
 DSA_TAG_DRIVER(seville_netdev_ops);

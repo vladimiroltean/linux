@@ -157,6 +157,8 @@ static const struct dsa_device_ops yt921x_netdev_ops = {
 	.xmit	= yt921x_tag_xmit,
 	.rcv	= yt921x_tag_rcv,
 	.needed_headroom = YT921X_TAG_LEN,
+	.max_switch_id = 0,
+	.max_num_ports = 11,
 };
 
 MODULE_DESCRIPTION("DSA tag driver for Motorcomm YT921x switches");

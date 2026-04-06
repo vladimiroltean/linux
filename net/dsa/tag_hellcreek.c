@@ -64,6 +64,8 @@ static const struct dsa_device_ops hellcreek_netdev_ops = {
 	.xmit	  = hellcreek_xmit,
 	.rcv	  = hellcreek_rcv,
 	.needed_tailroom = HELLCREEK_TAG_LEN,
+	.max_switch_id = 0,
+	.max_num_ports = 4,
 };
 
 MODULE_DESCRIPTION("DSA tag driver for Hirschmann Hellcreek TSN switches");

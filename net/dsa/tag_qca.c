@@ -116,6 +116,8 @@ static const struct dsa_device_ops qca_netdev_ops = {
 	.rcv	= qca_tag_rcv,
 	.needed_headroom = QCA_HDR_LEN,
 	.promisc_on_conduit = true,
+	.max_switch_id = 0,
+	.max_num_ports = 8,
 };
 
 MODULE_DESCRIPTION("DSA tag driver for Qualcomm Atheros QCA8K switches");

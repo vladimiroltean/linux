@@ -23,6 +23,8 @@ static const struct dsa_device_ops none_ops = {
 	.name	= NONE_NAME,
 	.proto	= DSA_TAG_PROTO_NONE,
 	.xmit	= dsa_user_notag_xmit,
+	.max_switch_id = 0,
+	.max_num_ports = 0,
 };
 
 module_dsa_tag_driver(none_ops);

@@ -104,6 +104,8 @@ static const struct dsa_device_ops mxl862_netdev_ops = {
 	.xmit = mxl862_tag_xmit,
 	.rcv = mxl862_tag_rcv,
 	.needed_headroom = MXL862_HEADER_LEN,
+	.max_switch_id = 0,
+	.max_num_ports = 16,
 };
 
 MODULE_ALIAS_DSA_TAG_DRIVER(DSA_TAG_PROTO_MXL862, MXL862_NAME);

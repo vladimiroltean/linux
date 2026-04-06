@@ -572,6 +572,14 @@ static int dsa_switch_setup_tag_protocol(struct dsa_switch *ds)
 	struct dsa_switch_tree *dst = ds->dst;
 	int err;
 
+	if (tag_ops->proto != DSA_TAG_PROTO_NONE &&
+	    (ds->num_ports > tag_ops->max_num_ports ||
+	     ds->index > tag_ops->max_switch_id)) {
+		dev_err(ds->dev,
+			"Switch limits exceed tagging protocol capabilities\n");
+		return -ENOPROTOOPT;
+	}
+
 	if (tag_ops->proto == dst->default_proto)
 		goto connect;
 

@@ -101,6 +101,8 @@ static const struct dsa_device_ops mtk_netdev_ops = {
 	.xmit		= mtk_tag_xmit,
 	.rcv		= mtk_tag_rcv,
 	.needed_headroom = MTK_HDR_LEN,
+	.max_switch_id	= 0,
+	.max_num_ports	= 8,
 };
 
 MODULE_DESCRIPTION("DSA tag driver for Mediatek switches");

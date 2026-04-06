@@ -87,6 +87,8 @@ static const struct dsa_device_ops ar9331_netdev_ops = {
 	.xmit	= ar9331_tag_xmit,
 	.rcv	= ar9331_tag_rcv,
 	.needed_headroom = AR9331_HDR_LEN,
+	.max_switch_id = 0,
+	.max_num_ports = 16,
 };
 
 MODULE_DESCRIPTION("DSA tag driver for Atheros AR9331 SoC with built-in switch");

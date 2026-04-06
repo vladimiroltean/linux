@@ -107,6 +107,8 @@ static const struct dsa_device_ops a5psw_netdev_ops = {
 	.xmit	= a5psw_tag_xmit,
 	.rcv	= a5psw_tag_rcv,
 	.needed_headroom = A5PSW_TAG_LEN,
+	.max_switch_id = 0,
+	.max_num_ports = 16,
 };
 
 MODULE_DESCRIPTION("DSA tag driver for Renesas RZ/N1 A5PSW switch");

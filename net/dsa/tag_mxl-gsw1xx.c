@@ -108,6 +108,8 @@ static const struct dsa_device_ops gsw1xx_netdev_ops = {
 	.xmit			= gsw1xx_tag_xmit,
 	.rcv			= gsw1xx_tag_rcv,
 	.needed_headroom	= GSW1XX_HEADER_LEN,
+	.max_switch_id		= 0,
+	.max_num_ports		= 8,
 };
 
 MODULE_DESCRIPTION("DSA tag driver for MaxLinear GSW1xx 8 byte protocol");

@@ -103,6 +103,8 @@ static const struct dsa_device_ops gswip_netdev_ops = {
 	.xmit = gswip_tag_xmit,
 	.rcv = gswip_tag_rcv,
 	.needed_headroom = GSWIP_RX_HEADER_LEN,
+	.max_switch_id = 0,
+	.max_num_ports = 8,
 };
 
 MODULE_DESCRIPTION("DSA tag driver for Lantiq / Intel GSWIP switches");

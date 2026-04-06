@@ -117,6 +117,8 @@ static const struct dsa_device_ops lan9303_netdev_ops = {
 	.xmit = lan9303_xmit,
 	.rcv = lan9303_rcv,
 	.needed_headroom = LAN9303_TAG_LEN,
+	.max_switch_id = 0,
+	.max_num_ports = 4,
 };
 
 MODULE_DESCRIPTION("DSA tag driver for SMSC/Microchip LAN9303 family of switches");

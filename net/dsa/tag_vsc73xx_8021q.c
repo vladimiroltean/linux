@@ -59,6 +59,8 @@ static const struct dsa_device_ops vsc73xx_8021q_netdev_ops = {
 	.rcv			= vsc73xx_rcv,
 	.needed_headroom	= VLAN_HLEN,
 	.promisc_on_conduit	= true,
+	.max_switch_id		= 7,
+	.max_num_ports		= 16,
 };
 
 MODULE_LICENSE("GPL");

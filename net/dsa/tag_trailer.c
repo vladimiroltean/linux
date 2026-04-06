@@ -56,6 +56,8 @@ static const struct dsa_device_ops trailer_netdev_ops = {
 	.xmit	= trailer_xmit,
 	.rcv	= trailer_rcv,
 	.needed_tailroom = 4,
+	.max_switch_id = 0,
+	.max_num_ports = 8,
 };
 
 MODULE_DESCRIPTION("DSA tag driver for switches using a trailer tag");

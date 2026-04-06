@@ -118,6 +118,8 @@ static const struct dsa_device_ops rtl4a_netdev_ops = {
 	.xmit	= rtl4a_tag_xmit,
 	.rcv	= rtl4a_tag_rcv,
 	.needed_headroom = RTL4_A_HDR_LEN,
+	.max_switch_id = 0,
+	.max_num_ports = 8,
 };
 module_dsa_tag_driver(rtl4a_netdev_ops);
 

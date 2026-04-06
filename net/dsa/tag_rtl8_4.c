@@ -232,6 +232,8 @@ static const struct dsa_device_ops rtl8_4_netdev_ops = {
 	.xmit = rtl8_4_tag_xmit,
 	.rcv = rtl8_4_tag_rcv,
 	.needed_headroom = RTL8_4_TAG_LEN,
+	.max_switch_id = 0,
+	.max_num_ports = 11,
 };
 
 DSA_TAG_DRIVER(rtl8_4_netdev_ops);
@@ -245,6 +247,8 @@ static const struct dsa_device_ops rtl8_4t_netdev_ops = {
 	.xmit = rtl8_4t_tag_xmit,
 	.rcv = rtl8_4t_tag_rcv,
 	.needed_tailroom = RTL8_4_TAG_LEN,
+	.max_switch_id = 0,
+	.max_num_ports = 11,
 };
 
 DSA_TAG_DRIVER(rtl8_4t_netdev_ops);

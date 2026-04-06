@@ -131,6 +131,8 @@ static const struct dsa_device_ops ocelot_8021q_netdev_ops = {
 	.disconnect		= ocelot_disconnect,
 	.needed_headroom	= VLAN_HLEN,
 	.promisc_on_conduit	= true,
+	.max_switch_id		= 7,
+	.max_num_ports		= 16,
 };
 
 MODULE_DESCRIPTION("DSA tag driver for Ocelot family of switches, using VLAN");

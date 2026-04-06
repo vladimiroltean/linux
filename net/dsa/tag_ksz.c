@@ -156,6 +156,8 @@ static const struct dsa_device_ops ksz8795_netdev_ops = {
 	.xmit	= ksz8795_xmit,
 	.rcv	= ksz8795_rcv,
 	.needed_tailroom = KSZ_INGRESS_TAG_LEN,
+	.max_switch_id = 0,
+	.max_num_ports = 4,
 };
 
 DSA_TAG_DRIVER(ksz8795_netdev_ops);
@@ -334,6 +336,8 @@ static const struct dsa_device_ops ksz9477_netdev_ops = {
 	.connect = ksz_connect,
 	.disconnect = ksz_disconnect,
 	.needed_tailroom = KSZ9477_INGRESS_TAG_LEN + KSZ_PTP_TAG_LEN,
+	.max_switch_id = 0,
+	.max_num_ports = 8,
 };
 
 DSA_TAG_DRIVER(ksz9477_netdev_ops);
@@ -378,6 +382,8 @@ static const struct dsa_device_ops ksz9893_netdev_ops = {
 	.connect = ksz_connect,
 	.disconnect = ksz_disconnect,
 	.needed_tailroom = KSZ_INGRESS_TAG_LEN + KSZ_PTP_TAG_LEN,
+	.max_switch_id = 0,
+	.max_num_ports = 8,
 };
 
 DSA_TAG_DRIVER(ksz9893_netdev_ops);
@@ -447,6 +453,8 @@ static const struct dsa_device_ops lan937x_netdev_ops = {
 	.connect = ksz_connect,
 	.disconnect = ksz_disconnect,
 	.needed_tailroom = LAN937X_EGRESS_TAG_LEN + KSZ_PTP_TAG_LEN,
+	.max_switch_id = 0,
+	.max_num_ports = 8,
 };
 
 DSA_TAG_DRIVER(lan937x_netdev_ops);

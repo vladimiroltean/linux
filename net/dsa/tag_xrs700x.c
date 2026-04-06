@@ -52,6 +52,8 @@ static const struct dsa_device_ops xrs700x_netdev_ops = {
 	.xmit	= xrs700x_xmit,
 	.rcv	= xrs700x_rcv,
 	.needed_tailroom = 1,
+	.max_switch_id = 0,
+	.max_num_ports = 8,
 };
 
 MODULE_DESCRIPTION("DSA tag driver for XRS700x switches");

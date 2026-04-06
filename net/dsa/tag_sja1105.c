@@ -731,6 +731,8 @@ static const struct dsa_device_ops sja1105_netdev_ops = {
 	.needed_headroom = VLAN_HLEN,
 	.flow_dissect = sja1105_flow_dissect,
 	.promisc_on_conduit = true,
+	.max_switch_id = 7,
+	.max_num_ports = 16,
 };
 
 DSA_TAG_DRIVER(sja1105_netdev_ops);
@@ -746,6 +748,8 @@ static const struct dsa_device_ops sja1110_netdev_ops = {
 	.flow_dissect = sja1110_flow_dissect,
 	.needed_headroom = SJA1110_HEADER_LEN + VLAN_HLEN,
 	.needed_tailroom = SJA1110_RX_TRAILER_LEN + SJA1110_MAX_PADDING_LEN,
+	.max_switch_id = 7,
+	.max_num_ports = 16,
 };
 
 DSA_TAG_DRIVER(sja1110_netdev_ops);

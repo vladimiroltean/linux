@@ -347,6 +347,8 @@ static const struct dsa_device_ops dsa_netdev_ops = {
 	.xmit	  = dsa_xmit,
 	.rcv	  = dsa_rcv,
 	.needed_headroom = DSA_HLEN,
+	.max_switch_id = 31,
+	.max_num_ports = 32,
 };
 
 DSA_TAG_DRIVER(dsa_netdev_ops);
@@ -389,6 +391,8 @@ static const struct dsa_device_ops edsa_netdev_ops = {
 	.xmit	  = edsa_xmit,
 	.rcv	  = edsa_rcv,
 	.needed_headroom = EDSA_HLEN,
+	.max_switch_id = 31,
+	.max_num_ports = 32,
 };
 
 DSA_TAG_DRIVER(edsa_netdev_ops);
