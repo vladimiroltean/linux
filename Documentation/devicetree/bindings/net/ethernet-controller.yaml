@@ -82,6 +82,8 @@ properties:
       - 10gbase-r
       - 25gbase-r
       - 10g-qxgmii
+      - 50gbase-kr2
+      - 100gbase-kr4
 
   phy-mode:
     $ref: "#/properties/phy-connection-type"
