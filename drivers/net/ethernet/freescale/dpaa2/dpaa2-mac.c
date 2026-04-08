@@ -663,7 +663,8 @@ int dpaa2_mac_connect(struct dpaa2_mac *mac)
 
 	mac->phylink_config.mac_capabilities = MAC_SYM_PAUSE | MAC_ASYM_PAUSE |
 		MAC_10FD | MAC_100FD | MAC_1000FD | MAC_2500FD | MAC_5000FD |
-		MAC_10000FD | MAC_25000FD | MAC_40000FD | MAC_100000FD;
+		MAC_10000FD | MAC_25000FD | MAC_40000FD | MAC_50000FD |
+		MAC_100000FD;
 
 	dpaa2_mac_set_supported_interfaces(mac);
 
