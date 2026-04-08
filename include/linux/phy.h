@@ -160,6 +160,8 @@ typedef enum {
 	PHY_INTERFACE_MODE_40GKR4,
 	PHY_INTERFACE_MODE_40GBASER,
 	PHY_INTERFACE_MODE_2500BASEKX,
+	PHY_INTERFACE_MODE_50GKR2,
+	PHY_INTERFACE_MODE_100GKR4,
 	PHY_INTERFACE_MODE_MAX,
 } phy_interface_t;
 
@@ -302,6 +304,10 @@ static inline const char *phy_modes(phy_interface_t interface)
 		return "40gbase-kr4";
 	case PHY_INTERFACE_MODE_40GBASER:
 		return "40gbase-r";
+	case PHY_INTERFACE_MODE_50GKR2:
+		return "50gbase-kr2";
+	case PHY_INTERFACE_MODE_100GKR4:
+		return "100gbase-kr4";
 	default:
 		return "unknown";
 	}
