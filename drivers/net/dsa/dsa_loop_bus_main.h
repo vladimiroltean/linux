@@ -10,6 +10,7 @@
 
 struct dsa_loop_device {
 	struct device dev;
+	u32 portid;
 	struct dsa_loop_pdata pdata;
 	struct net_device *conduits[DSA_MAX_PORTS];
 	netdevice_tracker trackers[DSA_MAX_PORTS];
@@ -32,5 +33,8 @@ struct dsa_loop_bus_priv {
 
 int dsa_loop_driver_register(struct dsa_loop_driver *drv);
 void dsa_loop_driver_unregister(struct dsa_loop_driver *drv);
+
+int dsa_loop_bus_port_enable(struct dsa_loop_device *dld, int port);
+int dsa_loop_bus_port_disable(struct dsa_loop_device *dld, int port);
 
 #endif /* DSA_LOOP_BUS_H */

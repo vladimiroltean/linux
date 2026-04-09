@@ -15,6 +15,61 @@
 #include "dsa_loop_bus_gen.h"
 #include "dsa_loop.h"
 
+static int dsa_loop_bus_port_event(struct dsa_loop_device *dld, int port,
+				    u8 cmd)
+{
+	struct sk_buff *msg;
+	struct nlattr *at;
+	void *hdr;
+	int ret;
+
+	msg = genlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
+	if (!msg)
+		return -ENOMEM;
+
+	hdr = genlmsg_put(msg, 0, 0, &dsa_loop_bus_nl_family, 0, cmd);
+	if (!hdr) {
+		nlmsg_free(msg);
+		return -EMSGSIZE;
+	}
+
+	if (nla_put_u32(msg, DSA_LOOP_BUS_A_TREE_INDEX, dld->pdata.cd.tree) ||
+	    nla_put_u32(msg, DSA_LOOP_BUS_A_SWITCH_ID, dld->pdata.cd.index))
+		goto nla_put_failure;
+
+	at = nla_nest_start(msg, DSA_LOOP_BUS_A_PORT);
+	if (!at)
+		goto nla_put_failure;
+
+	if (nla_put_u32(msg, DSA_LOOP_BUS_A_PORT_INDEX, port))
+		goto nla_put_failure;
+
+	nla_nest_end(msg, at);
+
+	genlmsg_end(msg, hdr);
+
+	ret = genlmsg_unicast(&init_net, msg, dld->portid);
+
+	return ret;
+
+nla_put_failure:
+	genlmsg_cancel(msg, hdr);
+	nlmsg_free(msg);
+	return -EMSGSIZE;
+}
+
+int dsa_loop_bus_port_enable(struct dsa_loop_device *dld, int port)
+{
+	return dsa_loop_bus_port_event(dld, port, DSA_LOOP_BUS_CMD_PORT_ENABLE);
+}
+EXPORT_SYMBOL_GPL(dsa_loop_bus_port_enable);
+
+int dsa_loop_bus_port_disable(struct dsa_loop_device *dld, int port)
+{
+	return dsa_loop_bus_port_event(dld, port, DSA_LOOP_BUS_CMD_PORT_DISABLE);
+}
+EXPORT_SYMBOL_GPL(dsa_loop_bus_port_disable);
+
 static int dsa_loop_bus_probe(struct device *dev)
 {
 	struct dsa_loop_driver *ddrv = to_dsa_loop_driver(dev->driver);
@@ -260,6 +315,7 @@ int dsa_loop_bus_nl_new_doit(struct sk_buff *skb, struct genl_info *info)
 		goto put_ports;
 
 	dld->dev.id = info->snd_portid;
+	dld->portid = info->snd_portid;
 	dld->dev.bus = &dsa_loop_bus_type;
 	dld->dev.release = dsa_loop_device_release;
 

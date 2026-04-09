@@ -166,6 +166,21 @@ static void dsa_loop_phylink_get_caps(struct dsa_switch *dsa, int port,
 	config->mac_capabilities = ~0;
 }
 
+static int dsa_loop_port_enable(struct dsa_switch *ds, int port,
+				struct phy_device *phy)
+{
+	struct dsa_loop_device *dld = to_dsa_loop_device(ds->dev);
+
+	return dsa_loop_bus_port_enable(dld, port);
+}
+
+static void dsa_loop_port_disable(struct dsa_switch *ds, int port)
+{
+	struct dsa_loop_device *dld = to_dsa_loop_device(ds->dev);
+
+	dsa_loop_bus_port_disable(dld, port);
+}
+
 static const struct dsa_switch_ops dsa_loop_ops = {
 	.get_tag_protocol	= dsa_loop_get_protocol,
 	.setup			= dsa_loop_setup,
@@ -175,6 +190,8 @@ static const struct dsa_switch_ops dsa_loop_ops = {
 	.get_ethtool_phy_stats	= dsa_loop_get_ethtool_stats,
 	.phy_read		= dsa_loop_phy_read,
 	.phy_write		= dsa_loop_phy_write,
+	.port_enable		= dsa_loop_port_enable,
+	.port_disable		= dsa_loop_port_disable,
 	.port_change_mtu	= dsa_loop_port_change_mtu,
 	.port_max_mtu		= dsa_loop_port_max_mtu,
 	.phylink_get_caps	= dsa_loop_phylink_get_caps,

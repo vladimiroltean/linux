@@ -78,6 +78,24 @@ operations:
           attributes:
             - tree-index
             - switch-id
+    -
+      name: port-enable
+      doc: Notifies user space that a port has been enabled.
+      attribute-set: dsa-loop-bus
+      event:
+        attributes:
+          - tree-index
+          - switch-id
+          - port
+    -
+      name: port-disable
+      doc: Notifies user space that a port has been disabled.
+      attribute-set: dsa-loop-bus
+      event:
+        attributes:
+          - tree-index
+          - switch-id
+          - port
 
 kernel-family:
   headers: ["\"dsa_loop_bus_main.h\""]
