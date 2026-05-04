@@ -1024,11 +1024,73 @@ static void exynos_ufs_specify_nexus_t_tm_req(struct ufs_hba *hba,
 	}
 }
 
-static int exynos_ufs_phy_init(struct exynos_ufs *ufs)
+static int exynos_ufs_phy_init(struct device *dev, struct exynos_ufs *ufs)
+{
+	struct phy *generic_phy;
+	int ret;
+
+	generic_phy = devm_phy_get(dev, "ufs-phy");
+	if (IS_ERR(generic_phy)) {
+		ret = PTR_ERR(generic_phy);
+		dev_err(dev, "failed to get ufs-phy: %pe\n", ERR_PTR(ret));
+		return ret;
+	}
+
+	ret = phy_init(generic_phy);
+	if (ret) {
+		dev_err(dev, "phy init failed: %pe\n", ERR_PTR(ret));
+		return ret;
+	}
+
+	ufs->phy = generic_phy;
+
+	return ret;
+}
+
+static void exynos_ufs_phy_exit(struct exynos_ufs *ufs)
+{
+	phy_exit(ufs->phy);
+}
+
+static int exynos_ufs_phy_power_on(struct exynos_ufs *ufs)
+{
+	int ret;
+
+	if (ufs->phy_powered_on)
+		return 0;
+
+	ret = phy_power_on(ufs->phy);
+	if (ret) {
+		dev_err(ufs->hba->dev, "Failed to power on PHY: %pe\n",
+			ERR_PTR(ret));
+		return ret;
+	}
+
+	ufs->phy_powered_on = true;
+
+	return 0;
+}
+
+static void exynos_ufs_phy_power_off(struct exynos_ufs *ufs)
+{
+	int ret;
+
+	if (!ufs->phy_powered_on)
+		return;
+
+	ret = phy_power_off(ufs->phy);
+	if (ret)
+		dev_warn(ufs->hba->dev, "Failed to power off PHY: %pe\n",
+			 ERR_PTR(ret));
+
+	ufs->phy_powered_on = false;
+}
+
+static int exynos_ufs_phy_update_bus_width(struct exynos_ufs *ufs)
 {
 	struct ufs_hba *hba = ufs->hba;
 	struct phy *generic_phy = ufs->phy;
-	int ret = 0;
+	int ret;
 
 	if (ufs->avail_ln_rx == 0 || ufs->avail_ln_tx == 0) {
 		ufshcd_dme_get(hba, UIC_ARG_MIB(PA_AVAILRXDATALANES),
@@ -1040,30 +1102,11 @@ static int exynos_ufs_phy_init(struct exynos_ufs *ufs)
 			ufs->avail_ln_rx, ufs->avail_ln_tx);
 	}
 
-	phy_set_bus_width(generic_phy, ufs->avail_ln_rx);
-
-	if (generic_phy->power_count) {
-		phy_power_off(generic_phy);
-		phy_exit(generic_phy);
-	}
-
-	ret = phy_init(generic_phy);
-	if (ret) {
-		dev_err(hba->dev, "%s: phy init failed, ret = %d\n",
-			__func__, ret);
-		return ret;
-	}
-
-	ret = phy_power_on(generic_phy);
+	ret = phy_request_bus_width(generic_phy, ufs->avail_ln_rx);
 	if (ret)
-		goto out_exit_phy;
+		return ret;
 
-	return 0;
-
-out_exit_phy:
-	phy_exit(generic_phy);
-
-	return ret;
+	return exynos_ufs_phy_power_on(ufs);
 }
 
 static void exynos_ufs_config_unipro(struct exynos_ufs *ufs)
@@ -1148,7 +1191,7 @@ static int exynos_ufs_pre_link(struct ufs_hba *hba)
 		ufs->drv_data->pre_link(ufs);
 
 	/* m-phy */
-	exynos_ufs_phy_init(ufs);
+	exynos_ufs_phy_update_bus_width(ufs);
 	if (!(ufs->opts & EXYNOS_UFS_OPT_SKIP_CONFIG_PHY_ATTR)) {
 		exynos_ufs_config_phy_time_attr(ufs);
 		exynos_ufs_config_phy_cap_attr(ufs);
@@ -1568,12 +1611,9 @@ static int exynos_ufs_init(struct ufs_hba *hba)
 		goto out;
 	}
 
-	ufs->phy = devm_phy_get(dev, "ufs-phy");
-	if (IS_ERR(ufs->phy)) {
-		ret = PTR_ERR(ufs->phy);
-		dev_err(dev, "failed to get ufs-phy\n");
+	ret = exynos_ufs_phy_init(dev, ufs);
+	if (ret)
 		goto out;
-	}
 
 	exynos_ufs_priv_init(hba, ufs);
 
@@ -1583,13 +1623,13 @@ static int exynos_ufs_init(struct ufs_hba *hba)
 		ret = ufs->drv_data->drv_init(ufs);
 		if (ret) {
 			dev_err(dev, "failed to init drv-data\n");
-			goto out;
+			goto out_phy_exit;
 		}
 	}
 
 	ret = exynos_ufs_get_clk_info(ufs);
 	if (ret)
-		goto out;
+		goto out_phy_exit;
 	exynos_ufs_specify_phy_time_attr(ufs);
 
 	exynos_ufs_config_smu(ufs);
@@ -1597,6 +1637,8 @@ static int exynos_ufs_init(struct ufs_hba *hba)
 	hba->host->dma_alignment = DATA_UNIT_SIZE - 1;
 	return 0;
 
+out_phy_exit:
+	exynos_ufs_phy_exit(ufs);
 out:
 	hba->priv = NULL;
 	return ret;
@@ -1606,8 +1648,8 @@ static void exynos_ufs_exit(struct ufs_hba *hba)
 {
 	struct exynos_ufs *ufs = ufshcd_get_variant(hba);
 
-	phy_power_off(ufs->phy);
-	phy_exit(ufs->phy);
+	exynos_ufs_phy_power_off(ufs);
+	exynos_ufs_phy_exit(ufs);
 }
 
 static int exynos_ufs_host_reset(struct ufs_hba *hba)
@@ -1823,7 +1865,7 @@ static int exynos_ufs_suspend(struct ufs_hba *hba, enum ufs_pm_op pm_op,
 		ufs->drv_data->suspend(ufs);
 
 	if (!ufshcd_is_link_active(hba))
-		phy_power_off(ufs->phy);
+		exynos_ufs_phy_power_off(ufs);
 
 	return 0;
 }
@@ -1833,7 +1875,7 @@ static int exynos_ufs_resume(struct ufs_hba *hba, enum ufs_pm_op pm_op)
 	struct exynos_ufs *ufs = ufshcd_get_variant(hba);
 
 	if (!ufshcd_is_link_active(hba))
-		phy_power_on(ufs->phy);
+		exynos_ufs_phy_power_on(ufs);
 
 	exynos_ufs_config_smu(ufs);
 	exynos_ufs_fmp_resume(hba);
