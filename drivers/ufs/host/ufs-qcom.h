@@ -335,6 +335,7 @@ struct ufs_qcom_host {
 	struct clk *rx_lane0_sync_clk;
 	struct clk *rx_lane1_sync_clk;
 	bool is_lane_clks_enabled;
+	bool phy_powered_on;
 
 	struct icc_path *icc_ddr;
 	struct icc_path *icc_cpu;
