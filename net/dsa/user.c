@@ -29,6 +29,7 @@
 #include "port.h"
 #include "switch.h"
 #include "tag.h"
+#include "tree.h"
 #include "user.h"
 
 struct dsa_switchdev_event_work {

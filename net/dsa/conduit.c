@@ -13,7 +13,7 @@
 #include <net/netdev_lock.h>
 
 #include "conduit.h"
-#include "dsa.h"
+#include "tree.h"
 #include "port.h"
 #include "tag.h"
 

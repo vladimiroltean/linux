@@ -18,6 +18,7 @@
 #include "switch.h"
 #include "tag_8021q.h"
 #include "trace.h"
+#include "tree.h"
 #include "user.h"
 
 static unsigned int dsa_switch_fastest_ageing_time(struct dsa_switch *ds,

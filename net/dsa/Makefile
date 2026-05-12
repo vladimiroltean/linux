@@ -17,6 +17,7 @@ dsa_core-y += \
 	tag.o \
 	tag_8021q.o \
 	trace.o \
+	tree.o \
 	user.o
 
 # tagging formats

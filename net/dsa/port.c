@@ -12,7 +12,7 @@
 #include <linux/of_mdio.h>
 #include <linux/of_net.h>
 
-#include "dsa.h"
+#include "tree.h"
 #include "port.h"
 #include "switch.h"
 #include "tag_8021q.h"
