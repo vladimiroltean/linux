@@ -534,6 +534,9 @@ out_put_node:
 	return err;
 }
 
+/* Takes a refcount on ds->dst. Callers are responsible for calling
+ * dsa_tree_put().
+ */
 static int dsa_switch_parse_member_of(struct dsa_switch *ds,
 				      struct device_node *dn)
 {
@@ -555,6 +558,7 @@ static int dsa_switch_parse_member_of(struct dsa_switch *ds,
 		dev_err(ds->dev,
 			"A DSA switch with index %d already exists in tree %d\n",
 			ds->index, ds->dst->index);
+		dsa_tree_put(ds->dst);
 		return -EEXIST;
 	}
 
@@ -578,6 +582,54 @@ static int dsa_switch_touch_ports(struct dsa_switch *ds)
 	return 0;
 }
 
+static void dsa_switch_release_ports(struct dsa_switch *ds)
+{
+	struct dsa_mac_addr *a, *tmp;
+	struct dsa_port *dp, *next;
+	struct dsa_vlan *v, *n;
+
+	dsa_switch_for_each_port_safe(dp, next, ds) {
+		if (dsa_port_is_cpu(dp) && dp->conduit)
+			netdev_put(dp->conduit, &dp->conduit_tracker);
+
+		/* These are either entries that upper layers lost track of
+		 * (probably due to bugs), or installed through interfaces
+		 * where one does not necessarily have to remove them, like
+		 * ndo_dflt_fdb_add().
+		 */
+		list_for_each_entry_safe(a, tmp, &dp->fdbs, list) {
+			dev_info(ds->dev,
+				 "Cleaning up unicast address %pM vid %u from port %d\n",
+				 a->addr, a->vid, dp->index);
+			list_del(&a->list);
+			kfree(a);
+		}
+
+		list_for_each_entry_safe(a, tmp, &dp->mdbs, list) {
+			dev_info(ds->dev,
+				 "Cleaning up multicast address %pM vid %u from port %d\n",
+				 a->addr, a->vid, dp->index);
+			list_del(&a->list);
+			kfree(a);
+		}
+
+		/* These are entries that upper layers have lost track of,
+		 * probably due to bugs, but also due to dsa_port_do_vlan_del()
+		 * having failed and the VLAN entry still lingering on.
+		 */
+		list_for_each_entry_safe(v, n, &dp->vlans, list) {
+			dev_info(ds->dev,
+				 "Cleaning up vid %u from port %d\n",
+				 v->vid, dp->index);
+			list_del(&v->list);
+			kfree(v);
+		}
+
+		list_del(&dp->list);
+		kfree(dp);
+	}
+}
+
 static int dsa_switch_parse_of(struct dsa_switch *ds, struct device_node *dn)
 {
 	int err;
@@ -588,9 +640,19 @@ static int dsa_switch_parse_of(struct dsa_switch *ds, struct device_node *dn)
 
 	err = dsa_switch_touch_ports(ds);
 	if (err)
-		return err;
+		goto out_put_tree;
 
-	return dsa_switch_parse_ports_of(ds, dn);
+	err = dsa_switch_parse_ports_of(ds, dn);
+	if (err)
+		goto out_release_ports;
+
+	return 0;
+
+out_release_ports:
+	dsa_switch_release_ports(ds);
+out_put_tree:
+	dsa_tree_put(ds->dst);
+	return err;
 }
 
 static int dev_is_class(struct device *dev, const void *class)
@@ -674,6 +736,9 @@ static int dsa_switch_parse_ports(struct dsa_switch *ds,
 	return 0;
 }
 
+/* Takes a refcount on ds->dst. Callers are responsible for calling
+ * dsa_tree_put().
+ */
 static int dsa_switch_parse(struct dsa_switch *ds, struct dsa_chip_data *cd)
 {
 	int err;
@@ -690,57 +755,19 @@ static int dsa_switch_parse(struct dsa_switch *ds, struct dsa_chip_data *cd)
 
 	err = dsa_switch_touch_ports(ds);
 	if (err)
-		return err;
+		goto out_put_tree;
 
-	return dsa_switch_parse_ports(ds, cd);
-}
+	err = dsa_switch_parse_ports(ds, cd);
+	if (err)
+		goto out_release_ports;
 
-static void dsa_switch_release_ports(struct dsa_switch *ds)
-{
-	struct dsa_mac_addr *a, *tmp;
-	struct dsa_port *dp, *next;
-	struct dsa_vlan *v, *n;
+	return 0;
 
-	dsa_switch_for_each_port_safe(dp, next, ds) {
-		if (dsa_port_is_cpu(dp) && dp->conduit)
-			netdev_put(dp->conduit, &dp->conduit_tracker);
-
-		/* These are either entries that upper layers lost track of
-		 * (probably due to bugs), or installed through interfaces
-		 * where one does not necessarily have to remove them, like
-		 * ndo_dflt_fdb_add().
-		 */
-		list_for_each_entry_safe(a, tmp, &dp->fdbs, list) {
-			dev_info(ds->dev,
-				 "Cleaning up unicast address %pM vid %u from port %d\n",
-				 a->addr, a->vid, dp->index);
-			list_del(&a->list);
-			kfree(a);
-		}
-
-		list_for_each_entry_safe(a, tmp, &dp->mdbs, list) {
-			dev_info(ds->dev,
-				 "Cleaning up multicast address %pM vid %u from port %d\n",
-				 a->addr, a->vid, dp->index);
-			list_del(&a->list);
-			kfree(a);
-		}
-
-		/* These are entries that upper layers have lost track of,
-		 * probably due to bugs, but also due to dsa_port_do_vlan_del()
-		 * having failed and the VLAN entry still lingering on.
-		 */
-		list_for_each_entry_safe(v, n, &dp->vlans, list) {
-			dev_info(ds->dev,
-				 "Cleaning up vid %u from port %d\n",
-				 v->vid, dp->index);
-			list_del(&v->list);
-			kfree(v);
-		}
-
-		list_del(&dp->list);
-		kfree(dp);
-	}
+out_release_ports:
+	dsa_switch_release_ports(ds);
+out_put_tree:
+	dsa_tree_put(ds->dst);
+	return err;
 }
 
 static int dsa_switch_probe(struct dsa_switch *ds)
@@ -761,12 +788,8 @@ static int dsa_switch_probe(struct dsa_switch *ds)
 
 	if (np) {
 		err = dsa_switch_parse_of(ds, np);
-		if (err)
-			dsa_switch_release_ports(ds);
 	} else if (pdata) {
 		err = dsa_switch_parse(ds, pdata);
-		if (err)
-			dsa_switch_release_ports(ds);
 	} else {
 		err = -ENODEV;
 	}
