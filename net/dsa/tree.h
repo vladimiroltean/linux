@@ -5,6 +5,7 @@
 
 struct dsa_device_ops;
 struct dsa_lag;
+struct dsa_switch;
 struct dsa_switch_tree;
 struct net_device;
 
@@ -33,8 +34,7 @@ struct dsa_bridge *dsa_tree_bridge_find(struct dsa_switch_tree *dst,
 int dsa_tree_setup(struct dsa_switch_tree *dst);
 void dsa_tree_teardown(struct dsa_switch_tree *dst);
 
-struct dsa_switch_tree *dsa_tree_touch(int index);
-struct dsa_switch_tree *dsa_tree_get(struct dsa_switch_tree *dst);
-void dsa_tree_put(struct dsa_switch_tree *dst);
+struct dsa_switch_tree *dsa_switch_get_tree(struct dsa_switch *ds);
+void dsa_switch_put_tree(struct dsa_switch *ds);
 
 #endif

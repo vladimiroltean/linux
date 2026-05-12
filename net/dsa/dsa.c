@@ -534,40 +534,6 @@ out_put_node:
 	return err;
 }
 
-/* Takes a refcount on ds->dst. Callers are responsible for calling
- * dsa_tree_put().
- */
-static int dsa_switch_parse_member_of(struct dsa_switch *ds,
-				      struct device_node *dn)
-{
-	u32 m[2] = { 0, 0 };
-	int sz;
-
-	/* Don't error out if this optional property isn't found */
-	sz = of_property_read_variable_u32_array(dn, "dsa,member", m, 2, 2);
-	if (sz < 0 && sz != -EINVAL)
-		return sz;
-
-	ds->index = m[1];
-
-	ds->dst = dsa_tree_touch(m[0]);
-	if (!ds->dst)
-		return -ENOMEM;
-
-	if (dsa_switch_find(ds->dst->index, ds->index)) {
-		dev_err(ds->dev,
-			"A DSA switch with index %d already exists in tree %d\n",
-			ds->index, ds->dst->index);
-		dsa_tree_put(ds->dst);
-		return -EEXIST;
-	}
-
-	if (ds->dst->last_switch < ds->index)
-		ds->dst->last_switch = ds->index;
-
-	return 0;
-}
-
 static int dsa_switch_touch_ports(struct dsa_switch *ds)
 {
 	struct dsa_port *dp;
@@ -628,31 +594,6 @@ static void dsa_switch_release_ports(struct dsa_switch *ds)
 		list_del(&dp->list);
 		kfree(dp);
 	}
-}
-
-static int dsa_switch_parse_of(struct dsa_switch *ds, struct device_node *dn)
-{
-	int err;
-
-	err = dsa_switch_parse_member_of(ds, dn);
-	if (err)
-		return err;
-
-	err = dsa_switch_touch_ports(ds);
-	if (err)
-		goto out_put_tree;
-
-	err = dsa_switch_parse_ports_of(ds, dn);
-	if (err)
-		goto out_release_ports;
-
-	return 0;
-
-out_release_ports:
-	dsa_switch_release_ports(ds);
-out_put_tree:
-	dsa_tree_put(ds->dst);
-	return err;
 }
 
 static int dev_is_class(struct device *dev, const void *class)
@@ -736,43 +677,8 @@ static int dsa_switch_parse_ports(struct dsa_switch *ds,
 	return 0;
 }
 
-/* Takes a refcount on ds->dst. Callers are responsible for calling
- * dsa_tree_put().
- */
-static int dsa_switch_parse(struct dsa_switch *ds, struct dsa_chip_data *cd)
-{
-	int err;
-
-	ds->cd = cd;
-
-	/* We don't support interconnected switches nor multiple trees via
-	 * platform data, so this is the unique switch of the tree.
-	 */
-	ds->index = 0;
-	ds->dst = dsa_tree_touch(0);
-	if (!ds->dst)
-		return -ENOMEM;
-
-	err = dsa_switch_touch_ports(ds);
-	if (err)
-		goto out_put_tree;
-
-	err = dsa_switch_parse_ports(ds, cd);
-	if (err)
-		goto out_release_ports;
-
-	return 0;
-
-out_release_ports:
-	dsa_switch_release_ports(ds);
-out_put_tree:
-	dsa_tree_put(ds->dst);
-	return err;
-}
-
 static int dsa_switch_probe(struct dsa_switch *ds)
 {
-	struct dsa_switch_tree *dst;
 	struct dsa_chip_data *pdata;
 	struct device_node *np;
 	int err;
@@ -786,23 +692,37 @@ static int dsa_switch_probe(struct dsa_switch *ds)
 	if (!ds->num_ports)
 		return -EINVAL;
 
-	if (np) {
-		err = dsa_switch_parse_of(ds, np);
-	} else if (pdata) {
-		err = dsa_switch_parse(ds, pdata);
-	} else {
-		err = -ENODEV;
-	}
+	if (!pdata && !np)
+		return -ENODEV;
 
+	if (pdata)
+		ds->cd = pdata;
+
+	ds->dst = dsa_switch_get_tree(ds);
+	if (IS_ERR(ds->dst))
+		return PTR_ERR(ds->dst);
+
+	err = dsa_switch_touch_ports(ds);
 	if (err)
-		return err;
+		goto out_put_tree;
 
-	dst = ds->dst;
-	err = dsa_tree_setup(dst);
-	if (err) {
-		dsa_switch_release_ports(ds);
-		dsa_tree_put(dst);
-	}
+	if (np)
+		err = dsa_switch_parse_ports_of(ds, np);
+	else
+		err = dsa_switch_parse_ports(ds, pdata);
+	if (err)
+		goto out_release_ports;
+
+	err = dsa_tree_setup(ds->dst);
+	if (err)
+		goto out_release_ports;
+
+	return 0;
+
+out_release_ports:
+	dsa_switch_release_ports(ds);
+out_put_tree:
+	dsa_switch_put_tree(ds);
 
 	return err;
 }
@@ -825,7 +745,7 @@ static void dsa_switch_remove(struct dsa_switch *ds)
 
 	dsa_tree_teardown(dst);
 	dsa_switch_release_ports(ds);
-	dsa_tree_put(dst);
+	dsa_switch_put_tree(ds);
 }
 
 void dsa_unregister_switch(struct dsa_switch *ds)

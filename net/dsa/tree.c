@@ -166,6 +166,27 @@ out_unlock:
 	return err;
 }
 
+static int dsa_switch_parse_member_of(struct device_node *dn,
+				      int *switch_index,
+				      int *tree_index)
+{
+	u32 m[2] = { 0, 0 };
+	int sz;
+
+	/* Don't error out if this optional property isn't found */
+	sz = of_property_read_variable_u32_array(dn, "dsa,member", m, 2, 2);
+	if (sz < 0 && sz != -EINVAL) {
+		*tree_index = 0;
+		*switch_index = 0;
+		return sz;
+	}
+
+	*tree_index = m[0];
+	*switch_index = m[1];
+
+	return 0;
+}
+
 /**
  * dsa_lag_map() - Map LAG structure to a linear LAG array
  * @dst: Tree in which to record the mapping.
@@ -789,27 +810,86 @@ static void dsa_tree_release(struct kref *ref)
 	dsa_tree_free(dst);
 }
 
-void dsa_tree_put(struct dsa_switch_tree *dst)
+static void dsa_tree_put(struct dsa_switch_tree *dst)
 {
 	if (dst)
 		kref_put(&dst->refcount, dsa_tree_release);
 }
 
-struct dsa_switch_tree *dsa_tree_get(struct dsa_switch_tree *dst)
-{
-	if (dst)
-		kref_get(&dst->refcount);
-
-	return dst;
-}
-
-struct dsa_switch_tree *dsa_tree_touch(int index)
+static struct dsa_switch_tree *dsa_tree_get(int index, struct device_node *dn,
+					    struct dsa_chip_data *pdata)
 {
 	struct dsa_switch_tree *dst;
 
 	dst = dsa_tree_find(index);
-	if (dst)
-		return dsa_tree_get(dst);
-	else
-		return dsa_tree_alloc(index);
+	if (dst) {
+		kref_get(&dst->refcount);
+		return dst;
+	}
+
+	dst = dsa_tree_alloc(index);
+	if (!dst)
+		return NULL;
+
+	return dst;
+}
+
+static int dsa_tree_bind_switch(struct dsa_switch_tree *dst,
+				struct dsa_switch *ds)
+{
+	if (dsa_switch_find(dst->index, ds->index)) {
+		dev_err(ds->dev,
+			"A DSA switch with index %d already exists in tree %d\n",
+			ds->index, dst->index);
+		return -EEXIST;
+	}
+
+	if (dst->last_switch < ds->index)
+		dst->last_switch = ds->index;
+
+	return 0;
+}
+
+struct dsa_switch_tree *dsa_switch_get_tree(struct dsa_switch *ds)
+{
+	struct device_node *switch_dn;
+	int tree_index, switch_index;
+	struct dsa_switch_tree *dst;
+	struct dsa_chip_data *pdata;
+	int err;
+
+	pdata = ds->dev->platform_data;
+	switch_dn = dev_of_node(ds->dev);
+
+	if (switch_dn) {
+		err = dsa_switch_parse_member_of(switch_dn, &switch_index,
+						 &tree_index);
+		if (err)
+			return ERR_PTR(err);
+	} else {
+		/* We don't support interconnected switches nor multiple trees
+		 * via platform data, so this is the unique switch of the tree.
+		 */
+		tree_index = 0;
+		switch_index = 0;
+	}
+
+	ds->index = switch_index;
+
+	dst = dsa_tree_get(tree_index, switch_dn, pdata);
+	if (!dst)
+		return ERR_PTR(-ENOMEM);
+
+	err = dsa_tree_bind_switch(dst, ds);
+	if (err) {
+		dsa_tree_put(dst);
+		return ERR_PTR(err);
+	}
+
+	return dst;
+}
+
+void dsa_switch_put_tree(struct dsa_switch *ds)
+{
+	dsa_tree_put(ds->dst);
 }
