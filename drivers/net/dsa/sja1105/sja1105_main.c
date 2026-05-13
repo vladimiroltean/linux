@@ -21,6 +21,7 @@
 #include <linux/if_ether.h>
 #include <linux/dsa/8021q.h>
 #include <linux/units.h>
+#include <net/ip.h>
 
 #include "sja1105.h"
 #include "sja1105_tas.h"
@@ -1432,10 +1433,10 @@ sja1105_find_static_fdb_entry(struct sja1105_private *priv,
  * operation. So we have to back them up in the static configuration tables
  * and hence apply them on next static config upload... yay!
  */
-static int sja1105_static_fdb_change(struct sja1105_private *priv,
-				     unsigned long destports,
-				     const struct sja1105_l2_lookup_entry *requested,
-				     bool keep)
+int sja1105_static_fdb_change(struct sja1105_private *priv,
+			      unsigned long destports,
+			      const struct sja1105_l2_lookup_entry *requested,
+			      bool keep)
 {
 	struct sja1105_l2_lookup_entry *l2_lookup;
 	struct sja1105_table *table;
@@ -1752,6 +1753,13 @@ skip_finding_an_index:
 int sja1105pqrs_fdb_add(struct dsa_switch *ds, int port,
 			const unsigned char *addr, u16 vid)
 {
+	if (sja1105_can_tstamp_extended_l2_addr(ds, addr)) {
+		dev_info(ds->dev,
+			 "Cannot offload forwarding for %pM due to hardware timestamping rules, ignoring\n",
+			 addr);
+		return -EOPNOTSUPP;
+	}
+
 	return __sja1105pqrs_fdb_add(ds, BIT(port), addr, vid, VLAN_VID_MASK,
 				     false, 0, NULL);
 }
@@ -2737,15 +2745,19 @@ static void sja1105_port_deferred_xmit(struct kthread_work *work)
 
 	mutex_lock(&priv->mgmt_tree->lock);
 
-	if (ext_tstamp) {
-		kfree_skb(skb);
-		rc = -EINVAL;
-	} else {
+	if (ext_tstamp)
+		rc = sja1105_extended_l2_xmit(ds, port, skb);
+	else
 		rc = sja1105_mgmt_xmit(ds, port, 0, skb, !!clone);
-	}
 
-	/* The clone, if there, was made by dsa_skb_tx_timestamp */
-	if (rc == 0 && clone)
+	/* The clone, if there, was made by dsa_skb_tx_timestamp().
+	 * For extended L2 addresses, we need to wait regardless of whether
+	 * user space wants the timestamp, because in lack of a management
+	 * route, this is our only confirmation that the packet was actually
+	 * transmitted, and that the L2 Lookup entry can be safely updated
+	 * with no packet in flight.
+	 */
+	if (rc == 0 && (clone || ext_tstamp))
 		sja1105_ptp_txtstamp_skb(ds, port, clone);
 
 	mutex_unlock(&priv->mgmt_tree->lock);
@@ -2765,6 +2777,10 @@ static int sja1105_connect_tag_protocol(struct dsa_switch *ds,
 	tagger_data = sja1105_tagger_data(ds);
 	tagger_data->xmit_work_fn = sja1105_port_deferred_xmit;
 	tagger_data->meta_tstamp_handler = sja1110_process_meta_tstamp;
+	if (priv->info->has_extended_l2_tstamp) {
+		tagger_data->skb_needs_extended_l2_tstamp =
+			sja1105_skb_needs_extended_l2_tstamp;
+	}
 
 	return 0;
 }
@@ -3182,6 +3198,7 @@ static struct sja1105_mgmt_tree *sja1105_mgmt_tree_get(struct dsa_switch *ds)
 	if (!mgmt_tree)
 		return NULL;
 
+	mgmt_tree->dst = ds->dst;
 	INIT_LIST_HEAD(&mgmt_tree->routes);
 	refcount_set(&mgmt_tree->refcount, 1);
 	mutex_init(&mgmt_tree->lock);
@@ -3194,6 +3211,7 @@ static void sja1105_mgmt_tree_put(struct sja1105_mgmt_tree *mgmt_tree)
 	if (!refcount_dec_and_test(&mgmt_tree->refcount))
 		return;
 
+	sja1105_tree_hwts_l4_disable(mgmt_tree);
 	WARN_ON(!list_empty(&mgmt_tree->routes));
 	kfree(mgmt_tree);
 }
@@ -3291,6 +3309,10 @@ static int sja1105_mgmt_setup(struct dsa_switch *ds)
 			goto err_destroy_routes;
 	}
 
+	rc = sja1105_hwts_l4_replay_add(ds);
+	if (rc)
+		goto err_destroy_routes;
+
 	return 0;
 
 err_destroy_routes:
@@ -3310,6 +3332,8 @@ static void sja1105_mgmt_teardown(struct dsa_switch *ds)
 
 	if (priv->info->tag_proto != DSA_TAG_PROTO_SJA1105)
 		return;
+
+	sja1105_hwts_l4_replay_del(ds);
 
 	dsa_switch_for_each_user_port(dp, ds)
 		sja1105_mgmt_route_destroy(priv->mgmt_routes[dp->index]);

@@ -59,15 +59,369 @@ enum sja1105_ptp_clk_mode {
 #define ptp_data_to_sja1105(d) \
 		container_of((d), struct sja1105_private, ptp_data)
 
+static const unsigned char ptp_rsvd_mac_da[SJA1105_EXTENDED_L2_ADDR_NUM][ETH_ALEN] = {
+	{ 0x01, 0x00, 0x5e, 0x00, 0x01, 0x81, }, /* ip_eth_mc_map(ptp_dst_ipv4) */
+	{ 0x01, 0x00, 0x5e, 0x00, 0x00, 0x6b, }, /* ip_eth_mc_map(p2p_dst_ipv4) */
+	{ 0x33, 0x33, 0x00, 0x00, 0x01, 0x81, }, /* ipv6_eth_mc_map(ptp_dst_ipv6) */
+	{ 0x33, 0x33, 0x00, 0x00, 0x00, 0x6b, }, /* ipv6_eth_mc_map(p2p_dst_ipv6) */
+};
+
+bool sja1105_can_tstamp_extended_l2_addr(struct dsa_switch *ds,
+					 const unsigned char *addr)
+{
+	struct sja1105_private *priv = ds->priv;
+
+	if (!priv->info->has_extended_l2_tstamp)
+		return false;
+
+	for (int i = 0; i < ARRAY_SIZE(ptp_rsvd_mac_da); i++)
+		if (ether_addr_equal(ptp_rsvd_mac_da[i], addr))
+			return true;
+
+	return false;
+}
+
+bool sja1105_skb_needs_extended_l2_tstamp(struct dsa_switch *ds,
+					  const struct sk_buff *skb)
+{
+	struct sja1105_private *priv = ds->priv;
+	struct sja1105_mgmt_tree *mgmt_tree = priv->mgmt_tree;
+	const struct ethhdr *hdr = eth_hdr(skb);
+
+	if (!READ_ONCE(mgmt_tree->hwts_l4_en))
+		return false;
+
+	return sja1105_can_tstamp_extended_l2_addr(ds, hdr->h_dest);
+}
+
+static struct sja1105_extended_l2_addr *
+sja1105_extended_l2_addr_lookup(struct sja1105_mgmt_tree *mgmt_tree,
+				const unsigned char *addr)
+{
+	struct sja1105_extended_l2_addr *eaddr;
+
+	lockdep_assert_held(&mgmt_tree->lock);
+
+	for (int i = 0; i < SJA1105_EXTENDED_L2_ADDR_NUM; i++) {
+		eaddr = mgmt_tree->extended_l2_addrs[i];
+		if (eaddr && ether_addr_equal(eaddr->addr, addr))
+			return eaddr;
+	}
+
+	return NULL;
+}
+
+static struct sja1105_l2_lookup_entry *
+sja1105_find_static_fdb_entry_by_index(struct sja1105_private *priv,
+				       size_t index)
+{
+	struct sja1105_l2_lookup_entry *l2_lookup;
+	struct sja1105_table *table;
+	int i;
+
+	table = &priv->static_config.tables[BLK_IDX_L2_LOOKUP];
+	l2_lookup = table->entries;
+
+	for (i = 0; i < table->entry_count; i++)
+		if (l2_lookup[i].index == index)
+			return &l2_lookup[i];
+
+	return NULL;
+}
+
+static int sja1105_extended_l2_addr_update(struct dsa_port *dp,
+					   const unsigned char *addr)
+{
+	struct sja1105_extended_l2_addr_component *eaddr_component;
+	struct sja1105_l2_lookup_entry *l2_lookup;
+	struct sja1105_extended_l2_addr *eaddr;
+	struct dsa_switch *ds = dp->ds;
+	struct sja1105_private *priv = ds->priv;
+	int l2_lookup_index = -1;
+	int rc = 0;
+
+	mutex_lock(&priv->fdb_lock);
+
+	/* Need to search again, this time with updates blocked */
+	eaddr = sja1105_extended_l2_addr_lookup(priv->mgmt_tree, addr);
+	if (!eaddr) {
+		/* This may happen if timestamping was disabled concurrently
+		 * with packet transmission.
+		 */
+		dev_warn_ratelimited(ds->dev,
+				     "No extended L2 address entry for %pM\n",
+				      addr);
+		rc = -ENOENT;
+		goto out_unlock_fdb;
+	}
+
+	/* Keeping a direct pointer to the L2 Lookup entry in the eaddr
+	 * structure is not possible, because of sja1105_table_resize() which
+	 * reallocates table->entries and makes those pointers stale.
+	 * Only looking up table->entries with the updates blocked is safe.
+	 */
+	mutex_lock(&eaddr->lock);
+	list_for_each_entry(eaddr_component, &eaddr->components, list) {
+		if (eaddr_component->ds != ds)
+			continue;
+
+		l2_lookup_index = eaddr_component->l2_lookup_index;
+		break;
+	}
+
+	if (l2_lookup_index == -1) {
+		/* This should be a bug, because address components are never
+		 * modified once published
+		 */
+		dev_err_ratelimited(ds->dev,
+				    "Switch not a component of extended L2 address entry %pM\n",
+				    addr);
+		rc = -EINVAL;
+		goto out_unlock_eaddr;
+	}
+
+	l2_lookup = sja1105_find_static_fdb_entry_by_index(priv, l2_lookup_index);
+	if (!l2_lookup) {
+		dev_err_ratelimited(ds->dev, "Failed to find L2 Lookup entry for %pM\n",
+				    addr);
+		rc = -ENOENT;
+		goto out_unlock_eaddr;
+	}
+
+	if (l2_lookup->destports != BIT(dp->index)) {
+		l2_lookup->destports = BIT(dp->index);
+
+		rc = sja1105_dynamic_config_write(priv, BLK_IDX_L2_LOOKUP,
+						  l2_lookup->index,
+						  l2_lookup, true);
+		if (rc) {
+			dev_warn_ratelimited(ds->dev,
+					     "Failed to update L2 Lookup entry %llu for %pM towards port %d: %pe\n",
+					     l2_lookup->index, addr, dp->index, ERR_PTR(rc));
+			/* Updating failed, revert DESTPORTS */
+			l2_lookup->destports = 0;
+		}
+	}
+
+out_unlock_eaddr:
+	mutex_unlock(&eaddr->lock);
+out_unlock_fdb:
+	mutex_unlock(&priv->fdb_lock);
+
+	return rc;
+}
+
+int sja1105_extended_l2_xmit(struct dsa_switch *ds, int port,
+			     struct sk_buff *skb)
+{
+	struct sja1105_mgmt_route_port *route_port;
+	struct sja1105_private *priv = ds->priv;
+	struct ethhdr *hdr = eth_hdr(skb);
+	struct sja1105_mgmt_route *route;
+	int rc;
+
+	route = priv->mgmt_routes[port];
+
+	list_for_each_entry(route_port, &route->ports, list) {
+		rc = sja1105_extended_l2_addr_update(route_port->dp,
+						     hdr->h_dest);
+		if (rc) {
+			kfree_skb(skb);
+			return rc;
+		}
+	}
+
+	/* Transfer skb to the host port. */
+	dsa_enqueue_skb(skb, dsa_to_port(ds, port)->user);
+
+	return NETDEV_TX_OK;
+}
+
+static int
+sja1105_extended_l2_addr_add_component(struct sja1105_extended_l2_addr *eaddr,
+				       struct dsa_switch *ds)
+{
+	struct sja1105_extended_l2_addr_component *eaddr_component;
+	size_t index;
+	int rc;
+
+	eaddr_component = kzalloc(sizeof(*eaddr_component), GFP_KERNEL);
+	if (!eaddr_component)
+		return -ENOMEM;
+
+	rc = __sja1105pqrs_fdb_add(ds, 0, eaddr->addr, 0, 0, true, 0, &index);
+	if (rc) {
+		kfree(eaddr_component);
+		return rc;
+	}
+
+	eaddr_component->ds = ds;
+	eaddr_component->l2_lookup_index = index;
+	mutex_lock(&eaddr->lock);
+	list_add_tail(&eaddr_component->list, &eaddr->components);
+	mutex_unlock(&eaddr->lock);
+
+	return 0;
+}
+
+static void
+sja1105_extended_l2_addr_del_component(struct sja1105_extended_l2_addr *eaddr,
+				       struct sja1105_extended_l2_addr_component *eaddr_component)
+{
+	struct dsa_switch *ds = eaddr_component->ds;
+
+	__sja1105pqrs_fdb_del(ds, GENMASK(ds->num_ports - 1, 0), eaddr->addr, 0, 0);
+	list_del(&eaddr_component->list);
+	kfree(eaddr_component);
+}
+
+static void sja1105_extended_l2_addr_release(struct sja1105_extended_l2_addr *eaddr)
+{
+	struct sja1105_extended_l2_addr_component *eaddr_component, *next;
+
+	list_for_each_entry_safe(eaddr_component, next, &eaddr->components, list)
+		sja1105_extended_l2_addr_del_component(eaddr, eaddr_component);
+
+	kfree(eaddr);
+}
+
+void sja1105_tree_hwts_l4_disable(struct sja1105_mgmt_tree *mgmt_tree)
+{
+	struct sja1105_extended_l2_addr *eaddr;
+
+	lockdep_assert_held(&mgmt_tree->lock);
+
+	WRITE_ONCE(mgmt_tree->hwts_l4_en, false);
+
+	for (int i = 0; i < SJA1105_EXTENDED_L2_ADDR_NUM; i++) {
+		eaddr = mgmt_tree->extended_l2_addrs[i];
+		if (eaddr)
+			sja1105_extended_l2_addr_release(eaddr);
+	}
+}
+
+static int sja1105_hwts_l4_replay(struct dsa_switch *ds, bool add)
+{
+	struct sja1105_private *priv = ds->priv;
+	struct sja1105_extended_l2_addr *eaddr;
+	struct sja1105_mgmt_tree *mgmt_tree;
+	int rc = 0;
+
+	mgmt_tree = priv->mgmt_tree;
+
+	mutex_lock(&mgmt_tree->lock);
+
+	for (int i = 0; i < SJA1105_EXTENDED_L2_ADDR_NUM; i++) {
+		eaddr = mgmt_tree->extended_l2_addrs[i];
+		if (!eaddr)
+			continue;
+
+		if (add) {
+			rc = sja1105_extended_l2_addr_add_component(eaddr, ds);
+			if (rc)
+				break;
+		} else {
+			struct sja1105_extended_l2_addr_component *eaddr_component, *next;
+
+			mutex_lock(&eaddr->lock);
+			list_for_each_entry_safe(eaddr_component, next, &eaddr->components, list) {
+				if (eaddr_component->ds == ds)
+					sja1105_extended_l2_addr_del_component(eaddr, eaddr_component);
+			}
+			mutex_unlock(&eaddr->lock);
+		}
+	}
+
+	mutex_unlock(&mgmt_tree->lock);
+
+	return rc;
+}
+
+int sja1105_hwts_l4_replay_add(struct dsa_switch *ds)
+{
+	return sja1105_hwts_l4_replay(ds, true);
+}
+
+void sja1105_hwts_l4_replay_del(struct dsa_switch *ds)
+{
+	sja1105_hwts_l4_replay(ds, false);
+}
+
+static int sja1105_tree_hwts_l4_enable(struct sja1105_mgmt_tree *mgmt_tree)
+{
+	struct dsa_switch_tree *dst = mgmt_tree->dst;
+	struct dsa_tree_component *component;
+	struct dsa_switch *ds;
+	int rc;
+
+	lockdep_assert_held(&mgmt_tree->lock);
+
+	for (int i = 0; i < SJA1105_EXTENDED_L2_ADDR_NUM; i++) {
+		const unsigned char *addr = ptp_rsvd_mac_da[i];
+		struct sja1105_extended_l2_addr *eaddr;
+
+		eaddr = kzalloc(sizeof(*eaddr), GFP_KERNEL);
+		if (!eaddr) {
+			sja1105_tree_hwts_l4_disable(mgmt_tree);
+			return -ENOMEM;
+		}
+
+		ether_addr_copy(eaddr->addr, addr);
+		mutex_init(&eaddr->lock);
+		INIT_LIST_HEAD(&eaddr->components);
+
+		dsa_tree_for_each_switch(ds, component, dst) {
+			rc = sja1105_extended_l2_addr_add_component(eaddr, ds);
+			if (rc) {
+				sja1105_extended_l2_addr_release(eaddr);
+				sja1105_tree_hwts_l4_disable(mgmt_tree);
+				return rc;
+			}
+		}
+
+		mgmt_tree->extended_l2_addrs[i] = eaddr;
+	}
+
+	WRITE_ONCE(mgmt_tree->hwts_l4_en, true);
+
+	return 0;
+}
+
+static int sja1105_tree_hwts_l4_changed(struct sja1105_mgmt_tree *mgmt_tree,
+					bool enable)
+{
+	int rc;
+
+	mutex_lock(&mgmt_tree->lock);
+
+	if (enable ^ mgmt_tree->hwts_l4_en) {
+		if (enable) {
+			rc = sja1105_tree_hwts_l4_enable(mgmt_tree);
+			if (rc) {
+				mutex_unlock(&mgmt_tree->lock);
+				return rc;
+			}
+		} else {
+			sja1105_tree_hwts_l4_disable(mgmt_tree);
+		}
+	}
+
+	mutex_unlock(&mgmt_tree->lock);
+
+	return 0;
+}
+
 int sja1105_hwtstamp_set(struct dsa_switch *ds, int port,
 			 struct kernel_hwtstamp_config *config,
 			 struct netlink_ext_ack *extack)
 {
-	unsigned long hwts_tx_en, hwts_l2_rx_en;
+	struct dsa_port *dp = dsa_to_port(ds, port);
 	struct sja1105_private *priv = ds->priv;
+	bool l2 = false, l4 = false;
+	unsigned long hwts_tx_en;
+	int rc;
 
 	hwts_tx_en = priv->hwts_tx_en;
-	hwts_l2_rx_en = priv->hwts_l2_rx_en;
 
 	switch (config->tx_type) {
 	case HWTSTAMP_TX_OFF:
@@ -80,19 +434,43 @@ int sja1105_hwtstamp_set(struct dsa_switch *ds, int port,
 		return -ERANGE;
 	}
 
+	if (hwts_tx_en & BIT(port) && dp->cpu_dp->ds != ds && !ds->dst->has_adjacency) {
+		dev_err(ds->dev, "Hardware timestamping supported only for top-level switch when adjacency info is missing\n");
+		return -EOPNOTSUPP;
+	}
+
 	switch (config->rx_filter) {
 	case HWTSTAMP_FILTER_NONE:
-		hwts_l2_rx_en &= ~BIT(port);
+		break;
+	case HWTSTAMP_FILTER_PTP_V2_L4_EVENT:
+	case HWTSTAMP_FILTER_PTP_V2_L4_SYNC:
+	case HWTSTAMP_FILTER_PTP_V2_L4_DELAY_REQ:
+		l4 = true;
 		break;
 	case HWTSTAMP_FILTER_PTP_V2_L2_EVENT:
-		hwts_l2_rx_en |= BIT(port);
+	case HWTSTAMP_FILTER_PTP_V2_L2_SYNC:
+	case HWTSTAMP_FILTER_PTP_V2_L2_DELAY_REQ:
+		l2 = true;
+		break;
+	case HWTSTAMP_FILTER_PTP_V2_EVENT:
+	case HWTSTAMP_FILTER_PTP_V2_SYNC:
+	case HWTSTAMP_FILTER_PTP_V2_DELAY_REQ:
+		l2 = true;
+		l4 = true;
 		break;
 	default:
 		return -ERANGE;
 	}
 
+	rc = sja1105_tree_hwts_l4_changed(priv->mgmt_tree, l4);
+	if (rc)
+		return rc;
+
 	priv->hwts_tx_en = hwts_tx_en;
-	priv->hwts_l2_rx_en = hwts_l2_rx_en;
+	if (l2)
+		priv->hwts_l2_rx_en |= BIT(port);
+	else
+		priv->hwts_l2_rx_en &= ~BIT(port);
 
 	return 0;
 }
@@ -102,15 +480,23 @@ int sja1105_hwtstamp_get(struct dsa_switch *ds, int port,
 {
 	struct sja1105_private *priv = ds->priv;
 
+	mutex_lock(&priv->mgmt_tree->lock);
+
 	config->flags = 0;
 	if (priv->hwts_tx_en & BIT(port))
 		config->tx_type = HWTSTAMP_TX_ON;
 	else
 		config->tx_type = HWTSTAMP_TX_OFF;
-	if (priv->hwts_l2_rx_en & BIT(port))
+	if (priv->hwts_l2_rx_en & BIT(port) && priv->mgmt_tree->hwts_l4_en)
+		config->rx_filter = HWTSTAMP_FILTER_PTP_V2_EVENT;
+	else if (priv->mgmt_tree->hwts_l4_en)
+		config->rx_filter = HWTSTAMP_FILTER_PTP_V2_L4_EVENT;
+	else if (priv->hwts_l2_rx_en & BIT(port))
 		config->rx_filter = HWTSTAMP_FILTER_PTP_V2_L2_EVENT;
 	else
 		config->rx_filter = HWTSTAMP_FILTER_NONE;
+
+	mutex_unlock(&priv->mgmt_tree->lock);
 
 	return 0;
 }
@@ -132,6 +518,9 @@ int sja1105_get_ts_info(struct dsa_switch *ds, int port,
 			 (1 << HWTSTAMP_TX_ON);
 	info->rx_filters = (1 << HWTSTAMP_FILTER_NONE) |
 			   (1 << HWTSTAMP_FILTER_PTP_V2_L2_EVENT);
+	if (priv->info->has_extended_l2_tstamp)
+		info->rx_filters |= (1 << HWTSTAMP_FILTER_PTP_V2_L4_EVENT) |
+				    (1 << HWTSTAMP_FILTER_PTP_V2_EVENT);
 	info->phc_index = ptp_clock_index(ptp_data->clock);
 	return 0;
 }

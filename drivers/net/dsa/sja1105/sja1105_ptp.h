@@ -6,6 +6,8 @@
 
 #include <linux/timer.h>
 
+struct sja1105_mgmt_tree;
+
 #if IS_ENABLED(CONFIG_NET_DSA_SJA1105_PTP)
 
 /* Timestamps are in units of 8 ns clock ticks (equivalent to
@@ -87,6 +89,7 @@ struct sja1105_ptp_data {
 	/* Serializes all operations on the PTP hardware clock */
 	struct mutex lock;
 	bool extts_enabled;
+	bool extended_l2_tstamp_enabled;
 	u64 ptpsyncts;
 };
 
@@ -138,6 +141,21 @@ void sja1110_txtstamp(struct dsa_switch *ds, int port, struct sk_buff *skb);
 
 void sja1110_process_meta_tstamp(struct dsa_switch *ds, int port, u8 ts_id,
 				 enum sja1110_meta_tstamp dir, u64 tstamp);
+
+int sja1105_extended_l2_xmit(struct dsa_switch *ds, int port,
+			     struct sk_buff *skb);
+
+bool sja1105_can_tstamp_extended_l2_addr(struct dsa_switch *ds,
+					 const unsigned char *addr);
+
+bool sja1105_skb_needs_extended_l2_tstamp(struct dsa_switch *ds,
+					  const struct sk_buff *skb);
+
+int sja1105_hwts_l4_replay_add(struct dsa_switch *ds);
+
+void sja1105_hwts_l4_replay_del(struct dsa_switch *ds);
+
+void sja1105_tree_hwts_l4_disable(struct sja1105_mgmt_tree *mgmt_tree);
 
 #else
 
@@ -206,6 +224,34 @@ static inline int sja1105_ptp_commit(struct dsa_switch *ds,
 #define sja1110_txtstamp NULL
 
 #define sja1110_process_meta_tstamp NULL
+
+static inline int sja1105_extended_l2_xmit(struct dsa_switch *ds,
+					   int port,
+					   struct sk_buff *skb)
+{
+	return NETDEV_TX_OK;
+}
+
+static inline bool sja1105_can_tstamp_extended_l2_addr(struct dsa_switch *ds,
+						       const unsigned char *addr)
+{
+	return false;
+}
+
+#define sja1105_skb_needs_extended_l2_tstamp NULL
+
+static inline int sja1105_hwts_l4_replay_add(struct dsa_switch *ds)
+{
+	return 0;
+}
+
+static inline void sja1105_hwts_l4_replay_del(struct dsa_switch *ds)
+{
+}
+
+static inline void sja1105_tree_hwts_l4_disable(struct sja1105_mgmt_tree *mgmt_tree)
+{
+}
 
 #endif /* IS_ENABLED(CONFIG_NET_DSA_SJA1105_PTP) */
 

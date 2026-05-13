@@ -21,6 +21,8 @@
 #define SJA1105_AGEING_TIME_MS(ms)	((ms) / 10)
 #define SJA1105_NUM_L2_POLICERS		SJA1110_MAX_L2_POLICING_COUNT
 
+#define SJA1105_EXTENDED_L2_ADDR_NUM	4
+
 /* Calculated assuming 1Gbps, where the clock has 125 MHz (8 ns period)
  * To avoid floating point operations, we'll multiply the degrees by 10
  * to get a "phase" and get 1 decimal point precision.
@@ -140,6 +142,7 @@ struct sja1105_info {
 	const struct sja1105_table_ops *static_ops;
 	const struct sja1105_regs *regs;
 	bool can_limit_mcast_flood;
+	bool has_extended_l2_tstamp;
 	int (*reset_cmd)(struct dsa_switch *ds);
 	int (*setup_rgmii_delay)(const void *ctx, int port);
 	/* Prototypes from include/net/dsa.h */
@@ -270,17 +273,36 @@ struct sja1105_mgmt_route {
 	struct list_head list;
 };
 
+struct sja1105_extended_l2_addr_component {
+	struct list_head list;
+	struct dsa_switch *ds;
+	size_t l2_lookup_index;
+};
+
+struct sja1105_extended_l2_addr {
+	unsigned char addr[ETH_ALEN];
+	struct list_head components;
+	struct mutex lock;
+};
+
 /**
  * sja1105_mgmt_tree: DSA switch tree-level structure for management routes
  * @lock: Serializes transmission of management frames across the tree, so that
  *	  the switches don't confuse them with one another.
  * @routes: List of sja1105_mgmt_route structures, one for each user port in
  *	    the tree.
+ * @extended_l2_addrs: Array of MAC DA values (mapped from IP multicast)
+ *		       that require extended L2 timestamping
+ * @hwts_l4_en: Set if extended L2 timestamping is enabled in the tree
+ * @dst: Pointer to DSA switch tree
  * @refcount: Reference count.
  */
 struct sja1105_mgmt_tree {
 	struct mutex lock;
 	struct list_head routes;
+	struct sja1105_extended_l2_addr *extended_l2_addrs[SJA1105_EXTENDED_L2_ADDR_NUM];
+	bool hwts_l4_en;
+	struct dsa_switch_tree *dst;
 	refcount_t refcount;
 };
 
@@ -463,6 +485,10 @@ int sja1105pqrs_fdb_add(struct dsa_switch *ds, int port,
 			const unsigned char *addr, u16 vid);
 int sja1105pqrs_fdb_del(struct dsa_switch *ds, int port,
 			const unsigned char *addr, u16 vid);
+int sja1105_static_fdb_change(struct sja1105_private *priv,
+			      unsigned long destports,
+			      const struct sja1105_l2_lookup_entry *requested,
+			      bool keep);
 
 /* From sja1105_flower.c */
 int sja1105_cls_flower_del(struct dsa_switch *ds, int port,
