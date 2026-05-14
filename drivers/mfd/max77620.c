@@ -494,6 +494,18 @@ static int max77620_pm_power_off(struct sys_off_data *data)
 	return NOTIFY_DONE;
 }
 
+static int max77620_power_off_priority(void)
+{
+	/*
+	 * For Smaug  we need to override the PSCI poweroff handler
+	 * which is registered at priority SYS_OFF_PRIO_FIRMWARE.
+	 */
+	if (of_machine_is_compatible("google,smaug"))
+		return SYS_OFF_PRIO_FIRMWARE + 1;
+
+	return SYS_OFF_PRIO_DEFAULT;
+}
+
 static int max77620_probe(struct i2c_client *client)
 {
 	const struct i2c_device_id *id = i2c_client_get_device_id(client);
@@ -502,6 +514,7 @@ static int max77620_probe(struct i2c_client *client)
 	struct regmap_irq_chip *chip_desc;
 	const struct mfd_cell *mfd_cells;
 	int n_mfd_cells;
+	int priority;
 	int ret;
 
 	chip = devm_kzalloc(&client->dev, sizeof(*chip), GFP_KERNEL);
@@ -574,10 +587,11 @@ static int max77620_probe(struct i2c_client *client)
 	}
 
 	if (of_device_is_system_power_controller(client->dev.of_node)) {
+		priority = max77620_power_off_priority();
 		ret = devm_register_sys_off_handler(&client->dev,
 						    SYS_OFF_MODE_POWER_OFF,
-						    SYS_OFF_PRIO_DEFAULT,
-						    max77620_pm_power_off, chip);
+						    priority, max77620_pm_power_off,
+						    chip);
 		if (ret)
 			return dev_err_probe(&client->dev, ret,
 					"failed to register power-off handler\n");
