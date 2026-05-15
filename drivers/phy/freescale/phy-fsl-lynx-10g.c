@@ -292,6 +292,16 @@ static const struct lynx_10g_proto_conf lynx_10g_proto_conf[LANE_MODE_MAX] = {
 		.adpt_eq = 48,
 		.ttlcr0 = 0x00000400,
 	},
+	[LANE_MODE_2500BASEKX] = {
+		.proto_sel = PROTO_SEL_SGMII_BASEX_KX_QSGMII,
+		.islew_rctl = 2,
+		.oslew_rctl = 2,
+		.teq_type = EQ_TYPE_2TAP,
+		.sgn_post1q = 1,
+		.ratio_post1q = 6,
+		.adpt_eq = 48,
+		.ttlcr0 = 0x00000400,
+	},
 	[LANE_MODE_QSGMII] = {
 		.proto_sel = PROTO_SEL_SGMII_BASEX_KX_QSGMII,
 		.islew_rctl = 1,
@@ -457,6 +467,13 @@ static void lynx_10g_pll_read_configuration(struct lynx_pll *pll)
 		break;
 	case PLLnCR0_FRATE_3_125G:
 		__set_bit(LANE_MODE_2500BASEX, pll->supported);
+		if (dlydiv_sel && dlydiv_sel != PLLnCR0_DLYDIV_SEL_312_5_MHZ) {
+			dev_dbg(pll->priv->dev,
+				"PLL%c has ex_dly_clk provisioned for a frequency incompatible with 2500Base-KX\n",
+				pll->id == 0 ? 'F' : 'S');
+		} else {
+			__set_bit(LANE_MODE_2500BASEKX, pll->supported);
+		}
 		break;
 	case PLLnCR0_FRATE_5_15625G:
 		/* 10.3125GHz clock net */
@@ -514,7 +531,9 @@ static void lynx_10g_backup_pccr_val(struct lynx_lane *lane)
 	case LANE_MODE_1000BASEKX:
 	case LANE_MODE_1000BASEX_SGMII:
 	case LANE_MODE_2500BASEX:
+	case LANE_MODE_2500BASEKX:
 		lane->default_pccr[LANE_MODE_1000BASEKX] = val | PCCR8_SGMIIa_KX;
+		lane->default_pccr[LANE_MODE_2500BASEKX] = val | PCCR8_SGMIIa_KX;
 		lane->default_pccr[LANE_MODE_1000BASEX_SGMII] = val & ~PCCR8_SGMIIa_KX;
 		lane->default_pccr[LANE_MODE_2500BASEX] = val & ~PCCR8_SGMIIa_KX;
 		break;
@@ -602,6 +621,7 @@ static int ls1028a_get_pccr(enum lynx_lane_mode lane_mode, int lane,
 	case LANE_MODE_1000BASEX_SGMII:
 	case LANE_MODE_1000BASEKX:
 	case LANE_MODE_2500BASEX:
+	case LANE_MODE_2500BASEKX:
 		pccr->offset = PCCR8;
 		pccr->width = 4;
 		pccr->shift = SGMII_CFG(lane);
@@ -643,6 +663,7 @@ static int ls1028a_get_pcvt_offset(int lane, enum lynx_lane_mode mode)
 	case LANE_MODE_1000BASEX_SGMII:
 	case LANE_MODE_1000BASEKX:
 	case LANE_MODE_2500BASEX:
+	case LANE_MODE_2500BASEKX:
 		return SGMIIaCR0(lane);
 	case LANE_MODE_QSGMII:
 		return lane == 1 ? QSGMIIaCR0(A) : -EINVAL;
@@ -675,6 +696,7 @@ static int ls1046a_serdes1_get_pccr(enum lynx_lane_mode lane_mode, int lane,
 	case LANE_MODE_1000BASEX_SGMII:
 	case LANE_MODE_1000BASEKX:
 	case LANE_MODE_2500BASEX:
+	case LANE_MODE_2500BASEKX:
 		pccr->offset = PCCR8;
 		pccr->width = 4;
 		pccr->shift = SGMII_CFG(lane);
@@ -716,6 +738,7 @@ static int ls1046a_serdes1_get_pcvt_offset(int lane, enum lynx_lane_mode mode)
 	case LANE_MODE_1000BASEX_SGMII:
 	case LANE_MODE_1000BASEKX:
 	case LANE_MODE_2500BASEX:
+	case LANE_MODE_2500BASEKX:
 		return SGMIIaCR0(lane);
 	case LANE_MODE_QSGMII:
 		if (lane != 1)
@@ -756,6 +779,7 @@ static int ls1046a_serdes2_get_pccr(enum lynx_lane_mode lane_mode, int lane,
 	case LANE_MODE_1000BASEX_SGMII:
 	case LANE_MODE_1000BASEKX:
 	case LANE_MODE_2500BASEX:
+	case LANE_MODE_2500BASEKX:
 		if (lane != 1)
 			return -EINVAL;
 
@@ -776,6 +800,7 @@ static int ls1046a_serdes2_get_pcvt_offset(int lane, enum lynx_lane_mode mode)
 	case LANE_MODE_1000BASEX_SGMII:
 	case LANE_MODE_1000BASEKX:
 	case LANE_MODE_2500BASEX:
+	case LANE_MODE_2500BASEKX:
 		if (lane != 1)
 			return -EINVAL;
 
@@ -896,6 +921,7 @@ static int ls2088a_serdes1_get_pccr(enum lynx_lane_mode lane_mode, int lane,
 	case LANE_MODE_1000BASEX_SGMII:
 	case LANE_MODE_1000BASEKX:
 	case LANE_MODE_2500BASEX:
+	case LANE_MODE_2500BASEKX:
 		pccr->offset = PCCR8;
 		pccr->width = 4;
 		pccr->shift = SGMII_CFG(lane);
@@ -943,6 +969,7 @@ static int ls2088a_serdes1_get_pcvt_offset(int lane, enum lynx_lane_mode mode)
 	case LANE_MODE_1000BASEX_SGMII:
 	case LANE_MODE_1000BASEKX:
 	case LANE_MODE_2500BASEX:
+	case LANE_MODE_2500BASEKX:
 		return SGMIIaCR0(lane);
 	case LANE_MODE_QSGMII:
 		switch (lane) {
@@ -987,6 +1014,7 @@ static int ls2088a_serdes2_get_pccr(enum lynx_lane_mode lane_mode, int lane,
 	case LANE_MODE_1000BASEX_SGMII:
 	case LANE_MODE_1000BASEKX:
 	case LANE_MODE_2500BASEX:
+	case LANE_MODE_2500BASEKX:
 		pccr->offset = PCCR8;
 		pccr->width = 4;
 		pccr->shift = SGMII_CFG(lane);
@@ -1004,6 +1032,7 @@ static int ls2088a_serdes2_get_pcvt_offset(int lane, enum lynx_lane_mode mode)
 	case LANE_MODE_1000BASEX_SGMII:
 	case LANE_MODE_1000BASEKX:
 	case LANE_MODE_2500BASEX:
+	case LANE_MODE_2500BASEKX:
 		return SGMIIaCR0(lane);
 	default:
 		return -EINVAL;
@@ -1110,6 +1139,7 @@ static void lynx_10g_lane_set_nrate(struct lynx_lane *lane,
 	case PLLnCR0_FRATE_3_125G:
 		switch (mode) {
 		case LANE_MODE_2500BASEX:
+		case LANE_MODE_2500BASEKX:
 			nrate = RAT_SEL_FULL;
 			break;
 		default:
@@ -1277,6 +1307,7 @@ static int lynx_10g_lane_disable_pcvt(struct lynx_lane *lane,
 	case LANE_MODE_1000BASEX_SGMII:
 	case LANE_MODE_1000BASEKX:
 	case LANE_MODE_2500BASEX:
+	case LANE_MODE_2500BASEKX:
 		err = lynx_pcvt_rmw(lane, mode, CR(1), SGMIIaCR1_SGPCS_DIS,
 				    SGMIIaCR1_SGPCS_EN);
 		if (err)
@@ -1316,6 +1347,7 @@ static int lynx_10g_lane_enable_pcvt(struct lynx_lane *lane,
 	case LANE_MODE_1000BASEX_SGMII:
 	case LANE_MODE_1000BASEKX:
 	case LANE_MODE_2500BASEX:
+	case LANE_MODE_2500BASEKX:
 		err = lynx_pcvt_rmw(lane, mode, CR(1), SGMIIaCR1_SGPCS_EN,
 				    SGMIIaCR1_SGPCS_EN);
 		if (err)
@@ -1360,6 +1392,7 @@ static int lynx_10g_lane_enable_pcvt(struct lynx_lane *lane,
 
 	switch (mode) {
 	case LANE_MODE_1000BASEKX:
+	case LANE_MODE_2500BASEKX:
 		val |= PCCR8_SGMIIa_KX;
 		fallthrough;
 	case LANE_MODE_1000BASEX_SGMII:
@@ -1630,9 +1663,11 @@ static int lynx_10g_set_mode(struct phy *phy, enum phy_mode mode, int submode)
 	/* 1000Base-KX lanes need their PLL to generate a 312.5 MHz frequency
 	 * through EX_DLY_CLK.
 	 */
-	if (lane_mode == LANE_MODE_1000BASEKX)
+	if (lane_mode == LANE_MODE_1000BASEKX ||
+	    lane_mode == LANE_MODE_2500BASEKX)
 		lynx_10g_pll_get_ex_dly_clk(lynx_pll_get(priv, lane_mode));
-	else if (lane->mode == LANE_MODE_1000BASEKX)
+	else if (lane->mode == LANE_MODE_1000BASEKX ||
+		 lane->mode == LANE_MODE_2500BASEKX)
 		lynx_10g_pll_put_ex_dly_clk(lynx_pll_get(priv, lane->mode));
 
 	if (lane->algorithm)
@@ -1703,6 +1738,7 @@ static void lynx_10g_get_pcvt_count(struct phy *phy,
 		case LANE_MODE_1000BASEX_SGMII:
 		case LANE_MODE_1000BASEKX:
 		case LANE_MODE_2500BASEX:
+		case LANE_MODE_2500BASEKX:
 		case LANE_MODE_USXGMII:
 		case LANE_MODE_10GBASER:
 		case LANE_MODE_10GBASEKR:
@@ -1719,6 +1755,7 @@ static void lynx_10g_get_pcvt_count(struct phy *phy,
 	case PHY_PCVT_ETHERNET_ANLT:
 		switch (lane_mode) {
 		case LANE_MODE_1000BASEKX:
+		case LANE_MODE_2500BASEKX:
 		case LANE_MODE_10GBASEKR:
 			opts->num_pcvt = 1;
 			break;
