@@ -1057,8 +1057,6 @@ struct kvm_vcpu_arch {
 		u16 vec;
 		u32 id;
 		u32 host_apf_flags;
-		bool send_always;
-		bool delivery_as_pf_vmexit;
 		bool pageready_pending;
 	} apf;
 
