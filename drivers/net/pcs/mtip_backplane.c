@@ -125,8 +125,8 @@
 #define MTIP_RESET_SLEEP_US		100
 #define MTIP_RESET_TIMEOUT_US		100000
 
-#define MTIP_BP_ETH_STAT_SLEEP_US	10
-#define MTIP_BP_ETH_STAT_TIMEOUT_US	100
+#define MTIP_BP_ETH_STAT_SLEEP_US	1000
+#define MTIP_BP_ETH_STAT_TIMEOUT_US	1000000
 
 #define MTIP_COEF_STAT_SLEEP_US		10
 #define MTIP_COEF_STAT_TIMEOUT_US	500000
@@ -1908,6 +1908,56 @@ static int mtip_fixup_c45_sgmii_if_mode(struct mtip_backplane *priv)
 			      C45_SGMII_IF_MODE_SPEED_1G);
 }
 
+static u32 mtip_c73_expected_tech(enum ethtool_link_mode_bit_indices mode)
+{
+	switch (mode) {
+	case ETHTOOL_LINK_MODE_1000baseKX_Full_BIT:
+		return BP_ETH_STAT_1GKX;
+	case ETHTOOL_LINK_MODE_10000baseKR_Full_BIT:
+		return BP_ETH_STAT_10GKR;
+	case ETHTOOL_LINK_MODE_25000baseKR_Full_BIT:
+		return BP_ETH_STAT_25GKR;
+	case ETHTOOL_LINK_MODE_25000baseKR_S_Full_BIT:
+		return BP_ETH_STAT_25GKR_S;
+	case ETHTOOL_LINK_MODE_40000baseKR4_Full_BIT:
+		return BP_ETH_STAT_40GKR4;
+	default:
+		return 0;
+	}
+}
+
+static int
+mtip_c73_wait_an_good_check(struct mtip_backplane *priv,
+			    enum ethtool_link_mode_bit_indices resolved)
+{
+	u32 expected_tech_bit = mtip_c73_expected_tech(resolved);
+	struct device *dev = &priv->mdiodev->dev;
+	int val, err;
+
+	/* After base page received, wait for AN state machine to reach
+	 * AN_GOOD_CHECK before starting link training. The BP_ETH_STATUS
+	 * register reflects the resolved technology only after the state
+	 * machine has completed all page exchanges.
+	 */
+	err = read_poll_timeout(mtip_read_an, val,
+				val < 0 || (val & expected_tech_bit),
+				MTIP_BP_ETH_STAT_SLEEP_US,
+				MTIP_BP_ETH_STAT_TIMEOUT_US, false,
+				priv, AN_BP_ETH_STAT);
+	if (val < 0) {
+		dev_err(dev, "Failed to read BP_ETH_STAT: %pe\n", ERR_PTR(val));
+		return val;
+	}
+	if (err) {
+		dev_err(dev,
+			"Failed to wait for %s to set in BP_ETH_STAT (0x%x): %pe\n",
+			ethtool_link_mode_str(resolved), val, ERR_PTR(err));
+		return err;
+	}
+
+	return 0;
+}
+
 static int mtip_c73_page_received(struct mtip_backplane *priv,
 				  enum an_restart_reason *an_restart_reason)
 {
@@ -1953,6 +2003,10 @@ static int mtip_c73_page_received(struct mtip_backplane *priv,
 		*an_restart_reason = AN_RESTART_REASON_NO_HCD;
 		return 0;
 	}
+
+	err = mtip_c73_wait_an_good_check(priv, resolved);
+	if (err)
+		return err;
 
 	if (resolved != priv->cfg_link_mode) {
 		*an_restart_reason = AN_RESTART_REASON_RECONFIG;
