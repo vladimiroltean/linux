@@ -5,6 +5,7 @@
  * Copyright 2023 NXP
  */
 
+#include <linux/clk.h>
 #include <linux/kernel.h>
 #include <linux/mii.h>
 #include <linux/module.h>
@@ -2334,6 +2335,44 @@ void mtip_backplane_add_subordinate(struct mtip_backplane *priv,
 }
 EXPORT_SYMBOL(mtip_backplane_add_subordinate);
 
+/* The counter value must be set depending on the chosen
+ * reg_clk frequency to define a 1ms timer.
+ */
+static int mtip_setup_ms_cnt(struct mtip_backplane *priv)
+{
+	struct device *dev = &priv->pcs_mdiodev->dev;
+	struct device_node *dn = dev_of_node(dev);
+	struct clk *reg_clk;
+	unsigned long freq;
+	u32 cycles;
+	int val;
+
+	reg_clk = of_clk_get_by_name(dn, "reg_clk");
+	if (IS_ERR(reg_clk)) {
+		dev_err(dev, "Failed to find reg_clk in OF node %pOF: %pe\n",
+			dn, reg_clk);
+		return PTR_ERR(reg_clk);
+	}
+
+	freq = clk_get_rate(reg_clk);
+	clk_put(reg_clk);
+
+	cycles = freq / MSEC_PER_SEC;
+
+	/* Number of register clock periods required for counting 1ms.
+	 * Higher 16 bits of 21-bit counter value. The lower 5 bits are
+	 * fixed to "1_0000" internally.
+	 */
+	val = cycles >> 5;
+
+	dev_info(dev,
+		 "AN_MS_CNT 0x%x, freq %lu, cycles %u, real_cycles %u, original AN_MS_CNT 0x%x\n",
+		 val, freq, cycles, (val << 5) + 0x10,
+		 mtip_read_an(priv, AN_MS_CNT));
+
+	return mtip_write_an(priv, AN_MS_CNT, val);
+}
+
 static struct mdio_device *
 mtip_get_mdiodev(struct mii_bus *bus, struct phy *serdes,
 		 enum ethtool_link_mode_bit_indices *cfg_link_mode)
@@ -2443,6 +2482,10 @@ struct mtip_backplane *mtip_backplane_create(struct mdio_device *pcs_mdiodev,
 		goto out_free_mdiodev;
 
 	err = mtip_reset_pcs(priv);
+	if (err < 0)
+		goto out_free_mdiodev;
+
+	err = mtip_setup_ms_cnt(priv);
 	if (err < 0)
 		goto out_free_mdiodev;
 

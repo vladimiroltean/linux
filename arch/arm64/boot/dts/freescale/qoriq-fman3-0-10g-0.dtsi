@@ -38,6 +38,8 @@ fman@1a00000 {
 
 		pcsphy6: ethernet-phy@0 {
 			reg = <0x0>;
+//			clocks = <&reg_clk>;
+//			clock-names = "reg_clk";
 		};
 	};
 };
