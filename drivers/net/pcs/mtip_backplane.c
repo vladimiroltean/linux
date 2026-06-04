@@ -2349,9 +2349,9 @@ static int mtip_setup_ms_cnt(struct mtip_backplane *priv)
 
 	reg_clk = of_clk_get_by_name(dn, "reg_clk");
 	if (IS_ERR(reg_clk)) {
-		dev_err(dev, "Failed to find reg_clk in OF node %pOF: %pe\n",
+		dev_dbg(dev, "Did not find reg_clk in OF node %pOF: %pe\n",
 			dn, reg_clk);
-		return PTR_ERR(reg_clk);
+		return 0;
 	}
 
 	freq = clk_get_rate(reg_clk);
