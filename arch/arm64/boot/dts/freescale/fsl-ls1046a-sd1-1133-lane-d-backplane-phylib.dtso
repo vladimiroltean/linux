@@ -19,6 +19,8 @@
 	compatible = "ethernet-phy-ieee802.3-c45";
 	phys = <&serdes1_lane_d>;
 	phy-names = "serdes";
+	clocks = <&reg_clk>;
+	clock-names = "reg_clk";
 };
 
 &serdes1 {
