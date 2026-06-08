@@ -62,8 +62,10 @@
 					LT_COZ(COEF_UPD_HOLD) | \
 					LT_COP1(COEF_UPD_HOLD))
 
-#define LT_COEF_UPD_ANYTHING(x)		((x) != 0)
-#define LT_COEF_UPD_NOTHING(x)		((x) == 0)
+#define LT_COEF_UPD_VALID_MASK		(LT_COEF_UPD_MASK | LT_COEF_UPD_INIT | \
+					 LT_COEF_UPD_PRESET)
+#define LT_COEF_UPD_ANYTHING(x)		(((x) & LT_COEF_UPD_VALID_MASK) != 0)
+#define LT_COEF_UPD_NOTHING(x)		(((x) & LT_COEF_UPD_VALID_MASK) == 0)
 
 #define LT_COEF_UPD_INIT		BIT(12)
 #define LT_COEF_UPD_PRESET		BIT(13)
