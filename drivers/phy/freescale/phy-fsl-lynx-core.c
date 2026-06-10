@@ -850,22 +850,15 @@ static bool lynx_xgkr_process_bin_m1(struct lynx_xgkr_algorithm *algorithm,
 			update->com1 = coef_update_opposite(prev_req_com1);
 		} else {
 			if (rts->prev_bin_m1_state == bin_m1_state) {
-				if (bin_m1_state == BIN_LATE) {
-					/* Late path, request Decrement c(-1) */
-					update->com1 = COEF_UPD_DEC;
-				} else {
-					/* Early path, request Increment c(-1) */
+				if (bin_m1_state == BIN_LATE)
 					update->com1 = COEF_UPD_INC;
-				}
-			} else {
-				/* according to: v1.0 */
-				if (bin_m1_state == BIN_LATE) {
-					/* request Decrement c(-1) */
+				else
 					update->com1 = COEF_UPD_DEC;
-				} else {
-					/* Hold C(-1) */
+			} else {
+				if (bin_m1_state == BIN_LATE)
+					update->com1 = COEF_UPD_INC;
+				else
 					update->com1 = COEF_UPD_HOLD;
-				}
 			}
 		}
 	}
