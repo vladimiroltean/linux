@@ -1089,6 +1089,7 @@ lynx_xgkr_train_remote_tx(struct lynx_xgkr_algorithm *algorithm,
 		return lynx_xgkr_remote_tx_request(rts, UPDATE_REQUESTER_INIT);
 	}
 
+#if 0
 	for (i = 0; i < TIMEOUT_RX_HAPPY; i++) {
 		is_rx_happy = lynx_xgkr_is_rx_happy(algorithm);
 		if (is_rx_happy)
@@ -1098,6 +1099,7 @@ lynx_xgkr_train_remote_tx(struct lynx_xgkr_algorithm *algorithm,
 	if (!is_rx_happy)
 		return lynx_xgkr_process_bad_state(algorithm, remote_tx,
 						   BAD_STATE_RX_NOT_HAPPY);
+#endif
 
 	/* Move to BinLong/BinM1 modules */
 
