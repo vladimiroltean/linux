@@ -5,6 +5,13 @@
 /dts-v1/;
 /plugin/;
 
+/ {
+	eq_25gbe: eq-25gbe {
+		eq-tap-values = <3 30 11>;
+		eq-tap-names = "c(-1)", "c(0)", "c(+1)";
+	};
+};
+
 &dpmac6 {
 	phys = <&serdes_1_lane_e>;
 	phy-names = "serdes";
@@ -17,4 +24,9 @@
 
 &serdes_1 {
 	status = "okay";
+};
+
+&serdes_1_lane_e {
+	coefficients = <&eq_25gbe>;
+	coefficient-names = "25gbase-kr";
 };
