@@ -1630,6 +1630,10 @@ static int lynx_10g_set_mode(struct phy *phy, enum phy_mode mode, int submode)
 	lane_mode = phy_interface_to_lane_mode(submode);
 	/* lynx_10g_validate() already made sure the lane_mode is supported */
 
+	dev_err(&phy->dev, "%s: lane_mode %s lane->mode %s\n",
+		__func__, lynx_lane_mode_str(lane_mode),
+		lynx_lane_mode_str(lane->mode));
+
 	if (lane_mode == lane->mode)
 		return 0;
 
