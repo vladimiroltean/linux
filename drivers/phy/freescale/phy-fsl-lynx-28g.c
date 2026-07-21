@@ -56,9 +56,15 @@
 #define PLLnCR1(pll)				(0x400 + (pll) * 0x100 + 0x8)
 #define PLLnCR1_FRATE_SEL			GENMASK(28, 24)
 #define PLLnCR1_FRATE_5G_10GVCO			0x0
-#define PLLnCR1_FRATE_5G_25GVCO			0x10
+#define PLLnCR1_FRATE_6_25G_18_75_GVCO		0x1
 #define PLLnCR1_FRATE_10G_20GVCO		0x6
+#define PLLnCR1_FRATE_5G_25GVCO			0x10
+#define PLLnCR1_FRATE_6_25G_25GVCO		0x11
+#define PLLnCR1_FRATE_6G_24GVCO			0x12
 #define PLLnCR1_FRATE_12G_25GVCO		0x16
+#define PLLnCR1_FRATE_8G_24GVCO			0x17
+#define PLLnCR1_FRATE_8G_16GVCO			0x19
+#define PLLnCR1_FRATE_14G_14GVCO		0x1a
 #define PLLnCR1_EX_DLY_SEL			GENMASK(1, 0)
 #define PLLnCR1_EX_DLY_SEL_312_5_MHZ		2
 
@@ -1012,6 +1018,52 @@ static bool lynx_28g_compat_lane_supports_mode(int lane,
 	}
 }
 
+static const char *lynx_28g_refclk_str(int refclk)
+{
+	switch (refclk) {
+	case PLLnCR0_REFCLK_SEL_100MHZ:
+		return "100MHz";
+	case PLLnCR0_REFCLK_SEL_125MHZ:
+		return "125MHz";
+	case PLLnCR0_REFCLK_SEL_156MHZ:
+		return "156.25MHz";
+	case PLLnCR0_REFCLK_SEL_150MHZ:
+		return "150MHz";
+	case PLLnCR0_REFCLK_SEL_161MHZ:
+		return "161.1328125MHz";
+	default:
+		return "unknown";
+	}
+}
+
+static const char *lynx_28g_clock_net_str(int frate)
+{
+	switch (frate) {
+	case PLLnCR1_FRATE_5G_10GVCO:
+		return "5 GHz (20 GHz VCO)";
+	case PLLnCR1_FRATE_6_25G_18_75_GVCO:
+		return "6.25 GHz (18.75 GHz VCO)";
+	case PLLnCR1_FRATE_10G_20GVCO:
+		return "10.3125 GHz (20.625 GHz VCO)";
+	case PLLnCR1_FRATE_5G_25GVCO:
+		return "5 GHz (25 GHz VCO)";
+	case PLLnCR1_FRATE_6_25G_25GVCO:
+		return "6.25 GHz (25 GHz VCO)";
+	case PLLnCR1_FRATE_6G_24GVCO:
+		return "6 GHz (24 GHz VCO)";
+	case PLLnCR1_FRATE_12G_25GVCO:
+		return "12.890625 GHz (25.78125G GHz VCO)";
+	case PLLnCR1_FRATE_8G_24GVCO:
+		return "8 GHz (24 GHz VCO)";
+	case PLLnCR1_FRATE_8G_16GVCO:
+		return "8 GHz (16 GHz VCO)";
+	case PLLnCR1_FRATE_14G_14GVCO:
+		return "14.025 GHz (14.025 GHz VCO)";
+	default:
+		return "unknown";
+	}
+}
+
 static bool lynx_28g_cdr_lock_check(struct lynx_28g_lane *lane)
 {
 	u32 rrstctl = lynx_28g_lane_read(lane, LNaRRSTCTL);
@@ -1771,6 +1823,8 @@ static const struct lynx_info lynx_info_compat = {
 	.pll_read_configuration = lynx_28g_pll_read_configuration,
 	.lane_read_configuration = lynx_28g_lane_read_configuration,
 	.cdr_lock_check = lynx_28g_cdr_lock_check,
+	.clock_net_str = lynx_28g_clock_net_str,
+	.refclk_str = lynx_28g_refclk_str,
 	.num_lanes = LYNX_28G_NUM_LANE,
 };
 
@@ -1781,6 +1835,8 @@ static const struct lynx_info lynx_info_lx2160a_serdes1 = {
 	.pll_read_configuration = lynx_28g_pll_read_configuration,
 	.lane_read_configuration = lynx_28g_lane_read_configuration,
 	.cdr_lock_check = lynx_28g_cdr_lock_check,
+	.clock_net_str = lynx_28g_clock_net_str,
+	.refclk_str = lynx_28g_refclk_str,
 	.num_lanes = LYNX_28G_NUM_LANE,
 };
 
@@ -1791,6 +1847,8 @@ static const struct lynx_info lynx_info_lx2160a_serdes2 = {
 	.pll_read_configuration = lynx_28g_pll_read_configuration,
 	.lane_read_configuration = lynx_28g_lane_read_configuration,
 	.cdr_lock_check = lynx_28g_cdr_lock_check,
+	.clock_net_str = lynx_28g_clock_net_str,
+	.refclk_str = lynx_28g_refclk_str,
 	.num_lanes = LYNX_28G_NUM_LANE,
 };
 
@@ -1801,6 +1859,8 @@ static const struct lynx_info lynx_info_lx2160a_serdes3 = {
 	.pll_read_configuration = lynx_28g_pll_read_configuration,
 	.lane_read_configuration = lynx_28g_lane_read_configuration,
 	.cdr_lock_check = lynx_28g_cdr_lock_check,
+	.clock_net_str = lynx_28g_clock_net_str,
+	.refclk_str = lynx_28g_refclk_str,
 	.num_lanes = LYNX_28G_NUM_LANE,
 };
 
@@ -1811,6 +1871,8 @@ static const struct lynx_info lynx_info_lx2162a_serdes1 = {
 	.pll_read_configuration = lynx_28g_pll_read_configuration,
 	.lane_read_configuration = lynx_28g_lane_read_configuration,
 	.cdr_lock_check = lynx_28g_cdr_lock_check,
+	.clock_net_str = lynx_28g_clock_net_str,
+	.refclk_str = lynx_28g_refclk_str,
 	.first_lane = 4,
 	.num_lanes = LYNX_28G_NUM_LANE,
 };
@@ -1822,6 +1884,8 @@ static const struct lynx_info lynx_info_lx2162a_serdes2 = {
 	.pll_read_configuration = lynx_28g_pll_read_configuration,
 	.lane_read_configuration = lynx_28g_lane_read_configuration,
 	.cdr_lock_check = lynx_28g_cdr_lock_check,
+	.clock_net_str = lynx_28g_clock_net_str,
+	.refclk_str = lynx_28g_refclk_str,
 	.num_lanes = LYNX_28G_NUM_LANE,
 };
 
