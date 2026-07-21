@@ -389,6 +389,38 @@ static bool lynx_10g_cdr_lock_check(struct lynx_lane *lane)
 	return !!(tcsr3 & LNaTCSR3_CDR_LCK);
 }
 
+static const char *lynx_10g_refclk_str(int refclk)
+{
+	switch (refclk) {
+	case PLLnCR0_REFCLK_SEL_100MHZ:
+		return "100MHz";
+	case PLLnCR0_REFCLK_SEL_125MHZ:
+		return "125MHz";
+	case PLLnCR0_REFCLK_SEL_156MHZ:
+		return "156.25MHz";
+	case PLLnCR0_REFCLK_SEL_150MHZ:
+		return "150MHz";
+	case PLLnCR0_REFCLK_SEL_161MHZ:
+		return "161.1328125MHz";
+	default:
+		return "unknown";
+	}
+}
+
+static const char *lynx_10g_clock_net_str(int frate)
+{
+	switch (frate) {
+	case PLLnCR0_FRATE_5G:
+		return "5GHz";
+	case PLLnCR0_FRATE_3_125G:
+		return "3.125GHz";
+	case PLLnCR0_FRATE_5_15625G:
+		return "5.15625GHz";
+	default:
+		return "unknown";
+	}
+}
+
 static void lynx_10g_pll_read_configuration(struct lynx_pll *pll)
 {
 	int dlydiv_sel;
@@ -629,6 +661,8 @@ static const struct lynx_info lynx_info_ls1028a = {
 	.pll_read_configuration = lynx_10g_pll_read_configuration,
 	.lane_read_configuration = lynx_10g_lane_read_configuration,
 	.cdr_lock_check = lynx_10g_cdr_lock_check,
+	.clock_net_str = lynx_10g_clock_net_str,
+	.refclk_str = lynx_10g_refclk_str,
 	.num_lanes = 4,
 	.index = 1,
 	.quirks = LYNX_QUIRK_HAS_HARDCODED_USXGMII,
@@ -709,6 +743,8 @@ static const struct lynx_info lynx_info_ls1046a_serdes1 = {
 	.pll_read_configuration = lynx_10g_pll_read_configuration,
 	.lane_read_configuration = lynx_10g_lane_read_configuration,
 	.cdr_lock_check = lynx_10g_cdr_lock_check,
+	.clock_net_str = lynx_10g_clock_net_str,
+	.refclk_str = lynx_10g_refclk_str,
 	.num_lanes = 4,
 	.index = 1,
 };
@@ -755,6 +791,8 @@ static const struct lynx_info lynx_info_ls1046a_serdes2 = {
 	.pll_read_configuration = lynx_10g_pll_read_configuration,
 	.lane_read_configuration = lynx_10g_lane_read_configuration,
 	.cdr_lock_check = lynx_10g_cdr_lock_check,
+	.clock_net_str = lynx_10g_clock_net_str,
+	.refclk_str = lynx_10g_refclk_str,
 	.num_lanes = 4,
 	.index = 2,
 };
@@ -845,6 +883,8 @@ static const struct lynx_info lynx_info_ls1088a_serdes1 = {
 	.pll_read_configuration = lynx_10g_pll_read_configuration,
 	.lane_read_configuration = lynx_10g_lane_read_configuration,
 	.cdr_lock_check = lynx_10g_cdr_lock_check,
+	.clock_net_str = lynx_10g_clock_net_str,
+	.refclk_str = lynx_10g_refclk_str,
 	.num_lanes = 4,
 	.index = 1,
 };
@@ -934,6 +974,8 @@ static const struct lynx_info lynx_info_ls2088a_serdes1 = {
 	.pll_read_configuration = lynx_10g_pll_read_configuration,
 	.lane_read_configuration = lynx_10g_lane_read_configuration,
 	.cdr_lock_check = lynx_10g_cdr_lock_check,
+	.clock_net_str = lynx_10g_clock_net_str,
+	.refclk_str = lynx_10g_refclk_str,
 	.num_lanes = 8,
 	.index = 1,
 };
@@ -974,6 +1016,8 @@ static const struct lynx_info lynx_info_ls2088a_serdes2 = {
 	.pll_read_configuration = lynx_10g_pll_read_configuration,
 	.lane_read_configuration = lynx_10g_lane_read_configuration,
 	.cdr_lock_check = lynx_10g_cdr_lock_check,
+	.clock_net_str = lynx_10g_clock_net_str,
+	.refclk_str = lynx_10g_refclk_str,
 	.num_lanes = 8,
 	.index = 2,
 };

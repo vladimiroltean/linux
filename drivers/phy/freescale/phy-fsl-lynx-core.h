@@ -56,6 +56,8 @@ struct lynx_info {
 	void (*pll_read_configuration)(struct lynx_pll *pll);
 	void (*lane_read_configuration)(struct lynx_lane *lane);
 	bool (*cdr_lock_check)(struct lynx_lane *lane);
+	const char *(*clock_net_str)(int frate_sel);
+	const char *(*refclk_str)(int refclk_sel);
 	int first_lane;
 	int num_lanes;
 	int index;

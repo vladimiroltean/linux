@@ -482,6 +482,54 @@ static int lynx_probe_lane(struct lynx_priv *priv, int id,
 	return 0;
 }
 
+#define LYNX_SUPPORT_BUF_LEN		128
+
+static void lynx_pll_dump(struct lynx_pll *pll)
+{
+	struct lynx_priv *priv = pll->priv;
+	char buf[LYNX_SUPPORT_BUF_LEN];
+	struct device *dev = priv->dev;
+	enum lynx_lane_mode mode;
+	int total_len = 0, len;
+	bool truncated = false;
+	int i;
+
+	dev_info(dev, "PLL%c: %s, %s, reference clock %s, clock net %s\n",
+		 pll->id == 0 ? 'F' : 'S',
+		 str_enabled_disabled(pll->enabled),
+		 pll->locked ? "locked" : "unlocked",
+		 priv->info->refclk_str(pll->refclk_sel),
+		 priv->info->clock_net_str(pll->frate_sel));
+
+	if (!pll->enabled)
+		return;
+
+	for (mode = LANE_MODE_UNKNOWN; mode < LANE_MODE_MAX; mode++) {
+		if (!test_bit(mode, pll->supported))
+			continue;
+
+		for (i = priv->info->first_lane; i < priv->info->num_lanes; i++) {
+			if (!lynx_lane_supports_mode(&priv->lane[i], mode))
+				continue;
+
+			len = snprintf(&buf[total_len],
+				       LYNX_SUPPORT_BUF_LEN - total_len,
+				       " %s", lynx_lane_mode_str(mode));
+			if (len >= LYNX_SUPPORT_BUF_LEN - total_len)
+				truncated = true;
+			total_len += len;
+
+			break;
+		}
+
+		if (truncated)
+			break;
+	}
+
+	dev_info(dev, "\tSupported lane modes:%s%s\n", buf,
+		 truncated ? " (truncated)" : "");
+}
+
 int lynx_probe(struct platform_device *pdev, const struct lynx_info *info,
 	       const struct phy_ops *phy_ops)
 {
@@ -564,6 +612,9 @@ int lynx_probe(struct platform_device *pdev, const struct lynx_info *info,
 				return err;
 		}
 	}
+
+	for (int i = 0; i < LYNX_NUM_PLL; i++)
+		lynx_pll_dump(&priv->pll[i]);
 
 	provider = devm_of_phy_provider_register(dev, lynx_xlate);
 	if (IS_ERR(provider))
