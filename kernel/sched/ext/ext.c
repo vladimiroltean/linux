@@ -1071,6 +1071,18 @@ void schedule_dsq_reenq(struct scx_sched *sch, struct scx_dispatch_q *dsq,
 	if (dsq->id == SCX_DSQ_LOCAL) {
 		rq = container_of(dsq, struct rq, scx.local_dsq);
 
+		/*
+		 * A sub-sched lacking baseline access on the target cid has no
+		 * business triggering IPIs. The lockless test is fine: slipping
+		 * through right after a revoke is harmless and a wrong denial
+		 * can't happen - if the caller has seen its ownership, so does
+		 * this test.
+		 */
+		if (unlikely(scx_missing_caps(sch, cpu_of(rq), SCX_CAP_BASE))) {
+			__scx_add_event(sch, SCX_EV_SUB_REENQ_DENIED, 1);
+			return;
+		}
+
 		struct scx_sched_pcpu *sch_pcpu = per_cpu_ptr(sch->pcpu, cpu_of(rq));
 		struct scx_deferred_reenq_local *drl = &sch_pcpu->deferred_reenq_local;
 
@@ -5132,6 +5144,7 @@ static const char *scx_cap_names[__SCX_NR_CAPS] = {
 	[__SCX_CAP_ENQ_IMMED]	= "enq_immed",
 	[__SCX_CAP_ENQ]		= "enq",
 	[__SCX_CAP_PREEMPT]	= "preempt",
+	[__SCX_CAP_PERF]	= "perf",
 };
 
 static ssize_t scx_attr_caps_show(struct kobject *kobj,
@@ -8106,6 +8119,7 @@ static bool kick_one_cpu(s32 cpu, struct scx_sched_pcpu *pcpu, struct rq *this_r
 	struct scx_rq *this_scx = &this_rq->scx;
 	const struct sched_class *cur_class;
 	bool should_wait = false;
+	bool kickable;
 	unsigned long flags;
 
 	raw_spin_rq_lock_irqsave(rq, flags);
@@ -8119,9 +8133,10 @@ static bool kick_one_cpu(s32 cpu, struct scx_sched_pcpu *pcpu, struct rq *this_r
 	 * business forcing a reschedule there - skip. This is the authoritative
 	 * cap check: ecaps is read here under @rq's lock.
 	 */
-	if ((cpu_online(cpu) || cpu == cpu_of(this_rq)) &&
-	    !sched_class_above(cur_class, &ext_sched_class) &&
-	    !scx_missing_caps(pcpu->sch, cpu, SCX_CAP_BASE)) {
+	kickable = (cpu_online(cpu) || cpu == cpu_of(this_rq)) &&
+		   !sched_class_above(cur_class, &ext_sched_class);
+
+	if (kickable && !scx_missing_caps(pcpu->sch, cpu, SCX_CAP_BASE)) {
 		if (cpumask_test_cpu(cpu, pcpu->cpus_to_preempt)) {
 			if (cur_class == &ext_sched_class) {
 				if (likely(!scx_missing_caps(pcpu->sch, cpu,
@@ -8145,6 +8160,9 @@ static bool kick_one_cpu(s32 cpu, struct scx_sched_pcpu *pcpu, struct rq *this_r
 
 		resched_curr(rq);
 	} else {
+		/* a kickable cpu was skipped solely for the missing caps */
+		if (kickable)
+			__scx_add_event(pcpu->sch, SCX_EV_SUB_KICK_DENIED, 1);
 		cpumask_clear_cpu(cpu, pcpu->cpus_to_preempt);
 		cpumask_clear_cpu(cpu, pcpu->cpus_to_wait);
 	}
@@ -8164,9 +8182,12 @@ static void kick_one_cpu_if_idle(s32 cpu, struct scx_sched_pcpu *pcpu,
 
 	/* idle kicks need baseline access too, see kick_one_cpu() */
 	if (!can_skip_idle_kick(rq) &&
-	    (cpu_online(cpu) || cpu == cpu_of(this_rq)) &&
-	    !scx_missing_caps(pcpu->sch, cpu, SCX_CAP_BASE))
-		resched_curr(rq);
+	    (cpu_online(cpu) || cpu == cpu_of(this_rq))) {
+		if (likely(!scx_missing_caps(pcpu->sch, cpu, SCX_CAP_BASE)))
+			resched_curr(rq);
+		else
+			__scx_add_event(pcpu->sch, SCX_EV_SUB_KICK_DENIED, 1);
+	}
 
 	raw_spin_rq_unlock_irqrestore(rq, flags);
 }
@@ -9761,6 +9782,62 @@ __bpf_kfunc u32 scx_bpf_cidperf_cur(s32 cid, const struct bpf_prog_aux *aux)
 	return arch_scale_freq_capacity(cpu);
 }
 
+/* validate and apply a cpuperf target, see scx_bpf_cpuperf_set() */
+static s32 scx_cpuperf_set(struct scx_sched *sch, s32 cpu, u32 perf)
+{
+	struct rq *rq, *locked_rq;
+	struct rq_flags rf;
+	s32 ret;
+
+	if (unlikely(perf > SCX_CPUPERF_ONE)) {
+		scx_error(sch, "Invalid cpuperf target %u for CPU %d", perf, cpu);
+		return -EINVAL;
+	}
+
+	if (!scx_cpu_valid(sch, cpu, NULL))
+		return -EINVAL;
+
+	rq = cpu_rq(cpu);
+	locked_rq = scx_locked_rq();
+
+	/*
+	 * When called with an rq lock held, restrict the operation to the
+	 * corresponding CPU to prevent ABBA deadlocks.
+	 */
+	if (locked_rq && rq != locked_rq) {
+		scx_error(sch, "Invalid target CPU %d", cpu);
+		return -EINVAL;
+	}
+
+	/*
+	 * If no rq lock is held, allow to operate on any CPU by acquiring
+	 * the corresponding rq lock.
+	 */
+	if (!locked_rq) {
+		rq_lock_irqsave(rq, &rf);
+		update_rq_clock(rq);
+	}
+
+	/*
+	 * ecaps updates are folded under the rq lock, making this test
+	 * authoritative: a write can never land after a revoke has taken
+	 * effect on @cpu.
+	 */
+	if (likely(!scx_missing_caps(sch, cpu, SCX_CAP_PERF))) {
+		rq->scx.cpuperf_target = perf;
+		cpufreq_update_util(rq, 0);
+		ret = 0;
+	} else {
+		__scx_add_event(sch, SCX_EV_SUB_CIDPERF_DENIED, 1);
+		ret = -EACCES;
+	}
+
+	if (!locked_rq)
+		rq_unlock_irqrestore(rq, &rf);
+
+	return ret;
+}
+
 /**
  * scx_bpf_cpuperf_set - Set the relative performance target of a CPU
  * @cpu: CPU of interest
@@ -9786,39 +9863,7 @@ __bpf_kfunc void scx_bpf_cpuperf_set(s32 cpu, u32 perf, const struct bpf_prog_au
 	if (unlikely(!sch))
 		return;
 
-	if (unlikely(perf > SCX_CPUPERF_ONE)) {
-		scx_error(sch, "Invalid cpuperf target %u for CPU %d", perf, cpu);
-		return;
-	}
-
-	if (scx_cpu_valid(sch, cpu, NULL)) {
-		struct rq *rq = cpu_rq(cpu), *locked_rq = scx_locked_rq();
-		struct rq_flags rf;
-
-		/*
-		 * When called with an rq lock held, restrict the operation
-		 * to the corresponding CPU to prevent ABBA deadlocks.
-		 */
-		if (locked_rq && rq != locked_rq) {
-			scx_error(sch, "Invalid target CPU %d", cpu);
-			return;
-		}
-
-		/*
-		 * If no rq lock is held, allow to operate on any CPU by
-		 * acquiring the corresponding rq lock.
-		 */
-		if (!locked_rq) {
-			rq_lock_irqsave(rq, &rf);
-			update_rq_clock(rq);
-		}
-
-		rq->scx.cpuperf_target = perf;
-		cpufreq_update_util(rq, 0);
-
-		if (!locked_rq)
-			rq_unlock_irqrestore(rq, &rf);
-	}
+	scx_cpuperf_set(sch, cpu, perf);
 }
 
 /**
@@ -9827,10 +9872,13 @@ __bpf_kfunc void scx_bpf_cpuperf_set(s32 cpu, u32 perf, const struct bpf_prog_au
  * @perf: target performance level [0, %SCX_CPUPERF_ONE]
  * @aux: implicit BPF argument to access bpf_prog_aux hidden from BPF progs
  *
- * cid-addressed equivalent of scx_bpf_cpuperf_set().
+ * cid-addressed equivalent of scx_bpf_cpuperf_set(). A sub-sched needs
+ * SCX_CAP_PERF on @cid. Returns 0 if the target was applied, -%EACCES if
+ * the write was denied for missing caps, other -errnos if @cid didn't
+ * resolve.
  */
-__bpf_kfunc void scx_bpf_cidperf_set(s32 cid, u32 perf,
-				     const struct bpf_prog_aux *aux)
+__bpf_kfunc s32 scx_bpf_cidperf_set(s32 cid, u32 perf,
+				    const struct bpf_prog_aux *aux)
 {
 	struct scx_sched *sch;
 	s32 cpu;
@@ -9839,11 +9887,12 @@ __bpf_kfunc void scx_bpf_cidperf_set(s32 cid, u32 perf,
 
 	sch = scx_prog_sched(aux);
 	if (unlikely(!sch))
-		return;
+		return -ENODEV;
 	cpu = scx_cid_to_cpu(sch, cid);
 	if (cpu < 0)
-		return;
-	scx_bpf_cpuperf_set(cpu, perf, aux);
+		return cpu;
+
+	return scx_cpuperf_set(sch, cpu, perf);
 }
 
 /**
