@@ -477,7 +477,7 @@ static void queue_sync_ecaps(struct scx_sched *sch, s32 cid)
 	if (llist_on_list(&pcpu->ecaps_to_sync_node))
 		return;
 	if (llist_add(&pcpu->ecaps_to_sync_node, &cpu_rq(cpu)->scx.ecaps_to_sync))
-		scx_kick_cpu(scx_root, cpu, 0);
+		scx_kick_cpu(sch->ancestors[0], cpu, 0);
 }
 
 /* discard @rq's queued ecaps syncs */
@@ -638,7 +638,7 @@ void scx_unbypass_replay_ecaps(struct rq *rq, struct scx_sched *sch)
  */
 void scx_online_ecaps(struct rq *rq)
 {
-	struct scx_sched *pos;
+	struct scx_sched *root, *pos;
 	s32 cid, shard;
 
 	/*
@@ -652,14 +652,15 @@ void scx_online_ecaps(struct rq *rq)
 
 	guard(rq_lock_irqsave)(rq);
 
+	root = scx_root_protected();
 	cid = __scx_cpu_to_cid(cpu_of(rq));
 	shard = rcu_dereference_all(scx_cid_to_shard)[cid];
 
-	scx_for_each_descendant_pre(pos, scx_root) {
+	scx_for_each_descendant_pre(pos, root) {
 		struct scx_pshard *ps;
 
 		/* root holds every cap and never uses ecaps */
-		if (pos == scx_root)
+		if (!pos->level)
 			continue;
 
 		ps = pos->pshard[shard];
@@ -679,13 +680,15 @@ void scx_online_ecaps(struct rq *rq)
 void scx_offline_ecaps(struct rq *rq)
 {
 	s32 cpu = cpu_of(rq);
-	struct scx_sched *pos;
+	struct scx_sched *root, *pos;
 
 	guard(rq_lock_irqsave)(rq);
 
-	scx_for_each_descendant_pre(pos, scx_root) {
+	root = scx_root_protected();
+
+	scx_for_each_descendant_pre(pos, root) {
 		/* root holds every cap and never uses ecaps */
-		if (pos == scx_root)
+		if (!pos->level)
 			continue;
 
 		WRITE_ONCE(per_cpu_ptr(pos->pcpu, cpu)->ecaps, 0);
@@ -1204,7 +1207,7 @@ dump:
 /* verify that a scheduler can be attached to @cgrp and return the parent */
 static struct scx_sched *find_parent_sched(struct cgroup *cgrp)
 {
-	struct scx_sched *parent = cgrp->scx_sched;
+	struct scx_sched *parent = scx_cgroup_sched(cgrp);
 	struct scx_sched *pos;
 
 	lockdep_assert_held(&scx_sched_lock);
@@ -1578,7 +1581,7 @@ static s32 scx_cgroup_task_migrating(struct cgroup_task_migrate_ctx *ctx)
 	if (!scx_cgroup_enabled)
 		return NOTIFY_OK;
 
-	to = ctx->dst_dcgrp->scx_sched;
+	to = scx_cgroup_sched(ctx->dst_dcgrp);
 	if (scx_task_on_sched(to, p))
 		return NOTIFY_OK;
 
@@ -1612,7 +1615,7 @@ static void scx_cgroup_task_migrated(struct cgroup_task_migrate_ctx *ctx)
 	if (!scx_cgroup_enabled)
 		return;
 
-	to = ctx->dst_dcgrp->scx_sched;
+	to = scx_cgroup_sched(ctx->dst_dcgrp);
 	if (scx_task_on_sched(to, p))
 		return;
 
@@ -1639,7 +1642,7 @@ static void scx_cgroup_task_migrate_canceled(struct cgroup_task_migrate_ctx *ctx
 	if (!scx_cgroup_enabled)
 		return;
 
-	to = ctx->dst_dcgrp->scx_sched;
+	to = scx_cgroup_sched(ctx->dst_dcgrp);
 	if (scx_task_on_sched(to, p))
 		return;
 
@@ -1653,6 +1656,7 @@ static s32 scx_cgroup_lifetime_notify(struct notifier_block *nb,
 {
 	struct cgroup *cgrp = data;
 	struct cgroup *parent = cgroup_parent(cgrp);
+	struct scx_sched *sch;
 
 	if (!cgroup_on_dfl(cgrp))
 		return NOTIFY_OK;
@@ -1661,12 +1665,13 @@ static s32 scx_cgroup_lifetime_notify(struct notifier_block *nb,
 	case CGROUP_LIFETIME_ONLINE:
 		/* inherit ->scx_sched from $parent */
 		if (parent)
-			rcu_assign_pointer(cgrp->scx_sched, parent->scx_sched);
+			rcu_assign_pointer(cgrp->scx_sched, scx_cgroup_sched(parent));
 		break;
 	case CGROUP_LIFETIME_OFFLINE:
 		/* if there is a sched attached, shoot it down */
-		if (cgrp->scx_sched && cgrp->scx_sched->cgrp == cgrp)
-			scx_exit(cgrp->scx_sched, SCX_EXIT_UNREG_KERN,
+		sch = scx_cgroup_sched(cgrp);
+		if (sch && sch->cgrp == cgrp)
+			scx_exit(sch, SCX_EXIT_UNREG_KERN,
 				 SCX_ECODE_RSN_CGROUP_OFFLINE,
 				 "cgroup %llu going offline", cgroup_id(cgrp));
 		break;
