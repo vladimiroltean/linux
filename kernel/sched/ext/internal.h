@@ -1543,7 +1543,6 @@ struct scx_sched {
 	 */
 	bool			warned_zero_slice:1;
 	bool			warned_unassoc_progs:1;
-	bool			warned_nmi_kick:1;
 
 	struct list_head	all;
 
@@ -1559,6 +1558,7 @@ struct scx_sched {
 	char			*cgrp_path;
 	struct kset		*sub_kset;
 
+	bool			linked;		/* on ->children, see scx_link_sched() */
 	bool			sub_attached;
 #endif	/* CONFIG_EXT_SUB_SCHED */
 
@@ -1577,6 +1577,7 @@ struct scx_sched {
 	struct kthread_worker	*helper;
 	struct irq_work		disable_irq_work;
 	struct kthread_work	disable_work;
+	struct irq_work		propagate_exit_irq_work; /* see scx_claim_exit() */
 	struct timer_list	bypass_lb_timer;
 	cpumask_var_t		bypass_lb_donee_cpumask;
 	cpumask_var_t		bypass_lb_resched_cpumask;
@@ -2002,15 +2003,14 @@ struct scx_sched *scx_alloc_and_add_sched(struct scx_enable_cmd *cmd,
 int scx_validate_ops(struct scx_sched *sch, const struct sched_ext_ops *ops);
 int scx_sched_sysfs_add(struct scx_sched *sch);
 bool scx_is_descendant(struct scx_sched *sch, struct scx_sched *ancestor);
-__printf(3, 0) s32 scx_bstr_format(struct scx_sched *sch, struct scx_bstr_buf *buf,
-				   char *fmt, unsigned long long *data, u32 data__sz);
+__printf(5, 0) bool scx_exit_bstr(struct scx_sched *sch, enum scx_exit_kind kind,
+				  s64 exit_code, struct scx_sched *fmt_blame,
+				  char *fmt, unsigned long long *data, u32 data__sz);
 
 extern raw_spinlock_t scx_sched_lock;
 extern struct mutex scx_enable_mutex;
 extern struct percpu_rw_semaphore scx_fork_rwsem;
 extern bool scx_cgroup_enabled;
-extern raw_spinlock_t scx_exit_bstr_buf_lock;
-extern struct scx_bstr_buf scx_exit_bstr_buf;
 #ifdef CONFIG_EXT_SUB_SCHED
 extern const struct rhashtable_params scx_sched_hash_params;
 extern struct rhashtable scx_sched_hash;

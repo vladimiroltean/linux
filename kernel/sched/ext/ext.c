@@ -196,9 +196,6 @@ static const struct rhashtable_params dsq_hash_params = {
 
 static LLIST_HEAD(dsqs_to_free);
 
-DEFINE_RAW_SPINLOCK(scx_exit_bstr_buf_lock);
-struct scx_bstr_buf scx_exit_bstr_buf;
-
 /* ops debug dump */
 static DEFINE_RAW_SPINLOCK(scx_dump_lock);
 
@@ -5035,6 +5032,7 @@ static void scx_sched_free_rcu_work(struct work_struct *work)
 	struct scx_dispatch_q *dsq;
 	int cpu, node;
 
+	irq_work_sync(&sch->propagate_exit_irq_work);
 	irq_work_sync(&sch->disable_irq_work);
 	kthread_destroy_worker(sch->helper);
 	timer_shutdown_sync(&sch->bypass_lb_timer);
@@ -5392,25 +5390,6 @@ void scx_softlockup(u32 dur_s)
 			cpu, dur_s);
 }
 
-/*
- * scx_hardlockup() runs from NMI and eventually calls scx_claim_exit(),
- * which takes scx_sched_lock. scx_sched_lock isn't NMI-safe and grabbing
- * it from NMI context can lead to deadlocks. Defer via irq_work; the
- * disable path runs off irq_work anyway.
- */
-static atomic_t scx_hardlockup_cpu = ATOMIC_INIT(-1);
-
-static void scx_hardlockup_irq_workfn(struct irq_work *work)
-{
-	int cpu = atomic_xchg(&scx_hardlockup_cpu, -1);
-
-	if (cpu >= 0 && handle_lockup(cpu, "hard lockup - CPU %d", cpu))
-		printk_deferred(KERN_ERR "sched_ext: Hard lockup - CPU %d, disabling BPF scheduler\n",
-				cpu);
-}
-
-static DEFINE_IRQ_WORK(scx_hardlockup_irq_work, scx_hardlockup_irq_workfn);
-
 /**
  * scx_hardlockup - sched_ext hardlockup handler
  * @cpu: the target CPU
@@ -5420,19 +5399,21 @@ static DEFINE_IRQ_WORK(scx_hardlockup_irq_work, scx_hardlockup_irq_workfn);
  * Try kicking out the current scheduler in an attempt to recover the system to
  * a good state before taking more drastic actions.
  *
- * Queues an irq_work; the handle_lockup() call happens in IRQ context (see
- * scx_hardlockup_irq_workfn).
+ * Called from NMI. Aborting the scheduler sets ->aborting throughout the
+ * hierarchy before returning, which is what breaks the dispatch-path live-locks
+ * that can hard-lock CPUs.
  *
- * Returns %true if sched_ext is enabled and the work was queued, %false
- * otherwise.
+ * Returns %true if sched_ext is enabled and abort was initiated, which may
+ * resolve the lockup. %false if sched_ext is not enabled or abort was already
+ * initiated by someone else.
  */
 bool scx_hardlockup(int cpu)
 {
-	if (!rcu_access_pointer(scx_root))
+	if (!handle_lockup(cpu, "hard lockup - CPU %d", cpu))
 		return false;
 
-	atomic_cmpxchg(&scx_hardlockup_cpu, -1, cpu);
-	irq_work_queue(&scx_hardlockup_irq_work);
+	printk_deferred(KERN_ERR "sched_ext: Hard lockup - CPU %d, disabling BPF scheduler\n",
+			cpu);
 	return true;
 }
 
@@ -5994,26 +5975,13 @@ static void refresh_watchdog(void)
 
 s32 scx_link_sched(struct scx_sched *sch)
 {
-	const char *err_msg = "";
-	s32 ret = 0;
-
 	scoped_guard(raw_spinlock_irqsave, &scx_bypass_lock)	/* for the parent bypass check */
 	scoped_guard(raw_spinlock, &scx_sched_lock) {
 #ifdef CONFIG_EXT_SUB_SCHED
 		struct scx_sched *parent = scx_parent(sch);
 
 		if (parent) {
-			/*
-			 * scx_claim_exit() propagates exit_kind transition to
-			 * its sub-scheds while holding scx_sched_lock - either
-			 * we can see the parent's non-NONE exit_kind or the
-			 * parent can shoot us down.
-			 */
-			if (atomic_read(&parent->exit_kind) != SCX_EXIT_NONE) {
-				err_msg = "parent disabled";
-				ret = -ENOENT;
-				break;
-			}
+			s32 ret;
 
 			/*
 			 * Bypass state is spread across per-cpu flags and a
@@ -6021,32 +5989,39 @@ s32 scx_link_sched(struct scx_sched *sch)
 			 * valid use case. Refuse it.
 			 */
 			if (READ_ONCE(parent->bypass_depth)) {
-				err_msg = "parent bypassing";
-				ret = -EBUSY;
-				break;
+				scx_error(sch, "parent bypassing (%d)", -EBUSY);
+				return -EBUSY;
 			}
 
 			ret = rhashtable_lookup_insert_fast(&scx_sched_hash,
 					&sch->hash_node, scx_sched_hash_params);
 			if (ret) {
-				err_msg = "failed to insert into scx_sched_hash";
-				break;
+				scx_error(sch, "failed to insert into scx_sched_hash (%d)",
+					  ret);
+				return ret;
 			}
 
 			list_add_tail_rcu(&sch->sibling, &parent->children);
+
+			/*
+			 * Pairs with the mb after the ->aborting assertion in
+			 * scx_claim_exit(). Either we see ->aborting and back
+			 * out, or the exit path sees us and exits us.
+			 */
+			smp_mb();
+			if (unlikely(READ_ONCE(parent->aborting))) {
+				rhashtable_remove_fast(&scx_sched_hash, &sch->hash_node,
+						       scx_sched_hash_params);
+				list_del_rcu(&sch->sibling);
+				scx_error(sch, "parent disabled (%d)", -ENOENT);
+				return -ENOENT;
+			}
+
+			sch->linked = true;
 		}
 #endif	/* CONFIG_EXT_SUB_SCHED */
 
 		list_add_tail_rcu(&sch->all, &scx_sched_all);
-	}
-
-	/*
-	 * scx_error() takes scx_sched_lock via scx_claim_exit(), so it must run after
-	 * the guard above is released.
-	 */
-	if (ret) {
-		scx_error(sch, "%s (%d)", err_msg, ret);
-		return ret;
 	}
 
 	refresh_watchdog();
@@ -6057,10 +6032,11 @@ void scx_unlink_sched(struct scx_sched *sch)
 {
 	scoped_guard(raw_spinlock_irq, &scx_sched_lock) {
 #ifdef CONFIG_EXT_SUB_SCHED
-		if (scx_parent(sch)) {
+		if (sch->linked) {
 			rhashtable_remove_fast(&scx_sched_hash, &sch->hash_node,
 					       scx_sched_hash_params);
 			list_del_rcu(&sch->sibling);
+			sch->linked = false;
 		}
 #endif	/* CONFIG_EXT_SUB_SCHED */
 		list_del_rcu(&sch->all);
@@ -6270,12 +6246,36 @@ done:
 	scx_bypass(sch, false);
 }
 
+/**
+ * scx_propagate_exit_irq_workfn - Claim SCX_EXIT_PARENT on the exiting subtree
+ * @irq_work: &scx_sched.propagate_exit_irq_work
+ *
+ * Queued by scx_claim_exit() after a non-PARENT claim. Claims SCX_EXIT_PARENT
+ * on each descendant, giving every one its own disable work - most of disabling
+ * is serialized but ops.exit() can take arbitrarily long and running them in
+ * separate helper kthreads parallelizes it. No recursion as only non-PARENT
+ * claims propagate.
+ */
+static void scx_propagate_exit_irq_workfn(struct irq_work *irq_work)
+{
+	struct scx_sched *sch = container_of(irq_work, struct scx_sched,
+					     propagate_exit_irq_work);
+	struct scx_sched *pos;
+
+	scoped_guard (raw_spinlock_irqsave, &scx_sched_lock) {
+		scx_for_each_descendant_pre(pos, sch)
+			scx_disable(pos, SCX_EXIT_PARENT);
+	}
+}
+
 /*
  * Claim the exit on @sch. The caller must ensure that the helper kthread work
  * is kicked before the current task can be preempted. Once exit_kind is
  * claimed, scx_error() can no longer trigger, so if the current task gets
  * preempted and the BPF scheduler fails to schedule it back, the helper work
  * will never be kicked and the whole system can wedge.
+ *
+ * Lock-free and safe to call from any context including NMI.
  */
 static bool scx_claim_exit(struct scx_sched *sch, enum scx_exit_kind kind)
 {
@@ -6289,36 +6289,30 @@ static bool scx_claim_exit(struct scx_sched *sch, enum scx_exit_kind kind)
 	if (!atomic_try_cmpxchg(&sch->exit_kind, &none, kind))
 		return false;
 
-	/*
-	 * Some CPUs may be trapped in the dispatch paths. Set the aborting
-	 * flag to break potential live-lock scenarios, ensuring we can
-	 * successfully reach scx_bypass().
-	 */
-	WRITE_ONCE(sch->aborting, true);
+	if (kind == SCX_EXIT_PARENT) {
+		/* an ancestor is already sweeping the subtree */
+		WRITE_ONCE(sch->aborting, true);
+	} else {
+		struct scx_sched *pos;
 
-	trace_sched_ext_exit(sch, kind);
-
-	/*
-	 * Propagate exits to descendants immediately. Each has a dedicated
-	 * helper kthread and can run in parallel. While most of disabling is
-	 * serialized, running them in separate threads allows parallelizing
-	 * ops.exit(), which can take arbitrarily long prolonging bypass mode.
-	 *
-	 * To guarantee forward progress, this propagation must be in-line so
-	 * that ->aborting is synchronously asserted for all sub-scheds. The
-	 * propagation is also the interlocking point against sub-sched
-	 * attachment. See scx_link_sched().
-	 *
-	 * This doesn't cause recursions as propagation only takes place for
-	 * non-propagation exits.
-	 */
-	if (kind != SCX_EXIT_PARENT) {
-		scoped_guard (raw_spinlock_irqsave, &scx_sched_lock) {
-			struct scx_sched *pos;
+		/*
+		 * CPUs may be live-locked in the dispatch paths of @sch or its
+		 * descendants, which ->aborting breaks. Sweep the subtree
+		 * locklessly so that this works from NMI. smp_store_mb() orders
+		 * each node's ->aborting store before its children are walked -
+		 * either we see a racing scx_link_sched() on ->children or it
+		 * sees ->aborting.
+		 */
+		scoped_guard (rcu) {
 			scx_for_each_descendant_pre(pos, sch)
-				scx_disable(pos, SCX_EXIT_PARENT);
+				smp_store_mb(pos->aborting, true);
 		}
+
+		irq_work_queue(&sch->propagate_exit_irq_work);
 	}
+
+	/* fired after ->aborting is set so callbacks can't delay recovery */
+	trace_sched_ext_exit(sch, kind);
 
 	return true;
 }
@@ -6735,6 +6729,32 @@ static void scx_disable_irq_workfn(struct irq_work *irq_work)
 	kthread_queue_work(sch->helper, &sch->disable_work);
 }
 
+/* finish exit_info and kick the disable work, ei->msg must already be set */
+static void scx_finish_exit(struct scx_sched *sch, enum scx_exit_kind kind,
+			    s64 exit_code, s32 exit_cpu)
+{
+	struct scx_exit_info *ei = sch->exit_info;
+
+	ei->exit_code = exit_code;
+#ifdef CONFIG_STACKTRACE
+	/*
+	 * stack_trace_save()'s NMI-safety is arch-dependent and undocumented.
+	 * Skip the backtrace when exiting from NMI.
+	 */
+	if (kind >= SCX_EXIT_ERROR && !in_nmi())
+		ei->bt_len = stack_trace_save(ei->bt, SCX_EXIT_BT_LEN, 1);
+#endif
+	/*
+	 * Set ei->kind and ->reason for scx_dump_state(). They'll be set again
+	 * in scx_disable_workfn().
+	 */
+	ei->kind = kind;
+	ei->reason = scx_exit_reason(ei->kind);
+	ei->exit_cpu = exit_cpu;
+
+	irq_work_queue(&sch->disable_irq_work);
+}
+
 bool scx_vexit(struct scx_sched *sch,
 	       enum scx_exit_kind kind, s64 exit_code, s32 exit_cpu,
 	       const char *fmt, va_list args)
@@ -6746,22 +6766,9 @@ bool scx_vexit(struct scx_sched *sch,
 	if (!scx_claim_exit(sch, kind))
 		return false;
 
-	ei->exit_code = exit_code;
-#ifdef CONFIG_STACKTRACE
-	if (kind >= SCX_EXIT_ERROR)
-		ei->bt_len = stack_trace_save(ei->bt, SCX_EXIT_BT_LEN, 1);
-#endif
 	vscnprintf(ei->msg, SCX_EXIT_MSG_LEN, fmt, args);
 
-	/*
-	 * Set ei->kind and ->reason for scx_dump_state(). They'll be set again
-	 * in scx_disable_workfn().
-	 */
-	ei->kind = kind;
-	ei->reason = scx_exit_reason(ei->kind);
-	ei->exit_cpu = exit_cpu;
-
-	irq_work_queue(&sch->disable_irq_work);
+	scx_finish_exit(sch, kind, exit_code, exit_cpu);
 	return true;
 }
 
@@ -6918,6 +6925,7 @@ struct scx_sched *scx_alloc_and_add_sched(struct scx_enable_cmd *cmd,
 	sch->slice_dfl = SCX_SLICE_DFL;
 	atomic_set(&sch->exit_kind, SCX_EXIT_NONE);
 	sch->disable_irq_work = IRQ_WORK_INIT_HARD(scx_disable_irq_workfn);
+	sch->propagate_exit_irq_work = IRQ_WORK_INIT_HARD(scx_propagate_exit_irq_workfn);
 	kthread_init_work(&sch->disable_work, scx_disable_workfn);
 	timer_setup(&sch->bypass_lb_timer, scx_bypass_lb_timerfn, 0);
 
@@ -9183,11 +9191,7 @@ void scx_kick_cpu(struct scx_sched *sch, s32 cpu, u64 flags)
 	 * not mask NMIs, so kicking from NMI could corrupt it and is unsupported.
 	 */
 	if (unlikely(in_nmi())) {
-		if (!sch->warned_nmi_kick) {
-			sch->warned_nmi_kick = true;
-			pr_warn("sched_ext: %s: scx_bpf_kick_cpu() from NMI ignored\n",
-				sch->ops.name);
-		}
+		scx_error(sch, "scx_bpf_kick_cpu() called from NMI");
 		return;
 	}
 
@@ -9574,12 +9578,38 @@ static s32 __bstr_format(struct scx_sched *sch, u64 *data_buf, char *line_buf,
 	return ret;
 }
 
-__printf(3, 0)
-s32 scx_bstr_format(struct scx_sched *sch, struct scx_bstr_buf *buf,
-		    char *fmt, unsigned long long *data, u32 data__sz)
+/*
+ * Exit @sch with the reason formatted from a BPF-supplied bstr format. The exit
+ * is claimed first and the reason is formatted directly into the winner-owned
+ * exit_info buffer, which allows use from any context including NMI.
+ *
+ * @fmt_blame is the sched blamed for formatting failures through the
+ * scx_error() calls in __bstr_format() and differs from @sch when a parent
+ * supplies the kill reason for a child. A formatting failure doesn't revert the
+ * claim - @sch still exits with the claimed kind and a fallback message.
+ */
+__printf(5, 0)
+bool scx_exit_bstr(struct scx_sched *sch, enum scx_exit_kind kind,
+		   s64 exit_code, struct scx_sched *fmt_blame, char *fmt,
+		   unsigned long long *data, u32 data__sz)
 {
-	return __bstr_format(sch, buf->data, buf->line, sizeof(buf->line),
-			     fmt, data, data__sz);
+	struct scx_exit_info *ei = sch->exit_info;
+	u64 data_buf[MAX_BPRINTF_VARARGS];
+	s32 ret;
+
+	guard(preempt)();
+
+	if (!scx_claim_exit(sch, kind))
+		return false;
+
+	ret = __bstr_format(fmt_blame, data_buf, ei->msg, SCX_EXIT_MSG_LEN,
+			    fmt, data, data__sz);
+	if (ret < 0)
+		scnprintf(ei->msg, SCX_EXIT_MSG_LEN,
+			  "exit message formatting failed (%d)", ret);
+
+	scx_finish_exit(sch, kind, exit_code, raw_smp_processor_id());
+	return true;
 }
 
 __bpf_kfunc_start_defs();
@@ -9601,14 +9631,13 @@ __bpf_kfunc void scx_bpf_exit_bstr(s64 exit_code, char *fmt,
 				   const struct bpf_prog_aux *aux)
 {
 	struct scx_sched *sch;
-	unsigned long flags;
 
-	raw_spin_lock_irqsave(&scx_exit_bstr_buf_lock, flags);
+	guard(rcu)();
+
 	sch = scx_prog_sched(aux);
-	if (likely(sch) &&
-	    scx_bstr_format(sch, &scx_exit_bstr_buf, fmt, data, data__sz) >= 0)
-		scx_exit(sch, SCX_EXIT_UNREG_BPF, exit_code, "%s", scx_exit_bstr_buf.line);
-	raw_spin_unlock_irqrestore(&scx_exit_bstr_buf_lock, flags);
+	if (likely(sch))
+		scx_exit_bstr(sch, SCX_EXIT_UNREG_BPF, exit_code, sch, fmt,
+			      data, data__sz);
 }
 
 /**
@@ -9626,14 +9655,13 @@ __bpf_kfunc void scx_bpf_error_bstr(char *fmt, unsigned long long *data,
 				    u32 data__sz, const struct bpf_prog_aux *aux)
 {
 	struct scx_sched *sch;
-	unsigned long flags;
 
-	raw_spin_lock_irqsave(&scx_exit_bstr_buf_lock, flags);
+	guard(rcu)();
+
 	sch = scx_prog_sched(aux);
-	if (likely(sch) &&
-	    scx_bstr_format(sch, &scx_exit_bstr_buf, fmt, data, data__sz) >= 0)
-		scx_exit(sch, SCX_EXIT_ERROR_BPF, 0, "%s", scx_exit_bstr_buf.line);
-	raw_spin_unlock_irqrestore(&scx_exit_bstr_buf_lock, flags);
+	if (likely(sch))
+		scx_exit_bstr(sch, SCX_EXIT_ERROR_BPF, 0, sch, fmt, data,
+			      data__sz);
 }
 
 /**

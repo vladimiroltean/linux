@@ -1067,12 +1067,14 @@ void scx_sub_disable(struct scx_sched *sch)
 	scx_cgroup_lock();
 
 	/*
-	 * An enable that failed before scx_link_sched() never owned a cgroup or
-	 * task and won't be waited on by an ancestor's drain_descendants().
-	 * Nothing to reparent and walking the tasks can misbehave as the task
-	 * ownership invariant (either owned by self or parent) does not hold.
+	 * An enable that failed before scx_link_sched() succeeded never owned a
+	 * cgroup or task and won't be waited on by an ancestor's
+	 * drain_descendants(). Nothing to reparent and walking the tasks can
+	 * misbehave as the task ownership invariant (either owned by self or
+	 * parent) does not hold. ->sibling can't identify this case - an undone
+	 * link leaves it non-empty.
 	 */
-	if (list_empty(&sch->sibling))
+	if (!sch->linked)
 		goto dump;
 
 	set_cgroup_sched(sch_cgroup(sch), parent);
@@ -2153,7 +2155,6 @@ __bpf_kfunc s32 scx_bpf_sub_kill_bstr(u64 cgroup_id, char *fmt,
 				      const struct bpf_prog_aux *aux)
 {
 	struct scx_sched *parent, *child;
-	s32 ret;
 
 	guard(rcu)();
 
@@ -2176,11 +2177,7 @@ __bpf_kfunc s32 scx_bpf_sub_kill_bstr(u64 cgroup_id, char *fmt,
 		return -EINVAL;
 	}
 
-	guard(raw_spinlock_irqsave)(&scx_exit_bstr_buf_lock);
-	ret = scx_bstr_format(parent, &scx_exit_bstr_buf, fmt, data, data__sz);
-	if (ret < 0)
-		return ret;
-	scx_exit(child, SCX_EXIT_PARENT_KILL, 0, "%s", scx_exit_bstr_buf.line);
+	scx_exit_bstr(child, SCX_EXIT_PARENT_KILL, 0, parent, fmt, data, data__sz);
 	return 0;
 }
 
