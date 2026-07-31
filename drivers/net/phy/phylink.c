@@ -1909,10 +1909,6 @@ struct phylink *phylink_create(struct phylink_config *config,
 	__set_bit(PHYLINK_DISABLE_STOPPED, &pl->phylink_disable_state);
 	timer_setup(&pl->link_poll, phylink_fixed_poll, 0);
 
-	linkmode_fill(pl->supported);
-	linkmode_copy(pl->link_config.advertising, pl->supported);
-	phylink_validate(pl, pl->supported, &pl->link_config);
-
 	ret = phylink_parse_mode(pl, fwnode);
 	if (ret < 0)
 		goto free_pl;
@@ -1921,6 +1917,17 @@ struct phylink *phylink_create(struct phylink_config *config,
 		ret = phylink_parse_fixedlink(pl, fwnode);
 		if (ret < 0)
 			goto release_link_gpio;
+	} else if (pl->cfg_link_an_mode == MLO_AN_PHY) {
+		/* phylink_bringup_phy() will recalculate pl->supported with
+		 * information from the PHY, but it may take a while until it
+		 * is called, and we should report something to user space
+		 * until then rather than nothing at all, to avoid issues.
+		 * Just report all link modes supportable by the current
+		 * phy_interface_t and the MAC capabilities.
+		 */
+		linkmode_fill(pl->supported);
+		linkmode_copy(pl->link_config.advertising, pl->supported);
+		phylink_validate(pl, pl->supported, &pl->link_config);
 	}
 
 	pl->req_link_an_mode = pl->cfg_link_an_mode;
