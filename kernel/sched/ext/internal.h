@@ -57,6 +57,7 @@ enum scx_exit_kind {
 	SCX_EXIT_ERROR_BPF,	/* ERROR but triggered through scx_bpf_error() */
 	SCX_EXIT_ERROR_STALL,	/* watchdog detected stalled runnable tasks */
 	SCX_EXIT_ERROR_REENQ,	/* task hit reenqueue limit without running */
+	SCX_EXIT_ERROR_RESCUE,	/* ejected for overloading rescue execution */
 };
 
 /*
@@ -925,6 +926,37 @@ struct sched_ext_ops {
 	u32 cid_shard_size;
 
 	/**
+	 * @rescue_bandwidth_ppt: Rescue execution bandwidth in parts per thousand
+	 *
+	 * The fraction of each CPU's time that may be consumed running tasks
+	 * from its rescue DSQ. A higher bandwidth admits and escalates rescues
+	 * faster, see @rescue_quantum_us.
+	 *
+	 * Only the root scheduler's value is used. 0 means the default of 20
+	 * (2%). May not exceed 250 (25%). %SCX_RESCUE_DISABLE disables rescue -
+	 * %SCX_ENQ_RESCUE inserts are then rejected like any other insert
+	 * lacking the caps.
+	 */
+	u32 rescue_bandwidth_ppt;
+
+	/**
+	 * @rescue_quantum_us: Rescue execution quantum in microseconds
+	 *
+	 * How much CPU time each rescue gets. Rescues run one at a time per CPU
+	 * and admissions are paced to keep rescue execution within
+	 * @rescue_bandwidth_ppt - with the defaults, one 5ms rescue every
+	 * 250ms. A crowded queue round-robins on the quantum divided across the
+	 * waiters, floored at 1ms. A stuck rescue eventually escalates to
+	 * forced execution. A larger quantum interrupts the CPU less often but
+	 * for longer and spaces rescues further apart.
+	 *
+	 * Only the root scheduler's value is used. 0 means the default (5000).
+	 * Non-zero values must be within [1000, 100000]. Values too short for
+	 * the kernel to meter are lifted silently.
+	 */
+	u32 rescue_quantum_us;
+
+	/**
 	 * @sub_cgroup_id: When >1, attach the scheduler as a sub-scheduler
 	 * on the specified cgroup.
 	 */
@@ -1058,6 +1090,8 @@ struct sched_ext_ops_cid {
 	u32 exit_dump_len;
 	u64 hotplug_seq;
 	u32 cid_shard_size;
+	u32 rescue_bandwidth_ppt;
+	u32 rescue_quantum_us;
 	u64 sub_cgroup_id;
 	char name[SCX_OPS_NAME_LEN];
 
@@ -1211,6 +1245,12 @@ struct scx_event_stats {
 	 * sub-sched lacked SCX_CAP_PERF on the target cid.
 	 */
 	s64		SCX_EV_SUB_CIDPERF_DENIED;
+
+	/*
+	 * The number of times an insert carrying %SCX_ENQ_RESCUE lacked the
+	 * caps for its cid and the task entered the rescue path.
+	 */
+	s64		SCX_EV_SUB_RESCUE;
 };
 
 #define SCX_EVENTS_LIST(SCX_EVENT)					\
@@ -1233,7 +1273,8 @@ struct scx_event_stats {
 	SCX_EVENT(SCX_EV_SUB_PREEMPT_DENIED);				\
 	SCX_EVENT(SCX_EV_SUB_KICK_DENIED);				\
 	SCX_EVENT(SCX_EV_SUB_REENQ_DENIED);				\
-	SCX_EVENT(SCX_EV_SUB_CIDPERF_DENIED)
+	SCX_EVENT(SCX_EV_SUB_CIDPERF_DENIED);				\
+	SCX_EVENT(SCX_EV_SUB_RESCUE)
 
 struct scx_sched;
 
@@ -1246,6 +1287,8 @@ struct scx_dsp_buf_ent {
 	struct task_struct	*task;
 	unsigned long		qseq;
 	u64			dsq_id;
+	u64			slice;
+	u64			vtime;
 	u64			enq_flags;
 };
 
@@ -1298,6 +1341,14 @@ struct scx_sched_pcpu {
 	bool			idle_renotify;
 	/* effective caps as of the last sub_ecaps_updated() delivery */
 	u64			reported_ecaps;
+
+	/*
+	 * Decaying rescue runtime consumed on this cpu, see
+	 * scx_rescue_decay_avg(). Overload on this cpu ejects the sub with the
+	 * largest value. Accessed only under this cpu's rq lock.
+	 */
+	u64			rescue_avg;
+	u64			rescue_avg_at;	/* last decay, jiffies_64 */
 #endif
 
 	/*
@@ -1655,6 +1706,17 @@ enum scx_enq_flags {
 	SCX_ENQ_IMMED		= 1LLU << 33,
 
 	/*
+	 * Only allowed on local DSQs. If the insert lacks the caps for the
+	 * target cid, divert the task to the CPU's rescue path instead of
+	 * rejecting and reenqueueing, e.g. when the task's affinity is
+	 * restricted to cids the scheduler doesn't hold. The kernel runs
+	 * rescued tasks on the target CPU. Rescue execution is guaranteed to
+	 * make forward progress and is bandwidth-limited, see the
+	 * rescue_bandwidth_ppt and rescue_quantum_us ops fields.
+	 */
+	SCX_ENQ_RESCUE		= 1LLU << 34,
+
+	/*
 	 * The task being enqueued was previously enqueued on a DSQ, but was
 	 * removed and is being re-enqueued. See SCX_TASK_REENQ_* flags to find
 	 * out why a given task is being reenqueued.
@@ -1680,6 +1742,8 @@ enum scx_enq_flags {
 	SCX_ENQ_NESTED		= 1LLU << 58,
 	SCX_ENQ_GDSQ_FALLBACK	= 1LLU << 59,	/* fell back to global DSQ */
 	SCX_ENQ_IGNORE_CAPS	= 1LLU << 60,	/* admit to local DSQ ignoring caps */
+	SCX_ENQ_APPLY_SLICE	= 1LLU << 61,	/* apply carried slice/vtime at insertion */
+	SCX_ENQ_SLICE_DFL	= 1LLU << 62,	/* carried slice is a default refill */
 };
 
 enum scx_deq_flags {
@@ -1968,15 +2032,24 @@ void scx_task_iter_start(struct scx_task_iter *iter, struct cgroup *cgrp);
 void scx_task_iter_unlock(struct scx_task_iter *iter);
 void scx_task_iter_stop(struct scx_task_iter *iter);
 struct task_struct *scx_task_iter_next_locked(struct scx_task_iter *iter);
+bool scx_set_task_slice(struct task_struct *p, u64 slice);
+void scx_task_slice_ended(struct rq *rq, struct task_struct *p);
+void scx_task_unlink_from_dsq(struct task_struct *p, struct scx_dispatch_q *dsq);
 void scx_dispatch_dequeue(struct rq *rq, struct task_struct *p);
 void scx_do_enqueue_task(struct rq *rq, struct task_struct *p, u64 enq_flags,
 			 int sticky_cpu);
+void scx_move_local_task_to_local_dsq(struct scx_sched *sch, struct task_struct *p,
+				      u64 enq_flags, struct scx_dispatch_q *src_dsq,
+				      struct rq *dst_rq);
 bool scx_consume_dispatch_q(struct scx_sched *sch, struct rq *rq,
 			    struct scx_dispatch_q *dsq, u64 enq_flags);
 bool scx_consume_global_dsq(struct scx_sched *sch, struct rq *rq);
 bool scx_rq_online(struct rq *rq);
 void scx_flush_dispatch_buf(struct scx_sched *sch, struct rq *rq);
+s32 scx_init_dsq(struct scx_dispatch_q *dsq, u64 dsq_id, struct scx_sched *sch);
+__printf(2, 3) void scx_dump_line(struct seq_buf *s, const char *fmt, ...);
 void scx_kick_cpu(struct scx_sched *sch, s32 cpu, u64 flags);
+u64 __scx_bpf_now(struct rq *rq);
 void schedule_dsq_reenq(struct scx_sched *sch, struct scx_dispatch_q *dsq,
 			u64 reenq_flags, struct rq *locked_rq);
 int __scx_init_task(struct scx_sched *sch, struct task_struct *p,
@@ -2011,6 +2084,7 @@ extern raw_spinlock_t scx_sched_lock;
 extern struct mutex scx_enable_mutex;
 extern struct percpu_rw_semaphore scx_fork_rwsem;
 extern bool scx_cgroup_enabled;
+extern struct list_head scx_sched_all;
 #ifdef CONFIG_EXT_SUB_SCHED
 extern const struct rhashtable_params scx_sched_hash_params;
 extern struct rhashtable scx_sched_hash;
@@ -2358,6 +2432,7 @@ static inline struct scx_sched *scx_parent(struct scx_sched *sch)
 	else
 		return NULL;
 }
+
 #else	/* CONFIG_EXT_SUB_SCHED */
 static inline bool scx_has_subs(void) { return false; }
 
@@ -2389,6 +2464,7 @@ static inline struct scx_sched *scx_prog_sched(const struct bpf_prog_aux *aux)
 }
 
 static inline struct scx_sched *scx_parent(struct scx_sched *sch) { return NULL; }
+
 #endif	/* CONFIG_EXT_SUB_SCHED */
 
 #endif /* _KERNEL_SCHED_EXT_INTERNAL_H */

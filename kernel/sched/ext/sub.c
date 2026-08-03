@@ -28,6 +28,13 @@
  */
 DEFINE_STATIC_KEY_FALSE(__scx_has_subs);
 
+/* latched at root enable before any rescue runs */
+static s32 scx_rescue_bw_1024;
+static s64 scx_rescue_quantum_ns;
+static s64 scx_rescue_sat_delta_ns;
+static unsigned long scx_rescue_decay_halflife;
+static unsigned long scx_rescue_overload_after;
+
 /**
  * scx_skip_subtree_pre - Skip @pos's subtree in a pre-order walk
  * @pos: current position
@@ -229,25 +236,466 @@ void scx_init_root_caps(struct scx_sched *sch)
 	}
 }
 
+/* unserved remainder of @rq's rescuee's admitted slice, 0 once fully served */
+static s64 scx_rescue_slice_remaining(struct rq *rq)
+{
+	s64 served = rq->scx.rescue.curr->se.sum_exec_runtime - rq->scx.rescue.exec_snap;
+
+	return max(rq->scx.rescue.slice - served, 0);
+}
+
+/*
+ * Decay @pcpu's rescue usage average in place, halving per the knob-derived
+ * halflife, see scx_rescue_set_knobs(). The timestamp advances only by whole
+ * halflives.
+ */
+static u64 scx_rescue_decay_avg(struct scx_sched_pcpu *pcpu)
+{
+	unsigned long halflife = scx_rescue_decay_halflife;
+	u64 n = div_u64(get_jiffies_64() - pcpu->rescue_avg_at, halflife);
+
+	if (n) {
+		pcpu->rescue_avg = n < 64 ? pcpu->rescue_avg >> n : 0;
+		pcpu->rescue_avg_at += n * halflife;
+	}
+	return pcpu->rescue_avg;
+}
+
 /**
- * scx_local_or_reject_dsq - Pick the local or reject DSQ for an insert
+ * scx_rescue_charge - Charge the rescuee's runtime
+ * @rq: rq the rescuee is running on
+ * @delta_exec: runtime being charged
+ *
+ * Also ends the rescue once the admitted slice has been served in full. Ending
+ * on served time rather than slice exhaustion bounds both the rescue and the
+ * charging when a scheduler extends the rescuee's slice.
+ */
+void scx_rescue_charge(struct rq *rq, s64 delta_exec)
+{
+	struct scx_sched_pcpu *pcpu;
+
+	lockdep_assert_rq_held(rq);
+
+	/*
+	 * A rescue slice is bounded by one quantum and tick-driven expiry can
+	 * overshoot by up to a tick. Clamp to avoid wild over-charges on VMs.
+	 */
+	delta_exec = min_t(s64, delta_exec, scx_rescue_quantum_ns + TICK_NSEC);
+
+	rq->scx.rescue.budget -= delta_exec;
+
+	/* per-cpu usage average feeds the overload victim pick */
+	pcpu = per_cpu_ptr(scx_task_sched(rq->curr)->pcpu, cpu_of(rq));
+	pcpu->rescue_avg = scx_rescue_decay_avg(pcpu) + delta_exec;
+
+	if (!scx_rescue_slice_remaining(rq))
+		scx_task_slice_ended(rq, rq->scx.rescue.curr);
+}
+
+/**
+ * scx_rescue_end - End the rescue execution on @rq
+ * @rq: rq of interest
+ *
+ * When no rescuee is left pending, the session is over and the balance above
+ * one quantum dies with it - it would otherwise become a banked license to
+ * preempt the cid owner long after the starvation ended. While waiters remain,
+ * the accrued deficit belongs to the queue and carries into the next rescue.
+ */
+void scx_rescue_end(struct rq *rq)
+{
+	lockdep_assert_rq_held(rq);
+
+	rq->scx.rescue.curr = NULL;
+	if (list_empty(&rq->scx.rescue.dsq.list))
+		rq->scx.rescue.budget = min(rq->scx.rescue.budget, scx_rescue_quantum_ns);
+}
+
+/**
+ * scx_rescue_keep - Keep the rescue going for a preempted-out rescuee
+ * @rq: rq @p is running on
+ * @p: task under rescue whose slice is exhausted
+ *
+ * Called from put_prev_task_scx() to decide what an exhausted slice means for
+ * the rescuee. scx_rescue_charge() ends the rescue the moment the admitted
+ * slice is fully served, so arriving here with the rescue still open means @p
+ * was preempted. Restore the unserved remainder and return %true - @p stays the
+ * rescuee and the caller reinserts it at the tail of the local DSQ, behind
+ * whatever preempted the rescuee.
+ *
+ * Return %false to end the rescue instead - the slice is already fully served,
+ * @p is leaving the rq or bypass is dismantling rescues.
+ */
+bool scx_rescue_keep(struct rq *rq, struct task_struct *p)
+{
+	s64 remaining = scx_rescue_slice_remaining(rq);
+
+	lockdep_assert_rq_held(rq);
+
+	if (!remaining || !(p->scx.flags & SCX_TASK_QUEUED) ||
+	    scx_bypassing(scx_task_sched(p), cpu_of(rq)))
+		return false;
+
+	scx_set_task_slice(p, remaining);
+	return true;
+}
+
+/**
+ * scx_rescue_accrue - Accrue budget at the configured fraction of elapsed time
+ * @rq: rq of interest
+ *
+ * A session spans from the first arrival until no rescuee is left, pending or
+ * admitted. While one is active the cap is three quanta and the balance drives
+ * escalation, see scx_rescue_timerfn(). Outside a session the cap is one
+ * quantum, so an idle gap funds the next arrival's admission but never an
+ * escalation.
+ */
+static void scx_rescue_accrue(struct rq *rq)
+{
+	bool in_session = rq->scx.rescue.curr || !list_empty(&rq->scx.rescue.dsq.list);
+	s64 cap = in_session ? 3 * scx_rescue_quantum_ns : scx_rescue_quantum_ns;
+	s64 delta;
+	u64 now;
+
+	lockdep_assert_rq_held(rq);
+
+	/* not every path here holds an updated rq clock, use __scx_bpf_now() */
+	now = __scx_bpf_now(rq);
+	delta = now - rq->scx.rescue.clock;
+	rq->scx.rescue.clock = now;
+
+	/*
+	 * Avoid multiplication overflows by taking a shortcut when the gap is
+	 * large enough to fill the budget.
+	 */
+	if (delta >= scx_rescue_sat_delta_ns)
+		rq->scx.rescue.budget = cap;
+	else
+		rq->scx.rescue.budget =
+			min(cap, rq->scx.rescue.budget +
+			    ((delta * scx_rescue_bw_1024) >> SCHED_CAPACITY_SHIFT));
+}
+
+/*
+ * The slice for the next admission - the quantum divided across the stranded
+ * tasks so that a crowded queue round-robins on shorter slices.
+ */
+static s64 scx_rescue_next_slice(struct rq *rq)
+{
+	s64 min_slice = max_t(s64, SCX_RESCUE_MIN_SLICE_US * NSEC_PER_USEC, TICK_NSEC);
+	u32 depth = rq->scx.rescue.dsq.nr ?: 1;
+
+	return clamp(div_s64(scx_rescue_quantum_ns, depth), min_slice, scx_rescue_quantum_ns);
+}
+
+static void scx_rescue_timer_arm(struct rq *rq)
+{
+	struct timer_list *timer = &rq->scx.rescue.timer;
+	s64 delay = scx_rescue_quantum_ns / 4;	/* should be granular enough */
+
+	if (timer_pending(timer))
+		return;
+
+	/*
+	 * While the head waiter can't be admitted because the bucket is short
+	 * of a full quantum, stretch to the full funding delay.
+	 */
+	if (!rq->scx.rescue.curr && rq->scx.rescue.budget < scx_rescue_quantum_ns) {
+		s64 deficit = scx_rescue_quantum_ns - rq->scx.rescue.budget;
+
+		delay = max(delay,
+			    div_s64(deficit << SCHED_CAPACITY_SHIFT, scx_rescue_bw_1024));
+	}
+
+	/* +1 rounds up so the beat is due by the time the timer fires */
+	timer->expires = jiffies + nsecs_to_jiffies(delay) + 1;
+	add_timer_on(timer, cpu_of(rq));
+}
+
+/**
+ * scx_rescue_admit - Start rescuing @p on @rq
+ * @rq: rq @p is being admitted on
+ * @p: task being admitted, off any DSQ
+ * @slice: CPU time to grant
+ *
+ * The schedulers keep their normal control over @p and may preempt or reslice
+ * it. @slice is measured on served CPU time against the snapshot taken here, so
+ * neither shortens the rescue, see scx_rescue_charge() and scx_rescue_keep().
+ * Prolonged denial escalates into protected execution, see
+ * scx_rescue_timerfn().
+ */
+static void scx_rescue_admit(struct rq *rq, struct task_struct *p, s64 slice)
+{
+	lockdep_assert_rq_held(rq);
+	WARN_ON_ONCE(rq->scx.rescue.curr);
+
+	rq->scx.rescue.curr = p;
+	rq->scx.rescue.slice = slice;
+	rq->scx.rescue.exec_snap = p->se.sum_exec_runtime;
+	scx_set_task_slice(p, slice);
+	scx_rescue_timer_arm(rq);
+}
+
+/**
+ * scx_rescue_try_admit - Try to admit a freshly stranded task
+ * @rq: rq @p is being inserted on
+ * @p: stranded task being diverted to rescue
+ *
+ * One rescue at a time and earlier arrivals go first. Admission needs a full
+ * quantum of budget, spent as the rescue runs. Return %true if @p was admitted
+ * and should be inserted at the tail of @rq's local DSQ, %false if it has to
+ * park on the rescue DSQ, with the timer armed to admit it later.
+ */
+static bool scx_rescue_try_admit(struct rq *rq, struct task_struct *p)
+{
+	scx_rescue_accrue(rq);
+
+	if (!rq->scx.rescue.curr && list_empty(&rq->scx.rescue.dsq.list) &&
+	    rq->scx.rescue.budget >= scx_rescue_quantum_ns) {
+		scx_rescue_admit(rq, p, scx_rescue_quantum_ns);
+		return true;
+	}
+
+	scx_rescue_timer_arm(rq);
+	return false;
+}
+
+/**
+ * scx_rescue_check_overload - Eject the top rescue consumer on a stuck rescue
+ * @rq: rq whose rescue timer fired
+ *
+ * If the oldest waiter on @rq's rescue DSQ has been queued for too long, rescue
+ * demand on this cpu persistently exceeds the configured bandwidth. Eject the
+ * sub with the highest recent rescue consumption instead of letting the
+ * scheduler stall path blame the waiter's owner, who may just be crowded out.
+ */
+static void scx_rescue_check_overload(struct rq *rq)
+{
+	struct scx_sched *victim = NULL, *pos;
+	struct task_struct *p;
+	int cpu = cpu_of(rq);
+	u64 max_avg = 0;
+	u32 dur_ms;
+
+	lockdep_assert_rq_held(rq);
+
+	p = list_first_entry_or_null(&rq->scx.rescue.dsq.list, struct task_struct,
+				     scx.dsq_list.node);
+	if (!p)
+		return;
+
+	/* has the head waiter been queued for longer than the threshold? */
+	if (time_before(jiffies, p->scx.rescue_at + scx_rescue_overload_after))
+		return;
+
+	/*
+	 * Grace period after the last ejection on this cpu - the freed
+	 * bandwidth gets one threshold's worth of time to drain the backlog
+	 * before another sub is judged.
+	 */
+	if (time_before64(get_jiffies_64(), rq->scx.rescue.kill_at +
+			  scx_rescue_overload_after))
+		return;
+
+	list_for_each_entry_rcu(pos, &scx_sched_all, all) {
+		u64 avg = scx_rescue_decay_avg(per_cpu_ptr(pos->pcpu, cpu));
+
+		/* skip an already-exiting sub, else the ejection is wasted */
+		if (pos->level && avg > max_avg &&
+		    atomic_read(&pos->exit_kind) == SCX_EXIT_NONE) {
+			max_avg = avg;
+			victim = pos;
+		}
+	}
+	if (!victim)
+		return;
+
+	rq->scx.rescue.kill_at = get_jiffies_64();
+	dur_ms = jiffies_to_msecs(jiffies - p->scx.rescue_at);
+	__scx_exit(victim, SCX_EXIT_ERROR_RESCUE, 0, cpu,
+		   "used too much rescue CPU time (%llums) while %s[%d] waited %u.%03us to be rescued",
+		   div_u64(max_avg, NSEC_PER_MSEC), p->comm, p->pid, dur_ms / 1000,
+		   dur_ms % 1000);
+}
+
+/**
+ * scx_rescue_timerfn - Drive and pace rescue execution
+ * @timer: rq->scx.rescue.timer
+ *
+ * Runs every quarter quantum while a rescuee exists, pending or admitted, see
+ * scx_rescue_timer_arm(). The head waiter is admitted once the bucket holds a
+ * full quantum and granted its slice, see scx_rescue_next_slice(). A session
+ * whose budget accumulates over two quanta with the admitted rescuee still
+ * waiting escalates - the rescuee's remaining slice turns into protected
+ * execution and it preempts the current task. An overloaded rescue queue ejects
+ * the top consumer, see scx_rescue_check_overload().
+ */
+static void scx_rescue_timerfn(struct timer_list *timer)
+{
+	struct rq *rq = timer_container_of(rq, timer, scx.rescue.timer);
+	struct task_struct *p;
+
+	guard(rq_lock_irqsave)(rq);
+
+	p = rq->scx.rescue.curr;
+	if (!p && list_empty(&rq->scx.rescue.dsq.list))
+		return;
+
+	scx_rescue_accrue(rq);
+	scx_rescue_check_overload(rq);
+
+	if (!p) {
+		s64 slice = scx_rescue_next_slice(rq);
+
+		/* no rescue in progress */
+		if (rq->scx.rescue.budget < scx_rescue_quantum_ns)
+			goto out_arm;
+
+		/* there's enough budget to start rescuing the next one */
+		p = list_first_entry(&rq->scx.rescue.dsq.list, struct task_struct,
+				     scx.dsq_list.node);
+		scx_task_unlink_from_dsq(p, &rq->scx.rescue.dsq);
+		scx_rescue_admit(rq, p, slice);
+		scx_move_local_task_to_local_dsq(scx_task_sched(p), p, SCX_ENQ_IGNORE_CAPS,
+						 &rq->scx.rescue.dsq, rq);
+		if (sched_class_above(&ext_sched_class, rq->curr->sched_class))
+			resched_curr(rq);
+	} else if (p->scx.dsq && rq->scx.rescue.budget > 2 * scx_rescue_quantum_ns) {
+		/*
+		 * The rescuee waited for the CPU for too long. Escalate - grant
+		 * the unserved remainder, protect it from the schedulers and
+		 * preempt the current task. The slice is set before the
+		 * protection. Repeat beats only repeat the head move - the
+		 * slice write is refused on a protected task.
+		 */
+		scx_set_task_slice(p, scx_rescue_slice_remaining(rq));
+		p->scx.flags |= SCX_TASK_PROTECTED;
+		scx_task_unlink_from_dsq(p, &rq->scx.local_dsq);
+		scx_move_local_task_to_local_dsq(scx_task_sched(p), p,
+					SCX_ENQ_HEAD | SCX_ENQ_PREEMPT | SCX_ENQ_IGNORE_CAPS,
+					&rq->scx.local_dsq, rq);
+	}
+out_arm:
+	scx_rescue_timer_arm(rq);
+}
+
+/* flush out tasks waiting for rescue before a CPU goes down */
+void scx_rescue_flush(struct rq *rq)
+{
+	struct task_struct *p, *n;
+
+	lockdep_assert_rq_held(rq);
+
+	/* sched domain rebuilds call rq_offline with the CPU staying alive */
+	if (cpu_active(cpu_of(rq)))
+		return;
+
+	/* end the current rescue */
+	if (rq->scx.rescue.curr)
+		scx_task_slice_ended(rq, rq->scx.rescue.curr);
+
+	/* and flush out all pending ones */
+	list_for_each_entry_safe(p, n, &rq->scx.rescue.dsq.list, scx.dsq_list.node) {
+		scx_task_unlink_from_dsq(p, &rq->scx.rescue.dsq);
+		scx_move_local_task_to_local_dsq(scx_task_sched(p), p, SCX_ENQ_IGNORE_CAPS,
+						 &rq->scx.rescue.dsq, rq);
+	}
+
+	timer_delete(&rq->scx.rescue.timer);
+}
+
+void scx_rescue_dump(struct seq_buf *s, struct rq *rq)
+{
+	struct task_struct *p = rq->scx.rescue.curr;
+
+	scx_dump_line(s, "          rescue=%u budget=%lldus rescuing=%s[%d]",
+		      rq->scx.rescue.dsq.nr,
+		      div_s64(rq->scx.rescue.budget, NSEC_PER_USEC),
+		      p ? p->comm : "none", p ? p->pid : -1);
+}
+
+/*
+ * A scheduler whose stall watchdog is shorter than the overload threshold gets
+ * stall-killed over its parked waiters before the overload check can eject the
+ * actual top consumer. The root's knobs set the threshold, warn on any
+ * scheduler that doesn't fit it.
+ */
+static void scx_rescue_check_timeout(struct scx_sched *sch)
+{
+	if (!scx_rescue_bw_1024 || sch->watchdog_timeout > scx_rescue_overload_after)
+		return;
+
+	pr_warn("sched_ext: %s: watchdog timeout %ums <= rescue overload threshold %ums\n",
+		sch->ops.name, jiffies_to_msecs(sch->watchdog_timeout),
+		jiffies_to_msecs(scx_rescue_overload_after));
+}
+
+/* latch the rescue parameters on root scheduler enable */
+void scx_rescue_set_knobs(struct scx_sched *sch)
+{
+	s32 bw_ppt = sch->ops.rescue_bandwidth_ppt ?: SCX_RESCUE_DFL_BW_PPT;
+	s64 quantum_us = sch->ops.rescue_quantum_us ?: SCX_RESCUE_DFL_QUANTUM_US;
+	s64 period_ns;
+
+	if (sch->ops.rescue_bandwidth_ppt == SCX_RESCUE_DISABLE) {
+		scx_rescue_bw_1024 = 0;
+		return;
+	}
+
+	scx_rescue_bw_1024 = bw_ppt * SCHED_CAPACITY_SCALE / 1000;
+	scx_rescue_quantum_ns = max(quantum_us * NSEC_PER_USEC, TICK_NSEC);
+	scx_rescue_sat_delta_ns =
+		div_s64((4 * scx_rescue_quantum_ns + TICK_NSEC) << SCHED_CAPACITY_SHIFT,
+			scx_rescue_bw_1024);
+
+	/*
+	 * The overload threshold and the decay halflife scale with the funding
+	 * period - the time the bucket takes to fund one full quantum.
+	 */
+	period_ns = div_s64(scx_rescue_quantum_ns << SCHED_CAPACITY_SHIFT, scx_rescue_bw_1024);
+	scx_rescue_overload_after =
+		clamp(nsecs_to_jiffies(SCX_RESCUE_OVERLOAD_MULT * period_ns),
+		      msecs_to_jiffies(SCX_RESCUE_MIN_OVERLOAD_MS),
+		      msecs_to_jiffies(SCX_RESCUE_MAX_OVERLOAD_MS));
+	scx_rescue_decay_halflife = scx_rescue_overload_after / 4;
+
+	/* a single in-budget wait must not cross the overload trigger */
+	if (nsecs_to_jiffies(period_ns) > scx_rescue_overload_after / 2)
+		pr_warn("sched_ext: %s: rescue funding period %lldms > overload threshold %ums / 2\n",
+			sch->ops.name, div_s64(period_ns, NSEC_PER_MSEC),
+			jiffies_to_msecs(scx_rescue_overload_after));
+
+	scx_rescue_check_timeout(sch);
+}
+
+void scx_rescue_init(struct rq *rq)
+{
+	BUG_ON(scx_init_dsq(&rq->scx.rescue.dsq, SCX_DSQ_RESCUE, NULL));
+	timer_setup(&rq->scx.rescue.timer, scx_rescue_timerfn, TIMER_PINNED);
+	rq->scx.rescue.kill_at = get_jiffies_64();
+}
+
+/**
+ * scx_resolve_local_dsq - Pick the local, rescue or reject DSQ for an insert
  * @sch: enqueuing sub-sched
  * @rq: rq whose local DSQ @p targets
  * @p: task being inserted
  * @enq_flags: in/out, unhonored flags are cleared
  *
- * Return @rq's local DSQ if @sch holds the required caps on @rq's cid,
- * otherwise @rq's reject DSQ after recording the reenq reason on @p.
+ * Return @rq's local DSQ if @sch holds the required caps on @rq's cid.
+ * Otherwise, return @rq's rescue DSQ if the insert carries %SCX_ENQ_RESCUE and
+ * rescue is enabled, or @rq's reject DSQ after recording the reenq reason on
+ * @p.
  *
- * %SCX_ENQ_IMMED and %SCX_ENQ_PREEMPT are cleared when diverting to reject.
- * %SCX_ENQ_PREEMPT is also cleared on a fallback migration-disabled admission.
+ * %SCX_ENQ_IMMED, %SCX_ENQ_PREEMPT and %SCX_ENQ_HEAD are cleared when diverting
+ * to rescue or reject. %SCX_ENQ_PREEMPT is also cleared on a fallback
+ * migration-disabled admission.
  *
  * Bypass doesn't need special-casing as a bypassing sched's tasks are enqueued
  * to and run by its nearest non-bypassing ancestor. If root is bypassing, it
  * always holds all caps.
  */
-struct scx_dispatch_q *scx_local_or_reject_dsq(struct scx_sched *sch, struct rq *rq,
-					       struct task_struct *p, u64 *enq_flags)
+struct scx_dispatch_q *scx_resolve_local_dsq(struct scx_sched *sch, struct rq *rq,
+					     struct task_struct *p, u64 *enq_flags)
 {
 	if (!scx_has_subs())
 		return &rq->scx.local_dsq;
@@ -262,7 +710,7 @@ struct scx_dispatch_q *scx_local_or_reject_dsq(struct scx_sched *sch, struct rq 
 	 * @p's owner (@sch). Check caps against the scheduling sched.
 	 */
 	if (*enq_flags & SCX_ENQ_PREEMPT)
-		needed |= scx_caps_for_preempt(asch, rq);
+		needed |= scx_caps_for_preempt(asch, rq, *enq_flags);
 	missing = scx_missing_caps(asch, cpu_of(rq), needed);
 
 	/* requirements met */
@@ -282,17 +730,28 @@ struct scx_dispatch_q *scx_local_or_reject_dsq(struct scx_sched *sch, struct rq 
 		return &rq->scx.local_dsq;
 	}
 
+	/*
+	 * Diverting to rescue or reject, neither of which honors IMMED, PREEMPT
+	 * or HEAD - a diversion has no priority and IMMED is not allowed on
+	 * non-local DSQs. Strip the enq and task flags along with the slice.
+	 */
+	*enq_flags &= ~(SCX_ENQ_IMMED | SCX_ENQ_PREEMPT | SCX_ENQ_HEAD |
+			SCX_ENQ_APPLY_SLICE | SCX_ENQ_SLICE_DFL);
+	p->scx.flags &= ~SCX_TASK_IMMED;
+
+	/* the enqueuer opted for rescue instead of rejection and reenqueue */
+	if ((*enq_flags & SCX_ENQ_RESCUE) && likely(scx_rescue_bw_1024)) {
+		__scx_add_event(sch, SCX_EV_SUB_RESCUE, 1);
+		if (scx_rescue_try_admit(rq, p))
+			return &rq->scx.local_dsq;
+
+		/* queueing, the overload trigger measures the wait from here */
+		p->scx.rescue_at = jiffies;
+		return &rq->scx.rescue.dsq;
+	}
+
 	p->scx.reenq_reason_caps = missing;
 	p->scx.reenq_reason_cid = cid;
-
-	/*
-	 * Only local DSQ can honor IMMED and dsq_inc_nr() WARNs on IMMED into
-	 * others. Strip both the enq flag and the sticky task flag - the
-	 * latter can carry in from an earlier admitted IMMED insert. Strip
-	 * PREEMPT too.
-	 */
-	*enq_flags &= ~(SCX_ENQ_IMMED | SCX_ENQ_PREEMPT);
-	p->scx.flags &= ~SCX_TASK_IMMED;
 
 	return &rq->scx.reject_dsq;
 }
@@ -302,8 +761,8 @@ bool scx_task_reenq_on_cap_revoke(struct rq *rq, struct task_struct *p)
 {
 	u64 missing;
 
-	/* migration-disabled tasks are admitted regardless of caps */
-	if (is_migration_disabled(p))
+	/* migration-disabled tasks and the rescuee are admitted capless */
+	if (is_migration_disabled(p) || p == scx_rescuee(rq))
 		return false;
 
 	missing = scx_missing_caps(scx_task_sched(p), cpu_of(rq), scx_caps_for_task(p));
@@ -1307,6 +1766,8 @@ void scx_sub_enable_workfn(struct kthread_work *work)
 	ret = scx_validate_ops(sch, ops);
 	if (ret)
 		goto err_disable;
+
+	scx_rescue_check_timeout(sch);
 
 	/*
 	 * Allocate pshard[] before scx_link_sched() publishes @sch into the

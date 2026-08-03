@@ -59,6 +59,7 @@ enum scx_dsq_id_flags {
 	SCX_DSQ_LOCAL		= SCX_DSQ_FLAG_BUILTIN | 2,
 	SCX_DSQ_BYPASS		= SCX_DSQ_FLAG_BUILTIN | 3,
 	SCX_DSQ_REJECT		= SCX_DSQ_FLAG_BUILTIN | 4,	/* internal - see find_dsq_for_dispatch() */
+	SCX_DSQ_RESCUE		= SCX_DSQ_FLAG_BUILTIN | 5,	/* internal - see find_dsq_for_dispatch() */
 	SCX_DSQ_LOCAL_ON	= SCX_DSQ_FLAG_BUILTIN | SCX_DSQ_FLAG_LOCAL_ON,
 	SCX_DSQ_LOCAL_CPU_MASK	= 0xffffffffLLU,
 };
@@ -102,6 +103,7 @@ enum scx_ent_flags {
 	SCX_TASK_DEQD_FOR_SLEEP	= 1 << 3, /* last dequeue was for SLEEP */
 	SCX_TASK_SUB_INIT	= 1 << 4, /* task being initialized for a sub sched */
 	SCX_TASK_IMMED		= 1 << 5, /* task is on local DSQ with %SCX_ENQ_IMMED */
+	SCX_TASK_PROTECTED	= 1 << 6, /* slice and DSQ head position protected */
 
 	/*
 	 * Bits 8 to 10 are used to carry task state:
@@ -192,6 +194,8 @@ struct sched_ext_entity {
 	atomic_long_t		ops_state;
 	u64			ddsp_dsq_id;
 	u64			ddsp_enq_flags;
+	u64			ddsp_slice;
+	u64			ddsp_vtime;
 	struct scx_dsq_list_node dsq_list;	/* dispatch order */
 	struct rb_node		dsq_priq;	/* p->scx.dsq_vtime order */
 	u32			dsq_seq;
@@ -210,6 +214,9 @@ struct sched_ext_entity {
 
 #ifdef CONFIG_SCHED_CORE
 	u64			core_sched_at;	/* see scx_prio_less() */
+#endif
+#ifdef CONFIG_EXT_SUB_SCHED
+	unsigned long		rescue_at;	/* queued on a rescue DSQ at, jiffies */
 #endif
 
 	/*
