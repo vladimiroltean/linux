@@ -1469,6 +1469,7 @@ static void dasd_eckd_path_available_action(struct dasd_device *device,
 }
 
 static void do_pe_handler_work(struct work_struct *work)
+__context_unsafe(/* Conditional locking */)
 {
 	struct pe_handler_work_data *data;
 	struct dasd_device *device;
@@ -1502,6 +1503,7 @@ static void do_pe_handler_work(struct work_struct *work)
 
 static int dasd_eckd_pe_handler(struct dasd_device *device,
 				__u8 tbvpm, __u8 fcsecpm)
+__context_unsafe(/* Conditional locking */)
 {
 	struct pe_handler_work_data *data;
 
@@ -1602,6 +1604,7 @@ static int dasd_eckd_read_features(struct dasd_device *device)
 
 /* Read Volume Information - Volume Storage Query */
 static int dasd_eckd_read_vol_info(struct dasd_device *device)
+__context_unsafe(/* Conditional locking */)
 {
 	struct dasd_eckd_private *private = device->private;
 	struct dasd_psf_prssd_data *prssdp;
@@ -5968,6 +5971,7 @@ dasd_eckd_fill_info(struct dasd_device * device,
  */
 static int
 dasd_eckd_release(struct dasd_device *device)
+__context_unsafe(/* Conditional locking */)
 {
 	struct dasd_ccw_req *cqr;
 	int rc;
@@ -6023,6 +6027,7 @@ dasd_eckd_release(struct dasd_device *device)
  */
 static int
 dasd_eckd_reserve(struct dasd_device *device)
+__context_unsafe(/* Conditional locking */)
 {
 	struct dasd_ccw_req *cqr;
 	int rc;
@@ -6077,6 +6082,7 @@ dasd_eckd_reserve(struct dasd_device *device)
  */
 static int
 dasd_eckd_steal_lock(struct dasd_device *device)
+__context_unsafe(/* Conditional locking */)
 {
 	struct dasd_ccw_req *cqr;
 	int rc;
@@ -6132,6 +6138,7 @@ dasd_eckd_steal_lock(struct dasd_device *device)
  */
 static int dasd_eckd_snid(struct dasd_device *device,
 			  void __user *argp)
+__context_unsafe(/* Conditional locking */)
 {
 	struct dasd_ccw_req *cqr;
 	int rc;
