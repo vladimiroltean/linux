@@ -190,15 +190,6 @@
 
 #define LNaRCCR0(lane)				(0x800 + (lane) * 0x100 + 0x68)
 #define LNaRCCR0_CAL_EN				BIT(31)
-#define LNaRCCR0_MEAS_EN			BIT(30)
-#define LNaRCCR0_CAL_BIN_SEL			BIT(28)
-#define LNaRCCR0_CAL_DC3_DIS			BIT(27)
-#define LNaRCCR0_CAL_DC2_DIS			BIT(26)
-#define LNaRCCR0_CAL_DC1_DIS			BIT(25)
-#define LNaRCCR0_CAL_DC0_DIS			BIT(24)
-#define LNaRCCR0_CAL_AC3_OV_EN			BIT(15)
-#define LNaRCCR0_CAL_AC3_OV			GENMASK(11, 8)
-#define LNaRCCR0_CAL_AC2_OV_EN			BIT(7)
 
 #define LNaRSCCR0(lane)				(0x800 + (lane) * 0x100 + 0x74)
 #define LNaRSCCR0_SMP_OFF_EN			BIT(31)
@@ -356,8 +347,6 @@ struct lynx_28g_proto_conf {
 	/* LNaRSCCR0 */
 	int smp_autoz_d1r;
 	int smp_autoz_eg1r;
-	/* LNaRCCR0 */
-	int rccr0;
 	/* LNaTTLCR0 */
 	int ttlcr0;
 };
@@ -390,7 +379,6 @@ static const struct lynx_28g_proto_conf lynx_28g_proto_conf[LANE_MODE_MAX] = {
 		.spare_in = 0,
 		.smp_autoz_d1r = 0,
 		.smp_autoz_eg1r = 0,
-		.rccr0 = LNaRCCR0_CAL_EN,
 		.ttlcr0 = LNaTTLCR0_TTL_SLO_PM_BYP |
 			  LNaTTLCR0_DATA_IN_SSC,
 	},
@@ -421,7 +409,6 @@ static const struct lynx_28g_proto_conf lynx_28g_proto_conf[LANE_MODE_MAX] = {
 		.spare_in = 0,
 		.smp_autoz_d1r = 0,
 		.smp_autoz_eg1r = 0,
-		.rccr0 = LNaRCCR0_CAL_EN,
 		.ttlcr0 = LNaTTLCR0_TTL_SLO_PM_BYP |
 			  LNaTTLCR0_DATA_IN_SSC,
 	},
@@ -452,7 +439,6 @@ static const struct lynx_28g_proto_conf lynx_28g_proto_conf[LANE_MODE_MAX] = {
 		.spare_in = 0,
 		.smp_autoz_d1r = 2,
 		.smp_autoz_eg1r = 0,
-		.rccr0 = LNaRCCR0_CAL_EN,
 		.ttlcr0 = LNaTTLCR0_TTL_SLO_PM_BYP |
 			  LNaTTLCR0_DATA_IN_SSC,
 	},
@@ -483,7 +469,6 @@ static const struct lynx_28g_proto_conf lynx_28g_proto_conf[LANE_MODE_MAX] = {
 		.spare_in = 0,
 		.smp_autoz_d1r = 2,
 		.smp_autoz_eg1r = 0,
-		.rccr0 = LNaRCCR0_CAL_EN,
 		.ttlcr0 = LNaTTLCR0_TTL_SLO_PM_BYP |
 			  LNaTTLCR0_DATA_IN_SSC,
 	},
@@ -514,7 +499,6 @@ static const struct lynx_28g_proto_conf lynx_28g_proto_conf[LANE_MODE_MAX] = {
 		.spare_in = 0,
 		.smp_autoz_d1r = 2,
 		.smp_autoz_eg1r = 0,
-		.rccr0 = LNaRCCR0_CAL_EN,
 		.ttlcr0 = LNaTTLCR0_TTL_SLO_PM_BYP |
 			  LNaTTLCR0_DATA_IN_SSC,
 	},
@@ -545,11 +529,6 @@ static const struct lynx_28g_proto_conf lynx_28g_proto_conf[LANE_MODE_MAX] = {
 		.spare_in = 3,
 		.smp_autoz_d1r = 2,
 		.smp_autoz_eg1r = 2,
-		.rccr0 = LNaRCCR0_CAL_EN |
-			 LNaRCCR0_CAL_DC3_DIS |
-			 LNaRCCR0_CAL_DC2_DIS |
-			 LNaRCCR0_CAL_DC1_DIS |
-			 LNaRCCR0_CAL_DC0_DIS,
 		.ttlcr0 = LNaTTLCR0_DATA_IN_SSC |
 			  FIELD_PREP_CONST(LNaTTLCR0_CDR_MIN_SMP_ON, 1),
 	},
@@ -580,11 +559,6 @@ static const struct lynx_28g_proto_conf lynx_28g_proto_conf[LANE_MODE_MAX] = {
 		.spare_in = 3,
 		.smp_autoz_d1r = 2,
 		.smp_autoz_eg1r = 2,
-		.rccr0 = LNaRCCR0_CAL_EN |
-			 LNaRCCR0_CAL_DC3_DIS |
-			 LNaRCCR0_CAL_DC2_DIS |
-			 LNaRCCR0_CAL_DC1_DIS |
-			 LNaRCCR0_CAL_DC0_DIS,
 		.ttlcr0 = LNaTTLCR0_DATA_IN_SSC |
 			  FIELD_PREP_CONST(LNaTTLCR0_CDR_MIN_SMP_ON, 1),
 	},
@@ -615,7 +589,6 @@ static const struct lynx_28g_proto_conf lynx_28g_proto_conf[LANE_MODE_MAX] = {
 		.spare_in = 0,
 		.smp_autoz_d1r = 2,
 		.smp_autoz_eg1r = 0,
-		.rccr0 = LNaRCCR0_CAL_EN,
 		.ttlcr0 = LNaTTLCR0_TTL_SLO_PM_BYP |
 			  LNaTTLCR0_DATA_IN_SSC,
 	},
@@ -646,7 +619,6 @@ static const struct lynx_28g_proto_conf lynx_28g_proto_conf[LANE_MODE_MAX] = {
 		.spare_in = 0,
 		.smp_autoz_d1r = 2,
 		.smp_autoz_eg1r = 0,
-		.rccr0 = LNaRCCR0_CAL_EN,
 		.ttlcr0 = LNaTTLCR0_TTL_SLO_PM_BYP |
 			  LNaTTLCR0_DATA_IN_SSC,
 	},
@@ -1262,7 +1234,7 @@ static void lynx_28g_lane_change_proto_conf(struct lynx_28g_lane *lane,
 			  LNaRSCCR0_SMP_AUTOZ_D1R |
 			  LNaRSCCR0_SMP_AUTOZ_EG1R);
 
-	lynx_28g_lane_write(lane, LNaRCCR0, conf->rccr0);
+	lynx_28g_lane_write(lane, LNaRCCR0, LNaRCCR0_CAL_EN);
 	lynx_28g_lane_write(lane, LNaTTLCR0, conf->ttlcr0);
 }
 
