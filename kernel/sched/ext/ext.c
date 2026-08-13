@@ -467,13 +467,14 @@ static inline void scx_call_op_set_cpumask(struct scx_sched *sch, struct rq *rq,
 
 		/*
 		 * Build the per-cpu arena cmask from kernel geometry via @ref,
-		 * never reading its BPF-writable header, and hand BPF the arena
-		 * address. The rq lock makes this cpu the sole kernel writer.
+		 * never reading its BPF-writable header. set_cmask()'s __arena
+		 * argument takes the kernel address and the struct_ops
+		 * trampoline rebases it into BPF's arena pointer form. The rq
+		 * lock makes this cpu the sole kernel writer.
 		 */
 		scx_cmask_ref_init_kern(sch, kern_va, 0, num_possible_cpus(), &ref);
 		scx_cmask_ref_from_cpumask(&ref, cpumask);
-		SCX_CALL_CID_OP_TASK(sch, set_cmask, rq, task,
-				     scx_kaddr_to_arena(sch, kern_va));
+		SCX_CALL_CID_OP_TASK(sch, set_cmask, rq, task, kern_va);
 	} else {
 		SCX_CALL_OP_TASK(sch, set_cpumask, rq, task, cpumask);
 	}
@@ -8339,9 +8340,8 @@ static struct bpf_struct_ops bpf_sched_ext_ops = {
  * fresh stubs, set_cmask due to an argument type difference and the sub-sched
  * notifiers because no cpu-form stub exists to reuse.
  */
-static void sched_ext_ops_cid__set_cmask(struct task_struct *p,
-					 const struct scx_cmask *cmask) {}
-static void sched_ext_ops__sub_caps_updated(const struct scx_cmask *cmask, u64 caps) {}
+static void sched_ext_ops_cid__set_cmask(struct task_struct *p, const struct scx_cmask *cmask__arena) {}
+static void sched_ext_ops__sub_caps_updated(const struct scx_cmask *cmask__arena, u64 caps) {}
 static void sched_ext_ops__sub_ecaps_updated(s32 cid, u64 before, u64 after) {}
 
 static struct sched_ext_ops_cid __bpf_ops_sched_ext_ops_cid = {
@@ -10677,20 +10677,20 @@ out:
 
 #ifndef CONFIG_EXT_SUB_SCHED
 __bpf_kfunc s32 scx_bpf_sub_grant(u64 cgroup_id, u64 caps,
-				  const struct scx_cmask *cmask__ign,
-				  struct scx_cmask *denied_out__ign,
+				  const struct scx_cmask *cmask__arena,
+				  struct scx_cmask *denied_out__arena__nullable,
 				  const struct bpf_prog_aux *aux)
 {
 	return -EOPNOTSUPP;
 }
 
 __bpf_kfunc void scx_bpf_sub_revoke(u64 cgroup_id, u64 caps,
-				    const struct scx_cmask *cmask__ign,
+				    const struct scx_cmask *cmask__arena,
 				    const struct bpf_prog_aux *aux)
 {
 }
 
-__bpf_kfunc s32 scx_bpf_sub_caps(u64 cgroup_id, u64 caps, struct scx_cmask *out__ign,
+__bpf_kfunc s32 scx_bpf_sub_caps(u64 cgroup_id, u64 caps, struct scx_cmask *out__arena,
 				 const struct bpf_prog_aux *aux)
 {
 	return -EOPNOTSUPP;
