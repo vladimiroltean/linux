@@ -122,6 +122,14 @@ const char *lynx_lane_mode_str(enum lynx_lane_mode lane_mode)
 		return "40GBase-R/XLAUI";
 	case LANE_MODE_40GBASEKR4:
 		return "40GBase-KR4";
+	case LANE_MODE_50GBASER:
+		return "50GBase-R";
+	case LANE_MODE_50GBASEKR2:
+		return "50GBase-KR2";
+	case LANE_MODE_100GBASER:
+		return "100GBase-R";
+	case LANE_MODE_100GBASEKR4:
+		return "100GBase-KR4";
 	default:
 		return "unknown";
 	}

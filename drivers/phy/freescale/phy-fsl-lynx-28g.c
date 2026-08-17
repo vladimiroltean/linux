@@ -224,6 +224,7 @@
 #define LNaPSS_TYPE_XFI				(PROTO_SEL_XFI_10GBASER_KR_SXGMII << 2)
 #define LNaPSS_TYPE_40G				((PROTO_SEL_XFI_10GBASER_KR_SXGMII << 2) | 3)
 #define LNaPSS_TYPE_25G				(PROTO_SEL_25G_50G_100G << 2)
+#define LNaPSS_TYPE_50G				((PROTO_SEL_25G_50G_100G << 2) | 1)
 #define LNaPSS_TYPE_100G			((PROTO_SEL_25G_50G_100G << 2) | 2)
 
 /* MDEV_PORT is at the same bitfield address for all protocol converters */
@@ -1749,6 +1750,10 @@ static void lynx_28g_pll_read_configuration(struct lynx_pll *pll)
 		/* 12.890625GHz clock net */
 		__set_bit(LANE_MODE_25GBASER, pll->supported);
 		__set_bit(LANE_MODE_25GBASEKR, pll->supported);
+		__set_bit(LANE_MODE_50GBASER, pll->supported);
+		__set_bit(LANE_MODE_50GBASEKR2, pll->supported);
+		__set_bit(LANE_MODE_100GBASER, pll->supported);
+		__set_bit(LANE_MODE_100GBASEKR4, pll->supported);
 		break;
 	default:
 		/* 6GHz, 8GHz */
@@ -1782,6 +1787,12 @@ static void lynx_28g_lane_read_configuration(struct lynx_28g_lane *lane)
 		break;
 	case LNaPSS_TYPE_40G:
 		lane->mode = LANE_MODE_40GBASER_XLAUI;
+		break;
+	case LNaPSS_TYPE_50G:
+		lane->mode = LANE_MODE_50GBASER;
+		break;
+	case LNaPSS_TYPE_100G:
+		lane->mode = LANE_MODE_100GBASER;
 		break;
 	default:
 		lane->mode = LANE_MODE_UNKNOWN;

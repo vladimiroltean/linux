@@ -344,6 +344,7 @@ static const u16 mtip_vendor_regs[] = {
 /* Keep sorted in order of decreasing link speeds */
 static const enum ethtool_link_mode_bit_indices mtip_backplane_link_modes[] = {
 	ETHTOOL_LINK_MODE_100000baseKR4_Full_BIT,
+	ETHTOOL_LINK_MODE_50000baseKR2_Full_BIT,
 	ETHTOOL_LINK_MODE_40000baseKR4_Full_BIT,
 	ETHTOOL_LINK_MODE_25000baseKR_Full_BIT,
 	ETHTOOL_LINK_MODE_25000baseKR_S_Full_BIT,
