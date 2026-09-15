@@ -3102,6 +3102,15 @@ static void enetc_tx_onestep_tstamp(struct work_struct *work)
 	netif_tx_lock_bh(priv->ndev);
 
 	clear_bit_unlock(ENETC_TX_ONESTEP_TSTAMP_IN_PROGRESS, &priv->flags);
+
+	/* Serialized with enetc_stop() through netif_tx_disable(). Leave the
+	 * queued packets to be purged there.
+	 */
+	if (test_bit(ENETC_TX_DOWN, &priv->flags)) {
+		netif_tx_unlock_bh(priv->ndev);
+		return;
+	}
+
 	skb = skb_dequeue(&priv->tx_skbs);
 	if (skb)
 		enetc_start_xmit(skb, priv->ndev);
@@ -3201,7 +3210,11 @@ void enetc_stop(struct net_device *ndev)
 
 	set_bit(ENETC_TX_DOWN, &priv->flags);
 
-	netif_tx_stop_all_queues(ndev);
+	/* Unlike netif_tx_stop_all_queues(), this waits for concurrent
+	 * enetc_start_xmit() calls (including from enetc_tx_onestep_tstamp())
+	 * to finish, so their BDs are flushed by enetc_wait_bdrs() below.
+	 */
+	netif_tx_disable(ndev);
 
 	enetc_disable_rx_bdrs(priv);
 
@@ -3219,6 +3232,10 @@ void enetc_stop(struct net_device *ndev)
 		/* NAPI schedules the DIM work, which may update rx_ictt */
 		cancel_work_sync(&priv->int_vector[i]->rx_dim.work);
 	}
+
+	cancel_work_sync(&priv->tx_onestep_tstamp);
+	skb_queue_purge(&priv->tx_skbs);
+	clear_bit_unlock(ENETC_TX_ONESTEP_TSTAMP_IN_PROGRESS, &priv->flags);
 
 	enetc_clear_interrupts(priv);
 }
