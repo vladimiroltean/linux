@@ -1049,7 +1049,9 @@ static netdev_tx_t enetc_start_xmit(struct sk_buff *skb,
 {
 	struct enetc_skb_cb *enetc_cb = ENETC_SKB_CB(skb);
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
+	bool onestep_locked = false;
 	struct enetc_bdr *tx_ring;
+	netdev_tx_t ret;
 	int count;
 
 	/* Queue one-step Sync packet if already locked */
@@ -1059,6 +1061,7 @@ static netdev_tx_t enetc_start_xmit(struct sk_buff *skb,
 			skb_queue_tail(&priv->tx_skbs, skb);
 			return NETDEV_TX_OK;
 		}
+		onestep_locked = true;
 	}
 
 	tx_ring = priv->tx_ring[skb->queue_mapping];
@@ -1068,43 +1071,37 @@ static netdev_tx_t enetc_start_xmit(struct sk_buff *skb,
 		if (priv->active_offloads & ENETC_F_LSO &&
 		    (skb->len - enetc_lso_get_hdr_len(skb)) <=
 		    ENETC_LSO_MAX_DATA_LEN) {
-			if (enetc_bd_unused(tx_ring) < enetc_lso_count_descs(skb)) {
-				netif_stop_subqueue(ndev, tx_ring->index);
-				return NETDEV_TX_BUSY;
-			}
+			if (enetc_bd_unused(tx_ring) < enetc_lso_count_descs(skb))
+				goto tx_busy;
 
 			count = enetc_lso_hw_offload(tx_ring, skb);
 		} else {
 			/* +gso_segs to cover one pad BD per segment */
 			if (enetc_bd_unused(tx_ring) < tso_count_descs(skb) +
-			    skb_shinfo(skb)->gso_segs) {
-				netif_stop_subqueue(ndev, tx_ring->index);
-				return NETDEV_TX_BUSY;
-			}
+			    skb_shinfo(skb)->gso_segs)
+				goto tx_busy;
 
 			enetc_lock_mdio();
 			count = enetc_map_tx_tso_buffs(tx_ring, skb);
 			enetc_unlock_mdio();
 		}
 	} else {
-		if (eth_skb_pad(skb))
-			return NETDEV_TX_OK;
+		if (eth_skb_pad(skb)) {
+			ret = NETDEV_TX_OK;
+			goto out;
+		}
 
 		if (unlikely(skb_headlen(skb) < ENETC_MIN_BUFF_SIZE &&
-			     !pskb_may_pull(skb, ENETC_MIN_BUFF_SIZE))) {
-			dev_kfree_skb_any(skb);
-			return NETDEV_TX_OK;
-		}
+			     !pskb_may_pull(skb, ENETC_MIN_BUFF_SIZE)))
+			goto drop_packet_err;
 
 		if (unlikely(skb_shinfo(skb)->nr_frags > priv->max_frags))
 			if (unlikely(skb_linearize(skb)))
 				goto drop_packet_err;
 
 		count = skb_shinfo(skb)->nr_frags + 1; /* fragments + head */
-		if (enetc_bd_unused(tx_ring) < ENETC_TXBDS_NEEDED(count)) {
-			netif_stop_subqueue(ndev, tx_ring->index);
-			return NETDEV_TX_BUSY;
-		}
+		if (enetc_bd_unused(tx_ring) < ENETC_TXBDS_NEEDED(count))
+			goto tx_busy;
 
 		enetc_lock_mdio();
 		count = enetc_map_tx_buffs(tx_ring, skb);
@@ -1119,9 +1116,21 @@ static netdev_tx_t enetc_start_xmit(struct sk_buff *skb,
 
 	return NETDEV_TX_OK;
 
+tx_busy:
+	netif_stop_subqueue(ndev, tx_ring->index);
+	ret = NETDEV_TX_BUSY;
+	goto out;
+
 drop_packet_err:
 	dev_kfree_skb_any(skb);
-	return NETDEV_TX_OK;
+	ret = NETDEV_TX_OK;
+out:
+	/* No TX completion will release the lock for this skb */
+	if (onestep_locked)
+		clear_bit_unlock(ENETC_TX_ONESTEP_TSTAMP_IN_PROGRESS,
+				 &priv->flags);
+
+	return ret;
 }
 
 netdev_tx_t enetc_xmit(struct sk_buff *skb, struct net_device *ndev)
