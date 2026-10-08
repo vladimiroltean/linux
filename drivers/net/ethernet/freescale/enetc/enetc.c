@@ -3127,8 +3127,9 @@ static void enetc_tx_onestep_tstamp(struct work_struct *work)
 	}
 
 	skb = skb_dequeue(&priv->tx_skbs);
-	if (skb)
-		enetc_start_xmit(skb, priv->ndev);
+	/* Unlike the qdisc, we cannot requeue the skb on NETDEV_TX_BUSY */
+	if (skb && enetc_start_xmit(skb, priv->ndev) == NETDEV_TX_BUSY)
+		dev_kfree_skb_any(skb);
 
 	netif_tx_unlock_bh(priv->ndev);
 }
