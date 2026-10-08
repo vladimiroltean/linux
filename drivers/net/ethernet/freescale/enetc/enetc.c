@@ -1277,13 +1277,18 @@ static void enetc_recycle_xdp_tx_buff(struct enetc_bdr *tx_ring,
 	struct enetc_rx_swbd rx_swbd = {
 		.dma = tx_swbd->dma,
 		.page = tx_swbd->page,
-		.page_offset = tx_swbd->page_offset,
 		.dir = tx_swbd->dir,
-		.len = tx_swbd->len,
 	};
 	struct enetc_bdr *rx_ring;
 
 	rx_ring = enetc_rx_ring_from_xdp_tx_ring(priv, tx_ring);
+
+	/* The BPF program may have moved the start of the TX data anywhere
+	 * within the half page, so restore the RX buffer offset.
+	 */
+	rx_swbd.page_offset = ALIGN_DOWN(tx_swbd->page_offset,
+					 ENETC_RXB_TRUESIZE) +
+			      rx_ring->buffer_offset;
 
 	if (likely(enetc_swbd_unused(rx_ring))) {
 		enetc_reuse_page(rx_ring, &rx_swbd);
@@ -1968,9 +1973,6 @@ static void enetc_map_rx_buff_to_xdp(struct enetc_bdr *rx_ring, int i,
 	struct enetc_rx_swbd *rx_swbd = enetc_get_rx_buff(rx_ring, i, size);
 	void *hard_start = page_address(rx_swbd->page) + rx_swbd->page_offset;
 
-	/* To be used for XDP_TX */
-	rx_swbd->len = size;
-
 	xdp_prepare_buff(xdp_buff, hard_start - rx_ring->buffer_offset,
 			 rx_ring->buffer_offset, size, false);
 }
@@ -1981,9 +1983,6 @@ static void enetc_add_rx_buff_to_xdp(struct enetc_bdr *rx_ring, int i,
 	struct skb_shared_info *shinfo = xdp_get_shared_info_from_buff(xdp_buff);
 	struct enetc_rx_swbd *rx_swbd = enetc_get_rx_buff(rx_ring, i, size);
 	skb_frag_t *frag;
-
-	/* To be used for XDP_TX */
-	rx_swbd->len = size;
 
 	if (!xdp_buff_has_frags(xdp_buff)) {
 		xdp_buff_set_frags_flag(xdp_buff);
@@ -2032,30 +2031,48 @@ static void enetc_build_xdp_buff(struct enetc_bdr *rx_ring, u32 bd_status,
 }
 
 /* Convert RX buffer descriptors to TX buffer descriptors. These will be
- * recycled back into the RX ring in enetc_clean_tx_ring.
+ * recycled back into the RX ring in enetc_clean_tx_ring. The data offset and
+ * length of each buffer are taken from the xdp_buff, because the BPF program
+ * may have changed them.
  */
 static int enetc_rx_swbd_to_xdp_tx_swbd(struct enetc_tx_swbd *xdp_tx_arr,
 					struct enetc_bdr *rx_ring,
+					struct xdp_buff *xdp_buff,
 					int rx_ring_first, int rx_ring_last)
 {
+	struct skb_shared_info *shinfo = xdp_get_shared_info_from_buff(xdp_buff);
 	int n = 0;
 
 	for (; rx_ring_first != rx_ring_last;
 	     n++, enetc_bdr_idx_inc(rx_ring, &rx_ring_first)) {
 		struct enetc_rx_swbd *rx_swbd = &rx_ring->rx_swbd[rx_ring_first];
 		struct enetc_tx_swbd *tx_swbd = &xdp_tx_arr[n];
+		unsigned int page_offset, len;
 
-		/* The BPF program may have written to the buffer */
+		if (n == 0) {
+			page_offset = xdp_buff->data -
+				      page_address(rx_swbd->page);
+			len = xdp_buff->data_end - xdp_buff->data;
+		} else {
+			skb_frag_t *frag = &shinfo->frags[n - 1];
+
+			page_offset = skb_frag_off(frag);
+			len = skb_frag_size(frag);
+		}
+
+		/* The BPF program may have written to the buffer, including
+		 * to the headroom, which was never synced for the CPU.
+		 */
 		dma_sync_single_range_for_device(rx_ring->dev, rx_swbd->dma,
-						 rx_swbd->page_offset,
-						 rx_swbd->len, rx_swbd->dir);
+						 page_offset, len,
+						 rx_swbd->dir);
 
 		/* No need to dma_map, we already have DMA_BIDIRECTIONAL */
 		tx_swbd->dma = rx_swbd->dma;
 		tx_swbd->dir = rx_swbd->dir;
 		tx_swbd->page = rx_swbd->page;
-		tx_swbd->page_offset = rx_swbd->page_offset;
-		tx_swbd->len = rx_swbd->len;
+		tx_swbd->page_offset = page_offset;
+		tx_swbd->len = len;
 		tx_swbd->is_dma_page = true;
 		tx_swbd->is_xdp_tx = true;
 		tx_swbd->is_eof = false;
@@ -2186,6 +2203,7 @@ static int enetc_clean_rx_ring_xdp(struct enetc_bdr *rx_ring,
 
 			xdp_tx_bd_cnt = enetc_rx_swbd_to_xdp_tx_swbd(xdp_tx_arr,
 								     rx_ring,
+								     &xdp_buff,
 								     orig_i, i);
 
 			if (!enetc_xdp_tx(tx_ring, xdp_tx_arr, xdp_tx_bd_cnt)) {
