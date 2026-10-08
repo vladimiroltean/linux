@@ -207,6 +207,12 @@ static int enetc_ptp_parse(struct sk_buff *skb, u8 *udp,
 	if (!hdr)
 		return -EINVAL;
 
+	/* Ensure the 10-byte originTimestamp following the header is present,
+	 * since enetc_update_ptp_sync_msg() rewrites it for one-step Sync.
+	 */
+	if ((u8 *)hdr + sizeof(struct ptp_header) + 10 > skb_tail_pointer(skb))
+		return -EINVAL;
+
 	type = ptp_class & PTP_CLASS_PMASK;
 	if (type == PTP_CLASS_IPV4 || type == PTP_CLASS_IPV6)
 		*udp = 1;
