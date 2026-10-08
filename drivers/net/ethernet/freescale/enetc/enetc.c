@@ -2045,6 +2045,11 @@ static int enetc_rx_swbd_to_xdp_tx_swbd(struct enetc_tx_swbd *xdp_tx_arr,
 		struct enetc_rx_swbd *rx_swbd = &rx_ring->rx_swbd[rx_ring_first];
 		struct enetc_tx_swbd *tx_swbd = &xdp_tx_arr[n];
 
+		/* The BPF program may have written to the buffer */
+		dma_sync_single_range_for_device(rx_ring->dev, rx_swbd->dma,
+						 rx_swbd->page_offset,
+						 rx_swbd->len, rx_swbd->dir);
+
 		/* No need to dma_map, we already have DMA_BIDIRECTIONAL */
 		tx_swbd->dma = rx_swbd->dma;
 		tx_swbd->dir = rx_swbd->dir;
