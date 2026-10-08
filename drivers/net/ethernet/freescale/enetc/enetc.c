@@ -146,11 +146,17 @@ static void enetc_unmap_tx_buff(struct enetc_bdr *tx_ring,
 	/* For XDP_TX, pages come from RX, whereas for the other contexts where
 	 * we have is_dma_page_set, those come from skb_frag_dma_map. We need
 	 * to match the DMA mapping length, so we need to differentiate those.
+	 *
+	 * The device does not write to TX buffers, so there is nothing to sync
+	 * for the CPU. For XDP_TX, the other half of the page may be owned by
+	 * the stack, and syncing the entire page for the CPU could discard its
+	 * writes. For DMA_TO_DEVICE mappings, skipping the sync is a no-op.
 	 */
 	if (tx_swbd->is_dma_page)
-		dma_unmap_page(tx_ring->dev, tx_swbd->dma,
-			       tx_swbd->is_xdp_tx ? PAGE_SIZE : tx_swbd->len,
-			       tx_swbd->dir);
+		dma_unmap_page_attrs(tx_ring->dev, tx_swbd->dma,
+				     tx_swbd->is_xdp_tx ? PAGE_SIZE :
+				     tx_swbd->len,
+				     tx_swbd->dir, DMA_ATTR_SKIP_CPU_SYNC);
 	else
 		dma_unmap_single(tx_ring->dev, tx_swbd->dma,
 				 tx_swbd->len, tx_swbd->dir);
@@ -1306,8 +1312,8 @@ static void enetc_recycle_xdp_tx_buff(struct enetc_bdr *tx_ring,
 		 */
 		rx_ring->stats.recycle_failures++;
 
-		dma_unmap_page(rx_ring->dev, rx_swbd.dma, PAGE_SIZE,
-			       rx_swbd.dir);
+		dma_unmap_page_attrs(rx_ring->dev, rx_swbd.dma, PAGE_SIZE,
+				     rx_swbd.dir, DMA_ATTR_SKIP_CPU_SYNC);
 		__free_page(rx_swbd.page);
 	}
 
@@ -1588,8 +1594,13 @@ static void enetc_flip_rx_buff(struct enetc_bdr *rx_ring,
 
 		enetc_put_rx_buff(rx_ring, rx_swbd);
 	} else {
-		dma_unmap_page(rx_ring->dev, rx_swbd->dma, PAGE_SIZE,
-			       rx_swbd->dir);
+		/* The buffer was already synced for the CPU by
+		 * enetc_get_rx_buff(), and the CPU may have written to the
+		 * page since then (skb_shared_info, BPF program, the stack
+		 * owning the other half). Don't let the unmap discard that.
+		 */
+		dma_unmap_page_attrs(rx_ring->dev, rx_swbd->dma, PAGE_SIZE,
+				     rx_swbd->dir, DMA_ATTR_SKIP_CPU_SYNC);
 		rx_swbd->page = NULL;
 	}
 }
@@ -2637,8 +2648,9 @@ static void enetc_free_rx_ring(struct enetc_bdr *rx_ring)
 		if (!rx_swbd->page)
 			continue;
 
-		dma_unmap_page(rx_ring->dev, rx_swbd->dma, PAGE_SIZE,
-			       rx_swbd->dir);
+		/* The other half of the page may be owned by the stack */
+		dma_unmap_page_attrs(rx_ring->dev, rx_swbd->dma, PAGE_SIZE,
+				     rx_swbd->dir, DMA_ATTR_SKIP_CPU_SYNC);
 		__free_page(rx_swbd->page);
 		rx_swbd->page = NULL;
 	}
