@@ -2227,6 +2227,14 @@ static int enetc_clean_rx_ring_xdp(struct enetc_bdr *rx_ring,
 			}
 			break;
 		case XDP_REDIRECT:
+			/* The redirect target may free the buffers before
+			 * xdp_do_redirect() returns, so the RX ring must take
+			 * its references to the other page halves, and decide
+			 * whether they are reusable, while the buffers still
+			 * hold their own references.
+			 */
+			enetc_bulk_flip_buff(rx_ring, orig_i, i);
+
 			enetc_unlock_mdio();
 			spin_unlock(&tx_ring->xdp_lock);
 
@@ -2235,10 +2243,9 @@ static int enetc_clean_rx_ring_xdp(struct enetc_bdr *rx_ring,
 			spin_lock(&tx_ring->xdp_lock);
 			enetc_lock_mdio();
 			if (unlikely(err)) {
-				enetc_xdp_drop(rx_ring, orig_i, i);
+				xdp_return_buff(&xdp_buff);
 				rx_ring->stats.xdp_redirect_failures++;
 			} else {
-				enetc_bulk_flip_buff(rx_ring, orig_i, i);
 				xdp_redirect_frm_cnt++;
 				rx_ring->stats.xdp_redirect++;
 			}
