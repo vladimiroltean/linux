@@ -3100,6 +3100,8 @@ void enetc_stop(struct net_device *ndev)
 		disable_irq(irq);
 		napi_synchronize(&priv->int_vector[i]->napi);
 		napi_disable(&priv->int_vector[i]->napi);
+		/* NAPI schedules the DIM work, which may update rx_ictt */
+		cancel_work_sync(&priv->int_vector[i]->rx_dim.work);
 	}
 
 	enetc_clear_interrupts(priv);

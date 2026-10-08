@@ -1088,8 +1088,8 @@ static int enetc_set_coalesce(struct net_device *ndev,
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 	u64 clk_freq = priv->sysclk_freq;
 	u32 rx_ictt, tx_ictt;
+	bool changed, running;
 	int i, ic_mode;
-	bool changed;
 
 	tx_ictt = enetc_usecs_to_cycles(ic->tx_coalesce_usecs, clk_freq);
 	rx_ictt = enetc_usecs_to_cycles(ic->rx_coalesce_usecs, clk_freq);
@@ -1110,9 +1110,17 @@ static int enetc_set_coalesce(struct net_device *ndev,
 
 	ic_mode |= tx_ictt ? ENETC_IC_TX_MANUAL : 0;
 
-	/* commit the settings */
 	changed = (ic_mode != priv->ic_mode) || (priv->tx_ictt != tx_ictt);
+	running = netif_running(ndev);
 
+	/* Reconfigure the operation mode of h/w interrupts, traffic needs to
+	 * be paused in the process. Stop it before committing the settings,
+	 * so that a DIM work item still in progress cannot overwrite rx_ictt.
+	 */
+	if (running && changed)
+		enetc_stop(ndev);
+
+	/* commit the settings */
 	priv->ic_mode = ic_mode;
 	priv->tx_ictt = tx_ictt;
 
@@ -1123,13 +1131,8 @@ static int enetc_set_coalesce(struct net_device *ndev,
 		v->rx_dim_en = !!(ic_mode & ENETC_IC_RX_ADAPTIVE);
 	}
 
-	if (netif_running(ndev) && changed) {
-		/* reconfigure the operation mode of h/w interrupts,
-		 * traffic needs to be paused in the process
-		 */
-		enetc_stop(ndev);
+	if (running && changed)
 		enetc_start(ndev);
-	}
 
 	return 0;
 }
