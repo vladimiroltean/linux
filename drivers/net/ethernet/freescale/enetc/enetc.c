@@ -2055,10 +2055,14 @@ static int enetc_rx_swbd_to_xdp_tx_swbd(struct enetc_tx_swbd *xdp_tx_arr,
 	int n = 0;
 
 	for (; rx_ring_first != rx_ring_last;
-	     n++, enetc_bdr_idx_inc(rx_ring, &rx_ring_first)) {
+	     enetc_bdr_idx_inc(rx_ring, &rx_ring_first)) {
 		struct enetc_rx_swbd *rx_swbd = &rx_ring->rx_swbd[rx_ring_first];
 		struct enetc_tx_swbd *tx_swbd = &xdp_tx_arr[n];
 		unsigned int page_offset, len;
+
+		/* Skip frags released by the BPF program */
+		if (!rx_swbd->page)
+			continue;
 
 		if (n == 0) {
 			page_offset = xdp_buff->data -
@@ -2087,6 +2091,7 @@ static int enetc_rx_swbd_to_xdp_tx_swbd(struct enetc_tx_swbd *xdp_tx_arr,
 		tx_swbd->is_dma_page = true;
 		tx_swbd->is_xdp_tx = true;
 		tx_swbd->is_eof = false;
+		n++;
 	}
 
 	/* We rely on caller providing an rx_ring_last > rx_ring_first */
@@ -2095,12 +2100,86 @@ static int enetc_rx_swbd_to_xdp_tx_swbd(struct enetc_tx_swbd *xdp_tx_arr,
 	return n;
 }
 
+static int enetc_xdp_buff_nr_frags(struct xdp_buff *xdp_buff)
+{
+	if (likely(!xdp_buff_has_frags(xdp_buff)))
+		return 0;
+
+	return xdp_get_shared_info_from_buff(xdp_buff)->nr_frags;
+}
+
+/* The BPF program may release frags of a multi-buffer xdp_buff, using
+ * bpf_xdp_adjust_tail() or bpf_xdp_pull_data(). These helpers call
+ * __xdp_return() on the frag, which for MEM_TYPE_PAGE_SHARED drops a page
+ * reference. The RX ring still has the page DMA-mapped, so take a temporary
+ * extra reference on the frag pages while the BPF program runs, to ensure that
+ * a released page cannot be freed before the RX ring unmaps it.
+ *
+ * No BPF helper can release the head buffer: bpf_xdp_adjust_head() and
+ * bpf_xdp_adjust_meta() only move pointers within it, bpf_xdp_adjust_tail()
+ * stops shrinking at ETH_HLEN and only moves xdp->data_end once it runs out
+ * of frags, and bpf_xdp_pull_data() copies data into it. So the head buffer
+ * does not need the extra reference, and single-buffer frames, which are the
+ * common case, do not pay for it.
+ */
+static void enetc_xdp_get_frags(struct enetc_bdr *rx_ring, int rx_ring_first,
+				int rx_ring_last)
+{
+	/* Skip the head buffer */
+	enetc_bdr_idx_inc(rx_ring, &rx_ring_first);
+
+	while (rx_ring_first != rx_ring_last) {
+		page_ref_inc(rx_ring->rx_swbd[rx_ring_first].page);
+		enetc_bdr_idx_inc(rx_ring, &rx_ring_first);
+	}
+}
+
+/* Drop the temporary references taken by enetc_xdp_get_frags(). The frags
+ * which were not released keep their relative order, so they can be matched
+ * against the RX software BDs by page. For a released frag, the temporary
+ * reference was already consumed by __xdp_return(), and the RX ring must
+ * forget about the buffer: unmap the page, drop the RX ring's own reference,
+ * and let enetc_refill_rx_ring() allocate a new page in its place.
+ */
+static void enetc_xdp_put_frags(struct enetc_bdr *rx_ring,
+				struct xdp_buff *xdp_buff, int rx_ring_first,
+				int rx_ring_last)
+{
+	struct skb_shared_info *shinfo = xdp_get_shared_info_from_buff(xdp_buff);
+	int f = 0, nr_frags = enetc_xdp_buff_nr_frags(xdp_buff);
+
+	/* Skip the head buffer */
+	enetc_bdr_idx_inc(rx_ring, &rx_ring_first);
+
+	while (rx_ring_first != rx_ring_last) {
+		struct enetc_rx_swbd *rx_swbd = &rx_ring->rx_swbd[rx_ring_first];
+
+		if (f < nr_frags &&
+		    skb_frag_page(&shinfo->frags[f]) == rx_swbd->page) {
+			page_ref_dec(rx_swbd->page);
+			f++;
+		} else {
+			/* The other half of the page may be owned by the stack */
+			dma_unmap_page_attrs(rx_ring->dev, rx_swbd->dma,
+					     PAGE_SIZE, rx_swbd->dir,
+					     DMA_ATTR_SKIP_CPU_SYNC);
+			put_page(rx_swbd->page);
+			rx_swbd->page = NULL;
+		}
+
+		enetc_bdr_idx_inc(rx_ring, &rx_ring_first);
+	}
+}
+
 static void enetc_xdp_drop(struct enetc_bdr *rx_ring, int rx_ring_first,
 			   int rx_ring_last)
 {
 	while (rx_ring_first != rx_ring_last) {
-		enetc_put_rx_buff(rx_ring,
-				  &rx_ring->rx_swbd[rx_ring_first]);
+		struct enetc_rx_swbd *rx_swbd = &rx_ring->rx_swbd[rx_ring_first];
+
+		/* Skip frags released by the BPF program */
+		if (rx_swbd->page)
+			enetc_put_rx_buff(rx_ring, rx_swbd);
 		enetc_bdr_idx_inc(rx_ring, &rx_ring_first);
 	}
 }
@@ -2109,8 +2188,11 @@ static void enetc_bulk_flip_buff(struct enetc_bdr *rx_ring, int rx_ring_first,
 				 int rx_ring_last)
 {
 	while (rx_ring_first != rx_ring_last) {
-		enetc_flip_rx_buff(rx_ring,
-				   &rx_ring->rx_swbd[rx_ring_first]);
+		struct enetc_rx_swbd *rx_swbd = &rx_ring->rx_swbd[rx_ring_first];
+
+		/* Skip frags released by the BPF program */
+		if (rx_swbd->page)
+			enetc_flip_rx_buff(rx_ring, rx_swbd);
 		enetc_bdr_idx_inc(rx_ring, &rx_ring_first);
 	}
 }
@@ -2141,6 +2223,7 @@ static int enetc_clean_rx_ring_xdp(struct enetc_bdr *rx_ring,
 		struct xdp_buff xdp_buff;
 		struct sk_buff *skb;
 		int orig_i, err;
+		int nr_frags;
 		u32 bd_status;
 
 		rxbd = enetc_rxbd(rx_ring, i);
@@ -2169,7 +2252,14 @@ static int enetc_clean_rx_ring_xdp(struct enetc_bdr *rx_ring,
 			rx_byte_cnt += VLAN_HLEN;
 		rx_byte_cnt += xdp_get_buff_len(&xdp_buff);
 
+		nr_frags = enetc_xdp_buff_nr_frags(&xdp_buff);
+		if (unlikely(nr_frags))
+			enetc_xdp_get_frags(rx_ring, orig_i, i);
+
 		xdp_act = bpf_prog_run_xdp(prog, &xdp_buff);
+
+		if (unlikely(nr_frags))
+			enetc_xdp_put_frags(rx_ring, &xdp_buff, orig_i, i);
 
 		switch (xdp_act) {
 		default:
