@@ -92,7 +92,6 @@ struct enetc_rx_swbd {
 	struct page *page;
 	u16 page_offset;
 	enum dma_data_direction dir;
-	u16 len;
 };
 
 /* ENETC overhead: optional extension BD + 1 BD gap */
