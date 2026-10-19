@@ -264,9 +264,11 @@ void enetc_pf_netdev_setup(struct enetc_si *si, struct net_device *ndev,
 	if (!is_enetc_rev1(si))
 		goto end;
 
+	/* NETDEV_XDP_ACT_NDO_XMIT is set only while an XDP program is
+	 * attached, see enetc_setup_xdp_prog().
+	 */
 	ndev->xdp_features = NETDEV_XDP_ACT_BASIC | NETDEV_XDP_ACT_REDIRECT |
-			     NETDEV_XDP_ACT_NDO_XMIT | NETDEV_XDP_ACT_RX_SG |
-			     NETDEV_XDP_ACT_NDO_XMIT_SG;
+			     NETDEV_XDP_ACT_RX_SG;
 
 	if (si->hw_features & ENETC_SI_F_PSFP && pf->ops->enable_psfp &&
 	    !pf->ops->enable_psfp(priv)) {

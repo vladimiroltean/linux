@@ -3482,6 +3482,7 @@ static int enetc_setup_xdp_prog(struct net_device *ndev, struct bpf_prog *prog,
 	int num_xdp_tx_queues = prog ? num_possible_cpus() : 0;
 	struct enetc_ndev_priv *priv = netdev_priv(ndev);
 	bool extended;
+	int err;
 
 	if (priv->min_num_stack_tx_queues + num_xdp_tx_queues >
 	    priv->num_tx_rings) {
@@ -3493,12 +3494,33 @@ static int enetc_setup_xdp_prog(struct net_device *ndev, struct bpf_prog *prog,
 		return -EBUSY;
 	}
 
+	/* The XDP TX rings used by ndo_xdp_xmit() are handed back to the
+	 * network stack when the XDP program is removed. Stop accepting
+	 * redirected frames, and wait for callers which may have seen us as
+	 * a redirect target to finish, before that happens. If the interface
+	 * is running, enetc_stop() waits. Otherwise, ENETC_TX_DOWN keeps
+	 * these callers out only until the next enetc_open(), so wait here.
+	 */
+	if (!prog) {
+		xdp_features_clear_redirect_target(ndev);
+		if (!netif_running(ndev))
+			synchronize_net();
+	}
+
 	extended = !!(priv->active_offloads & ENETC_F_RX_TSTAMP);
 
 	/* The buffer layout is changing, so we need to drain the old
 	 * RX buffers and seed new ones.
 	 */
-	return enetc_reconfigure(priv, extended, enetc_reconfigure_xdp_cb, prog);
+	err = enetc_reconfigure(priv, extended, enetc_reconfigure_xdp_cb, prog);
+
+	/* Advertise ndo_xdp_xmit() support only while XDP TX rings are
+	 * reserved, i.e. while an XDP program is attached.
+	 */
+	if (priv->xdp_prog)
+		xdp_features_set_redirect_target(ndev, true);
+
+	return err;
 }
 
 int enetc_setup_bpf(struct net_device *ndev, struct netdev_bpf *bpf)
