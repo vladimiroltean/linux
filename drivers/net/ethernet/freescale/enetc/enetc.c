@@ -3216,6 +3216,9 @@ void enetc_stop(struct net_device *ndev)
 
 	set_bit(ENETC_TX_DOWN, &priv->flags);
 
+	/* Wait for in-flight .ndo_xdp_xmit() calls to observe ENETC_TX_DOWN */
+	synchronize_net();
+
 	netif_tx_stop_all_queues(ndev);
 
 	enetc_disable_rx_bdrs(priv);
