@@ -248,6 +248,10 @@ static void enetc_unwind_tx_frame(struct enetc_bdr *tx_ring, int count, int i)
 		struct enetc_tx_swbd *tx_swbd = &tx_ring->tx_swbd[i];
 
 		enetc_free_tx_frame(tx_ring, tx_swbd);
+		/* Like enetc_clean_tx_ring(), scrub the swbd so that no
+		 * stale state is inherited when it is reused during xmit.
+		 */
+		memset(tx_swbd, 0, sizeof(*tx_swbd));
 		if (i == 0)
 			i = tx_ring->bd_count;
 		i--;
@@ -899,7 +903,6 @@ static int enetc_lso_map_data(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 
 static int enetc_lso_hw_offload(struct enetc_bdr *tx_ring, struct sk_buff *skb)
 {
-	struct enetc_tx_swbd *tx_swbd;
 	struct enetc_lso_t lso = {0};
 	int err, i, count = 0;
 
@@ -923,13 +926,7 @@ static int enetc_lso_hw_offload(struct enetc_bdr *tx_ring, struct sk_buff *skb)
 	return count;
 
 dma_err:
-	do {
-		tx_swbd = &tx_ring->tx_swbd[i];
-		enetc_free_tx_frame(tx_ring, tx_swbd);
-		if (i == 0)
-			i = tx_ring->bd_count;
-		i--;
-	} while (--count);
+	enetc_unwind_tx_frame(tx_ring, count, i);
 
 	return 0;
 }
