@@ -152,7 +152,10 @@ static void enetc_unmap_tx_buff(struct enetc_bdr *tx_ring,
 	 * the stack, and syncing the entire page for the CPU could discard its
 	 * writes. For DMA_TO_DEVICE mappings, skipping the sync is a no-op.
 	 */
-	if (tx_swbd->is_dma_page)
+	if (tx_swbd->tso_map_len)
+		dma_unmap_phys(tx_ring->dev, tx_swbd->dma, tx_swbd->tso_map_len,
+			       tx_swbd->dir, 0);
+	else if (tx_swbd->is_dma_page)
 		dma_unmap_page_attrs(tx_ring->dev, tx_swbd->dma,
 				     tx_swbd->is_xdp_tx ? PAGE_SIZE :
 				     tx_swbd->len,
@@ -161,6 +164,7 @@ static void enetc_unmap_tx_buff(struct enetc_bdr *tx_ring,
 		dma_unmap_single(tx_ring->dev, tx_swbd->dma,
 				 tx_swbd->len, tx_swbd->dir);
 	tx_swbd->dma = 0;
+	tx_swbd->tso_map_len = 0;
 }
 
 static void enetc_free_tx_frame(struct enetc_bdr *tx_ring,
@@ -184,6 +188,10 @@ static void enetc_free_tx_frame(struct enetc_bdr *tx_ring,
 		xdp_return_frame(tx_swbd->xdp_frame);
 		tx_swbd->xdp_frame = NULL;
 	} else if (skb) {
+		if (tx_swbd->is_sw_tso)
+			tso_dma_map_complete(tx_ring->dev,
+					     &ENETC_SKB_CB(skb)->tso_cstate);
+		tx_swbd->is_sw_tso = false;
 		dev_kfree_skb_any(skb);
 		tx_swbd->skb = NULL;
 	}
@@ -602,22 +610,14 @@ static int enetc_map_tx_tso_hdr(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 	return count;
 }
 
-static int enetc_map_tx_tso_data(struct enetc_bdr *tx_ring, struct sk_buff *skb,
-				 struct enetc_tx_swbd *tx_swbd,
-				 union enetc_tx_bd *txbd, char *data,
-				 int size, bool last_bd)
+static void enetc_map_tx_tso_data(struct enetc_tx_swbd *tx_swbd,
+				  union enetc_tx_bd *txbd, dma_addr_t addr,
+				  int size, bool last_bd)
 {
 	union enetc_tx_bd txbd_tmp;
-	dma_addr_t addr;
 	u8 flags = 0;
 
 	enetc_clear_tx_bd(&txbd_tmp);
-
-	addr = dma_map_single(tx_ring->dev, data, size, DMA_TO_DEVICE);
-	if (unlikely(dma_mapping_error(tx_ring->dev, addr))) {
-		netdev_err(tx_ring->ndev, "DMA map error\n");
-		return -ENOMEM;
-	}
 
 	if (last_bd) {
 		flags |= ENETC_TXBD_FLAGS_F;
@@ -628,13 +628,45 @@ static int enetc_map_tx_tso_data(struct enetc_bdr *tx_ring, struct sk_buff *skb,
 	txbd_tmp.buf_len = cpu_to_le16(size);
 	txbd_tmp.flags = flags;
 
-	tx_swbd->dma = addr;
+	/* The payload mapping is owned by the tso_dma_map, and is unmapped
+	 * through the last BD that references each mapped region (see
+	 * enetc_tso_set_unmap()), or at once through the completion state
+	 * when the IOVA path is used. Don't set tx_swbd->dma here.
+	 */
 	tx_swbd->len = size;
-	tx_swbd->dir = DMA_TO_DEVICE;
 
 	*txbd = txbd_tmp;
+}
 
-	return 0;
+static void enetc_tso_set_unmap(struct enetc_tx_swbd *tx_swbd,
+				dma_addr_t addr, unsigned int len)
+{
+	tx_swbd->dma = addr;
+	tx_swbd->tso_map_len = len;
+	tx_swbd->dir = DMA_TO_DEVICE;
+}
+
+/* Unwind a partially built software TSO frame. The payload mappings belong
+ * to @map rather than to individual BDs, so release them through the map,
+ * and make sure enetc_unwind_tx_frame() does not unmap them a second time.
+ */
+static void enetc_tso_unwind(struct enetc_bdr *tx_ring, struct tso_dma_map *map,
+			     int count, int i)
+{
+	int j = i, n = count;
+
+	while (n--) {
+		struct enetc_tx_swbd *tx_swbd = &tx_ring->tx_swbd[j];
+
+		tx_swbd->dma = 0;
+		tx_swbd->tso_map_len = 0;
+		if (j == 0)
+			j = tx_ring->bd_count;
+		j--;
+	}
+
+	tso_dma_map_cleanup(map);
+	enetc_unwind_tx_frame(tx_ring, count, i);
 }
 
 static void enetc_append_tx_pad(struct enetc_bdr *tx_ring, int i, int pad_len)
@@ -954,18 +986,29 @@ dma_err:
 static int enetc_map_tx_tso_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb)
 {
 	struct enetc_ndev_priv *priv = netdev_priv(tx_ring->ndev);
+	struct enetc_tx_swbd *last_unmap_swbd = NULL;
+	unsigned int last_unmap_len = 0;
+	dma_addr_t last_unmap_addr = 0;
 	int hdr_len, total_len, data_len;
 	struct enetc_tx_swbd *tx_swbd;
+	struct tso_dma_map map;
 	union enetc_tx_bd *txbd;
 	struct tso_t tso;
 	__wsum csum, csum2;
 	int count = 0, pos;
-	int err, i, bd_data_num;
+	int i, bd_data_num;
 
 	/* Initialize the TSO handler, and prepare the first payload */
 	hdr_len = tso_start(skb, &tso);
 	total_len = skb->len - hdr_len;
 	i = tx_ring->next_to_use;
+
+	/* Map the payload once, rather than once per segment chunk */
+	BUILD_BUG_ON(sizeof(struct enetc_skb_cb) > sizeof_field(struct sk_buff, cb));
+	if (unlikely(tso_dma_map_init(&map, tx_ring->dev, skb, hdr_len))) {
+		dev_err(tx_ring->dev, "DMA map error");
+		return 0;
+	}
 
 	while (total_len > 0) {
 		int max_data_bds;
@@ -999,9 +1042,20 @@ static int enetc_map_tx_tso_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb
 		bd_data_num = 0;
 
 		while (data_len > 0) {
+			unsigned int mapping_len, chunk_len = 0;
+			dma_addr_t addr;
 			int size;
 
 			size = min_t(int, tso.size, data_len);
+
+			/* The tso_t and tso_dma_map iterators walk the same
+			 * regions (linear payload, then frags), so a chunk of
+			 * @size never crosses a mapping boundary.
+			 */
+			tso_dma_map_next(&map, &addr, &chunk_len, &mapping_len,
+					 size);
+			if (WARN_ON_ONCE(chunk_len != size))
+				goto err_unwind;
 
 			/* Advance the index in the BDR */
 			enetc_bdr_idx_inc(tx_ring, &i);
@@ -1018,17 +1072,22 @@ static int enetc_map_tx_tso_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb
 			pos += size;
 
 			/* When padding, the pad BD is the last one, not this */
-			err = enetc_map_tx_tso_data(tx_ring, skb, tx_swbd, txbd,
-						    tso.data, size,
-						    !pad_len &&
-						    size == data_len);
-			if (err) {
-				if (i == 0)
-					i = tx_ring->bd_count;
-				i--;
+			enetc_map_tx_tso_data(tx_swbd, txbd, addr, size,
+					      !pad_len && size == data_len);
 
-				goto err_map_data;
+			/* Unmap each region through the last BD referencing
+			 * it. TX completion is in order, so all earlier BDs
+			 * which reference the region are done by then.
+			 */
+			if (mapping_len) {
+				if (last_unmap_swbd)
+					enetc_tso_set_unmap(last_unmap_swbd,
+							    last_unmap_addr,
+							    last_unmap_len);
+				last_unmap_addr = addr;
+				last_unmap_len = mapping_len;
 			}
+			last_unmap_swbd = tx_swbd;
 
 			data_len -= size;
 			count++;
@@ -1036,7 +1095,7 @@ static int enetc_map_tx_tso_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb
 			tso_build_data(skb, &tso, size);
 
 			if (unlikely(bd_data_num >= max_data_bds && data_len))
-				goto err_chained_bd;
+				goto err_unwind;
 		}
 
 		enetc_tso_complete_csum(tx_ring, &tso, skb, hdr, pos, csum);
@@ -1048,23 +1107,28 @@ static int enetc_map_tx_tso_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb
 			count++;
 		}
 
-		if (total_len == 0)
+		if (total_len == 0) {
+			tso_dma_map_completion_save(&map,
+						    &ENETC_SKB_CB(skb)->tso_cstate);
+			tx_swbd->is_sw_tso = true;
 			tx_swbd->skb = skb;
+		}
 
 		/* Go to the next BD */
 		enetc_bdr_idx_inc(tx_ring, &i);
 	}
+
+	if (last_unmap_swbd && last_unmap_len)
+		enetc_tso_set_unmap(last_unmap_swbd, last_unmap_addr,
+				    last_unmap_len);
 
 	tx_ring->next_to_use = i;
 	enetc_update_tx_ring_tail(tx_ring);
 
 	return count;
 
-err_map_data:
-	dev_err(tx_ring->dev, "DMA map error");
-
-err_chained_bd:
-	enetc_unwind_tx_frame(tx_ring, count, i);
+err_unwind:
+	enetc_tso_unwind(tx_ring, &map, count, i);
 
 	return 0;
 }
@@ -1411,6 +1475,10 @@ static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring, int napi_budget)
 		} else if (skb) {
 			struct enetc_skb_cb *enetc_cb = ENETC_SKB_CB(skb);
 
+			if (tx_swbd->is_sw_tso)
+				tso_dma_map_complete(tx_ring->dev,
+						     &enetc_cb->tso_cstate);
+
 			if (unlikely(enetc_cb->flag & ENETC_F_TX_ONESTEP_SYNC_TSTAMP)) {
 				/* Start work to release lock for next one-step
 				 * timestamping packet. And send one skb in
@@ -1421,6 +1489,7 @@ static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring, int napi_budget)
 				enetc_tstamp_tx(skb, tstamp);
 				do_twostep_tstamp = false;
 			}
+
 			napi_consume_skb(skb, napi_budget);
 		}
 

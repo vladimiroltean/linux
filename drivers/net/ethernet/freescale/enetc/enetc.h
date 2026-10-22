@@ -12,6 +12,7 @@
 #include <linux/if_vlan.h>
 #include <linux/phylink.h>
 #include <linux/dim.h>
+#include <net/tso.h>
 #include <net/xdp.h>
 
 #include "enetc_hw.h"
@@ -56,6 +57,9 @@ struct enetc_tx_swbd {
 	u8 is_xdp_tx:1;
 	u8 is_xdp_redirect:1;
 	u8 qbv_en:1;
+	u8 is_sw_tso:1;
+	/* Length of the tso_dma_map region to unmap at @dma, if non-zero */
+	u32 tso_map_len;
 };
 
 struct enetc_skb_cb {
@@ -63,6 +67,8 @@ struct enetc_skb_cb {
 	bool udp;
 	u16 correction_off;
 	u16 origin_tstamp_off;
+	/* Valid for software TSO skbs, on the swbd which has is_sw_tso set */
+	struct tso_dma_map_completion_state tso_cstate;
 };
 
 #define ENETC_SKB_CB(skb) ((struct enetc_skb_cb *)((skb)->cb))
