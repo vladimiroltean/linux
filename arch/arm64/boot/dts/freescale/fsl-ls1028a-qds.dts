@@ -26,6 +26,15 @@
 		mmc0 = &esdhc;
 		mmc1 = &esdhc1;
 		rtc1 = &ftm_alarm1;
+		ethernet0 = &enetc_port0;
+		ethernet1 = &enetc_port2;
+		ethernet2 = &mscc_felix_port0;
+		ethernet3 = &mscc_felix_port1;
+		ethernet4 = &mscc_felix_port2;
+		ethernet5 = &mscc_felix_port3;
+		ethernet6 = &mscc_felix_port4;
+		ethernet7 = &mscc_felix_port5;
+		ethernet8 = &enetc_port3;
 	};
 
 	chosen {
@@ -245,6 +254,10 @@
 	status = "okay";
 };
 
+&enetc_port3 {
+	status = "okay";
+};
+
 &esdhc {
 	status = "okay";
 };
@@ -369,7 +382,10 @@
 };
 
 &mscc_felix_port4 {
-	ethernet = <&enetc_port2>;
+	status = "okay";
+};
+
+&mscc_felix_port5 {
 	status = "okay";
 };
 
