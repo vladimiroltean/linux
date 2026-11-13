@@ -69,8 +69,8 @@ struct enetc_lso_t {
 	bool	ipv6;
 	bool	tcp;
 	u8	l3_hdr_len;
-	u8	hdr_len; /* LSO header length */
 	u8	l3_start;
+	u16	hdr_len; /* LSO header length */
 	u16	lso_seg_size;
 	int	total_len; /* total data length, not include LSO header */
 };
