@@ -628,7 +628,11 @@
 			interrupts = <GIC_SPI 57 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&clockgen QORIQ_CLK_PLATFORM_PLL
 					    QORIQ_CLK_PLL_DIV(2)>;
+			pinctrl-names = "default", "gpio";
+			pinctrl-0 = <&i2c1_pins>;
+			pinctrl-1 = <&gpio4_3_2_pins>;
 			scl-gpios = <&gpio3 2 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
+			sda-gpios = <&gpio3 3 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
 			dmas = <&edma0 1 36>,
 			       <&edma0 1 37>;
 			dma-names = "rx", "tx";
@@ -643,7 +647,11 @@
 			interrupts = <GIC_SPI 58 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&clockgen QORIQ_CLK_PLATFORM_PLL
 					    QORIQ_CLK_PLL_DIV(2)>;
+			pinctrl-names = "default", "gpio";
+			pinctrl-0 = <&i2c2_pins>;
+			pinctrl-1 = <&gpio4_11_10_pins>;
 			scl-gpios = <&gpio3 10 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
+			sda-gpios = <&gpio3 11 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
 			dmas = <&edma0 1 34>,
 			       <&edma0 1 35>;
 			dma-names = "rx", "tx";
@@ -658,7 +666,11 @@
 			interrupts = <GIC_SPI 59 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&clockgen QORIQ_CLK_PLATFORM_PLL
 					    QORIQ_CLK_PLL_DIV(2)>;
+			pinctrl-names = "default", "gpio";
+			pinctrl-0 = <&i2c3_pins>;
+			pinctrl-1 = <&gpio4_13_12_pins>;
 			scl-gpios = <&gpio3 12 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
+			sda-gpios = <&gpio3 13 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
 			dmas = <&edma0 1 40>,
 			       <&edma0 1 41>;
 			dma-names = "rx", "tx";
