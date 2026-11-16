@@ -48,12 +48,26 @@ struct rcw_pmux_soc {
 		.funcs = _funcs, .nfuncs = ARRAY_SIZE(_funcs),		\
 	}
 
-/* LX2160A: RCWSR12..14 and RCWSR27 */
-static const struct rcw_pmux_func lx2160a_iic2_funcs[] = {
+/* Chassis 3.2 (LS1028A, LX2160A): fields with the same encoding */
+static const struct rcw_pmux_func fsl_lsch32_iic2_funcs[] = {
 	RCW_PMUX_FUNC("i2c", 0), RCW_PMUX_FUNC("gpio", 1),
 	RCW_PMUX_FUNC("flextimer", 2), RCW_PMUX_FUNC("sdhc", 6),
 };
 
+static const struct rcw_pmux_func fsl_lsch32_iic1_funcs[] = {
+	RCW_PMUX_FUNC("i2c", 0), RCW_PMUX_FUNC("gpio", 1),
+};
+
+static const struct rcw_pmux_func fsl_lsch32_asleep_funcs[] = {
+	RCW_PMUX_FUNC("asleep", 0), RCW_PMUX_FUNC("gpio", 1),
+	RCW_PMUX_FUNC("evt", 2),
+};
+
+static const struct rcw_pmux_func fsl_lsch32_reset_req_funcs[] = {
+	RCW_PMUX_FUNC("reset-req", 0), RCW_PMUX_FUNC("gpio", 1),
+};
+
+/* LX2160A: RCWSR12..14 and RCWSR27 */
 static const struct rcw_pmux_func lx2160a_iic3_funcs[] = {
 	RCW_PMUX_FUNC("i2c", 0), RCW_PMUX_FUNC("gpio", 1),
 	RCW_PMUX_FUNC("can", 2), RCW_PMUX_FUNC("evt", 6),
@@ -127,19 +141,6 @@ static const struct rcw_pmux_func lx2160a_clk_out_funcs[] = {
 	RCW_PMUX_FUNC("flextimer", 2),
 };
 
-static const struct rcw_pmux_func lx2160a_asleep_funcs[] = {
-	RCW_PMUX_FUNC("asleep", 0), RCW_PMUX_FUNC("gpio", 1),
-	RCW_PMUX_FUNC("evt", 2),
-};
-
-static const struct rcw_pmux_func lx2160a_reset_req_funcs[] = {
-	RCW_PMUX_FUNC("reset-req", 0), RCW_PMUX_FUNC("gpio", 1),
-};
-
-static const struct rcw_pmux_func lx2160a_iic1_funcs[] = {
-	RCW_PMUX_FUNC("i2c", 0), RCW_PMUX_FUNC("gpio", 1),
-};
-
 static const struct rcw_pmux_func lx2160a_ec1_funcs[] = {
 	RCW_PMUX_FUNC("rgmii", 0), RCW_PMUX_FUNC("gpio", 1),
 };
@@ -164,7 +165,7 @@ static const struct rcw_pmux_func lx2160a_sdhc1_ds_funcs[] = {
 
 static const struct rcw_pmux_group lx2160a_groups[] = {
 	/* RCWSR12 */
-	RCW_PMUX_GROUP("iic2", 12, 0, 3, lx2160a_iic2_funcs),
+	RCW_PMUX_GROUP("iic2", 12, 0, 3, fsl_lsch32_iic2_funcs),
 	RCW_PMUX_GROUP("iic3", 12, 3, 3, lx2160a_iic3_funcs),
 	RCW_PMUX_GROUP("iic4", 12, 6, 3, lx2160a_iic3_funcs),
 	RCW_PMUX_GROUP("iic5", 12, 9, 3, lx2160a_iic5_funcs),
@@ -188,9 +189,9 @@ static const struct rcw_pmux_group lx2160a_groups[] = {
 	/* RCWSR14 */
 	RCW_PMUX_GROUP("evt2-0", 14, 0, 3, lx2160a_evt_funcs),
 	RCW_PMUX_GROUP("clk-out", 14, 3, 3, lx2160a_clk_out_funcs),
-	RCW_PMUX_GROUP("asleep", 14, 6, 3, lx2160a_asleep_funcs),
-	RCW_PMUX_GROUP("reset-req", 14, 9, 1, lx2160a_reset_req_funcs),
-	RCW_PMUX_GROUP("iic1", 14, 10, 1, lx2160a_iic1_funcs),
+	RCW_PMUX_GROUP("asleep", 14, 6, 3, fsl_lsch32_asleep_funcs),
+	RCW_PMUX_GROUP("reset-req", 14, 9, 1, fsl_lsch32_reset_req_funcs),
+	RCW_PMUX_GROUP("iic1", 14, 10, 1, fsl_lsch32_iic1_funcs),
 	/* RCWSR27 */
 	RCW_PMUX_GROUP("ec1", 27, 0, 2, lx2160a_ec1_funcs),
 	RCW_PMUX_GROUP("ec2", 27, 2, 2, lx2160a_ec2_funcs),
