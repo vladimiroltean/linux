@@ -670,7 +670,17 @@ static const struct fsl_soc_data ls1088a_data = {
 	.num_serdes_lanes = 4,
 };
 
+static const struct fsl_soc_pmux_mask ls1046a_pmux[] = {
+	{ 12, GENMASK(29, 12) | GENMASK(10, 0) },
+	{ 13, GENMASK(31, 29) | GENMASK(22, 14) | BIT(10) | BIT(8) |
+	      GENMASK(3, 2) | BIT(0) },
+	{ 14, GENMASK(31, 26) | BIT(22) | BIT(21) | BIT(18) | BIT(17) |
+	      GENMASK(2, 0) },
+	{}
+};
+
 static const struct fsl_soc_data ls1046a_data = {
+	.pmux = ls1046a_pmux,
 	.serdes_get_rcw_override = ls1046a_serdes_get_rcw_override,
 	.num_serdes_blocks = 2,
 	.num_serdes_lanes = 4,
