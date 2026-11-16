@@ -325,6 +325,172 @@ static const struct rcw_pmux_soc ls1028a_soc = {
 	.ngroups = ARRAY_SIZE(ls1028a_groups),
 };
 
+/*
+ * Chassis 2 (LS1043A, LS1046A): RCWSR12..14
+ *
+ * Most groups are muxed by a BASE field and an EXT one. The functions which
+ * the EXT field selects only set it, the BASE field decides on the pads that
+ * EXT does not take over. The functions of the BASE field need EXT to be 0.
+ * The values and masks below are relative to the shift of the group.
+ */
+
+/* UART group: UART_BASE at 0, UART_EXT at 12 */
+#define LSCH2_UART_BASE		GENMASK(2, 0)
+#define LSCH2_UART_EXT		GENMASK(14, 12)
+#define LSCH2_UART_ALL		(LSCH2_UART_BASE | LSCH2_UART_EXT)
+static const struct rcw_pmux_func fsl_lsch2_uart_funcs[] = {
+	RCW_PMUX_FUNC_MASK("gpio", 0, LSCH2_UART_ALL),
+	RCW_PMUX_FUNC_MASK("uart1", 3, LSCH2_UART_ALL),
+	RCW_PMUX_FUNC_MASK("uart1-rtscts", 4, LSCH2_UART_ALL),
+	RCW_PMUX_FUNC_MASK("uart1-2", 5, LSCH2_UART_ALL),
+	RCW_PMUX_FUNC_MASK("uart1-2-rtscts", 6, LSCH2_UART_ALL),
+	RCW_PMUX_FUNC_MASK("uart1-4", 7, LSCH2_UART_ALL),
+	RCW_PMUX_FUNC_MASK("lpuart1-2", 1 << 12, LSCH2_UART_EXT),
+	RCW_PMUX_FUNC_MASK("lpuart1-2-4", 2 << 12, LSCH2_UART_EXT),
+	RCW_PMUX_FUNC_MASK("flextimer", 3 << 12, LSCH2_UART_EXT),
+};
+
+/* IRQ group: IRQ_BASE at 0, one bit per IRQ3..IRQ11, and IRQ_EXT at 22 */
+#define LSCH2_IRQ_BASE		GENMASK(8, 0)
+#define LSCH2_IRQ_EXT		GENMASK(24, 22)
+#define LSCH2_IRQ_ALL		(LSCH2_IRQ_BASE | LSCH2_IRQ_EXT)
+
+/* SPI group: SPI_BASE at 0, SPI_EXT at 21 */
+#define LSCH2_SPI_BASE		GENMASK(1, 0)
+#define LSCH2_SPI_EXT		GENMASK(23, 21)
+#define LSCH2_SPI_ALL		(LSCH2_SPI_BASE | LSCH2_SPI_EXT)
+static const struct rcw_pmux_func fsl_lsch2_spi_funcs[] = {
+	RCW_PMUX_FUNC_MASK("spi", 0, LSCH2_SPI_ALL),
+	RCW_PMUX_FUNC_MASK("sdhc", 1, LSCH2_SPI_ALL),
+	RCW_PMUX_FUNC_MASK("gpio", 2, LSCH2_SPI_ALL),
+	RCW_PMUX_FUNC_MASK("sdhc-dir", 3, LSCH2_SPI_ALL),
+	RCW_PMUX_FUNC_MASK("sdhc-clk-sync", 1 << 21, LSCH2_SPI_EXT),
+	RCW_PMUX_FUNC_MASK("spi-no-sck", 2 << 21, LSCH2_SPI_EXT),
+};
+
+/* SDHC group: SDHC_BASE at 0, SDHC_EXT at 6 */
+#define LSCH2_SDHC_BASE		BIT(0)
+#define LSCH2_SDHC_EXT		GENMASK(8, 6)
+#define LSCH2_SDHC_ALL		(LSCH2_SDHC_BASE | LSCH2_SDHC_EXT)
+static const struct rcw_pmux_func fsl_lsch2_sdhc_funcs[] = {
+	RCW_PMUX_FUNC_MASK("sdhc", 0, LSCH2_SDHC_ALL),
+	RCW_PMUX_FUNC_MASK("gpio", 1, LSCH2_SDHC_ALL),
+	RCW_PMUX_FUNC_MASK("lpuart2-3", 1 << 6, LSCH2_SDHC_EXT),
+	RCW_PMUX_FUNC_MASK("lpuart3-5-6", 2 << 6, LSCH2_SDHC_EXT),
+	RCW_PMUX_FUNC_MASK("flextimer", 3 << 6, LSCH2_SDHC_EXT),
+};
+
+static const struct rcw_pmux_func fsl_lsch2_asleep_funcs[] = {
+	RCW_PMUX_FUNC("asleep", 0), RCW_PMUX_FUNC("gpio", 1),
+};
+
+static const struct rcw_pmux_func fsl_lsch2_rtc_funcs[] = {
+	RCW_PMUX_FUNC("rtc", 0), RCW_PMUX_FUNC("gpio", 1),
+};
+
+/* IFC group A: IFC_GRP_A_BASE at 0, IFC_GRP_A_EXT at 27 */
+#define LSCH2_IFC_A_BASE	GENMASK(1, 0)
+#define LSCH2_IFC_A_EXT		GENMASK(29, 27)
+#define LSCH2_IFC_A_ALL		(LSCH2_IFC_A_BASE | LSCH2_IFC_A_EXT)
+static const struct rcw_pmux_func fsl_lsch2_ifc_a_funcs[] = {
+	RCW_PMUX_FUNC_MASK("ifc", 0, LSCH2_IFC_A_ALL),
+	RCW_PMUX_FUNC_MASK("gpio", 1, LSCH2_IFC_A_ALL),
+	RCW_PMUX_FUNC_MASK("ifc-rb", 2, LSCH2_IFC_A_ALL),
+	RCW_PMUX_FUNC_MASK("qspi", 1 << 27, LSCH2_IFC_A_EXT),
+	RCW_PMUX_FUNC_MASK("flextimer", 2 << 27, LSCH2_IFC_A_EXT),
+	RCW_PMUX_FUNC_MASK("ifc-cs", 4 << 27, LSCH2_IFC_A_EXT),
+};
+
+/* IFC group D: IFC_GRP_D_BASE at 0, IFC_GRP_D_EXT at 12 */
+#define LSCH2_IFC_D_BASE	BIT(0)
+#define LSCH2_IFC_D_EXT		GENMASK(14, 12)
+#define LSCH2_IFC_D_ALL		(LSCH2_IFC_D_BASE | LSCH2_IFC_D_EXT)
+static const struct rcw_pmux_func fsl_lsch2_ifc_d_funcs[] = {
+	RCW_PMUX_FUNC_MASK("ifc", 0, LSCH2_IFC_D_ALL),
+	RCW_PMUX_FUNC_MASK("gpio", 1, LSCH2_IFC_D_ALL),
+	RCW_PMUX_FUNC_MASK("qspi", 1 << 12, LSCH2_IFC_D_EXT),
+	RCW_PMUX_FUNC_MASK("flextimer", 2 << 12, LSCH2_IFC_D_EXT),
+};
+
+/* IFC group E1: IFC_GRP_E1_BASE at 0, IFC_GRP_E1_EXT at 7 */
+#define LSCH2_IFC_E1_BASE	BIT(0)
+#define LSCH2_IFC_E1_EXT	GENMASK(9, 7)
+#define LSCH2_IFC_E1_ALL	(LSCH2_IFC_E1_BASE | LSCH2_IFC_E1_EXT)
+static const struct rcw_pmux_func fsl_lsch2_ifc_e1_funcs[] = {
+	RCW_PMUX_FUNC_MASK("ifc", 0, LSCH2_IFC_E1_ALL),
+	RCW_PMUX_FUNC_MASK("gpio", 1, LSCH2_IFC_E1_ALL),
+	RCW_PMUX_FUNC_MASK("qspi", 1 << 7, LSCH2_IFC_E1_EXT),
+	RCW_PMUX_FUNC_MASK("flextimer", 2 << 7, LSCH2_IFC_E1_EXT),
+};
+
+/* IFC group F: IFC_A_22_24 at 0, IFC_GRP_F_EXT at 14 */
+#define LSCH2_IFC_F_WP		BIT(0)
+#define LSCH2_IFC_F_EXT		GENMASK(16, 14)
+#define LSCH2_IFC_F_ALL		(LSCH2_IFC_F_WP | LSCH2_IFC_F_EXT)
+static const struct rcw_pmux_func fsl_lsch2_ifc_f_funcs[] = {
+	RCW_PMUX_FUNC_MASK("ifc", 0, LSCH2_IFC_F_ALL),
+	RCW_PMUX_FUNC_MASK("ifc-wp", 1, LSCH2_IFC_F_ALL),
+	RCW_PMUX_FUNC_MASK("qspi", 1 << 14, LSCH2_IFC_F_EXT),
+};
+
+static const struct rcw_pmux_func fsl_lsch2_ec1_funcs[] = {
+	RCW_PMUX_FUNC("rgmii", 0), RCW_PMUX_FUNC("gpio", 1),
+	RCW_PMUX_FUNC("flextimer", 5),
+};
+
+static const struct rcw_pmux_func fsl_lsch2_ec2_funcs[] = {
+	RCW_PMUX_FUNC("rgmii", 0), RCW_PMUX_FUNC("gpio", 1),
+	RCW_PMUX_FUNC("tsec-1588", 2), RCW_PMUX_FUNC("flextimer", 5),
+};
+
+static const struct rcw_pmux_func fsl_lsch2_mdio_funcs[] = {
+	RCW_PMUX_FUNC("mdio", 0), RCW_PMUX_FUNC("gpio", 1),
+};
+
+static const struct rcw_pmux_func fsl_lsch2_usb_funcs[] = {
+	RCW_PMUX_FUNC("usb", 0), RCW_PMUX_FUNC("gpio", 1),
+};
+
+/* LS1046A: RCWSR12..14 */
+static const struct rcw_pmux_func ls1046a_irq_funcs[] = {
+	RCW_PMUX_FUNC_MASK("irq", 0, LSCH2_IRQ_ALL),
+	RCW_PMUX_FUNC_MASK("gpio", LSCH2_IRQ_BASE, LSCH2_IRQ_ALL),
+	RCW_PMUX_FUNC_MASK("flextimer", 3 << 22, LSCH2_IRQ_EXT),
+};
+
+static const struct rcw_pmux_func ls1046a_iic2_funcs[] = {
+	RCW_PMUX_FUNC("i2c", 0), RCW_PMUX_FUNC("sdhc", 1),
+	RCW_PMUX_FUNC("gpio", 2), RCW_PMUX_FUNC("flextimer", 3),
+};
+
+static const struct rcw_pmux_group ls1046a_groups[] = {
+	/* RCWSR12 */
+	RCW_PMUX_GROUP("uart", 12, 15, 3, fsl_lsch2_uart_funcs),
+	RCW_PMUX_GROUP("irq", 12, 2, 9, ls1046a_irq_funcs),
+	RCW_PMUX_GROUP("spi", 12, 0, 2, fsl_lsch2_spi_funcs),
+	RCW_PMUX_GROUP("sdhc", 12, 12, 1, fsl_lsch2_sdhc_funcs),
+	RCW_PMUX_GROUP("asleep", 12, 14, 1, fsl_lsch2_asleep_funcs),
+	RCW_PMUX_GROUP("rtc", 12, 13, 1, fsl_lsch2_rtc_funcs),
+	/* RCWSR13 */
+	RCW_PMUX_GROUP("ifc-a", 13, 2, 2, fsl_lsch2_ifc_a_funcs),
+	RCW_PMUX_GROUP("ifc-d", 13, 8, 1, fsl_lsch2_ifc_d_funcs),
+	RCW_PMUX_GROUP("ifc-e1", 13, 10, 1, fsl_lsch2_ifc_e1_funcs),
+	RCW_PMUX_GROUP("ifc-f", 13, 0, 1, fsl_lsch2_ifc_f_funcs),
+	/* RCWSR14 */
+	RCW_PMUX_GROUP("ec1", 14, 29, 3, fsl_lsch2_ec1_funcs),
+	RCW_PMUX_GROUP("ec2", 14, 26, 3, fsl_lsch2_ec2_funcs),
+	RCW_PMUX_GROUP("em1", 14, 22, 1, fsl_lsch2_mdio_funcs),
+	RCW_PMUX_GROUP("em2", 14, 21, 1, fsl_lsch2_mdio_funcs),
+	RCW_PMUX_GROUP("usb-drvvbus", 14, 18, 1, fsl_lsch2_usb_funcs),
+	RCW_PMUX_GROUP("usb-pwrfault", 14, 17, 1, fsl_lsch2_usb_funcs),
+	RCW_PMUX_GROUP("iic2", 14, 0, 3, ls1046a_iic2_funcs),
+};
+
+static const struct rcw_pmux_soc ls1046a_soc = {
+	.groups = ls1046a_groups,
+	.ngroups = ARRAY_SIZE(ls1046a_groups),
+};
+
 struct rcw_pmux {
 	struct device *dev;
 	struct pinctrl_dev *pctl;
@@ -532,6 +698,7 @@ static int rcw_pmux_probe(struct platform_device *pdev)
 
 static const struct of_device_id rcw_pmux_of_match[] = {
 	{ .compatible = "fsl,ls1028a-rcw-pinmux", .data = &ls1028a_soc },
+	{ .compatible = "fsl,ls1046a-rcw-pinmux", .data = &ls1046a_soc },
 	{ .compatible = "fsl,lx2160a-rcw-pinmux", .data = &lx2160a_soc },
 	{ }
 };
