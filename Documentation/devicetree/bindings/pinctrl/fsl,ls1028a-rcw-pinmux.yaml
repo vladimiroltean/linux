@@ -1,0 +1,308 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/pinctrl/fsl,ls1028a-rcw-pinmux.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: NXP LS1028A RCW pad muxes
+
+maintainers:
+  - Vladimir Oltean <vladimir.oltean@nxp.com>
+
+description:
+  The LS1028A muxes its IIC, XSPI, SDHC, UART, EC1, USB and SPI3 pads based
+  on its RCW. The related fields are from the read-only RCWSR12 to RCWSR14 and
+  RCWSR27 registers of DCFG, and can be changed at runtime by writing the RCW
+  override registers in the DCSR view of DCFG. The node is a child of the DCFG
+  node, which owns both views. Its reg are the RCWSR12 to RCWSR14 and the
+  RCWSR27 windows of the CCSR view, and the override registers are at the same
+  offsets of the DCSR view.
+
+properties:
+  compatible:
+    const: fsl,ls1028a-rcw-pinmux
+
+  reg:
+    items:
+      - description: RCWSR12 to RCWSR14
+      - description: RCWSR27
+
+patternProperties:
+  '-pins$':
+    type: object
+    $ref: pinmux-node.yaml#
+    additionalProperties: false
+
+    properties:
+      function:
+        enum: [ asleep, can, clk-out, ec1-1588, ec1-1722, evt, flexspi,
+                flextimer, gpio, gtx-clk, i2c, lpuart, reset-req, rgmii,
+                sai-rx, sai-tx, sdhc, sdhc-clk, spi, switch-1588, uart, usb ]
+
+      groups:
+        items:
+          enum: [ iic2, iic3, iic4, iic5, iic6, xspi1-data74, xspi1-data30,
+                  xspi1-base, sdhc1-base, sdhc2-data74, sdhc2-base,
+                  uart1-soutsin, uart2-soutsin, clk-out, asleep, reset-req,
+                  iic1, ec1-sai4-5, ec1-sai3-6, usb-drvvbus, usb-pwrfault,
+                  spi3, gtx-clk125 ]
+
+    required:
+      - function
+      - groups
+
+    allOf:
+      - if:
+          properties:
+            function:
+              const: asleep
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ asleep ]
+
+      - if:
+          properties:
+            function:
+              const: can
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ iic3, iic4 ]
+
+      - if:
+          properties:
+            function:
+              const: clk-out
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ clk-out ]
+
+      - if:
+          properties:
+            function:
+              const: ec1-1588
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ ec1-sai4-5, ec1-sai3-6, spi3 ]
+
+      - if:
+          properties:
+            function:
+              const: ec1-1722
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ gtx-clk125 ]
+
+      - if:
+          properties:
+            function:
+              const: evt
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ iic3, iic4, iic5, iic6, clk-out, asleep ]
+
+      - if:
+          properties:
+            function:
+              const: flexspi
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ xspi1-data74, xspi1-data30, xspi1-base, sdhc2-data74,
+                        sdhc2-base ]
+
+      - if:
+          properties:
+            function:
+              const: flextimer
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ iic2, iic3, iic4, xspi1-data74, xspi1-data30,
+                        xspi1-base, sdhc2-data74, sdhc2-base, uart1-soutsin,
+                        uart2-soutsin, clk-out, ec1-sai4-5, ec1-sai3-6 ]
+
+      - if:
+          properties:
+            function:
+              const: gpio
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ iic2, iic3, iic4, iic5, iic6, xspi1-data74,
+                        xspi1-data30, xspi1-base, sdhc1-base, sdhc2-data74,
+                        sdhc2-base, uart1-soutsin, uart2-soutsin, clk-out,
+                        asleep, reset-req, iic1, ec1-sai4-5, ec1-sai3-6,
+                        usb-drvvbus, usb-pwrfault, spi3, gtx-clk125 ]
+
+      - if:
+          properties:
+            function:
+              const: gtx-clk
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ gtx-clk125 ]
+
+      - if:
+          properties:
+            function:
+              const: i2c
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ iic2, iic3, iic4, iic5, iic6, sdhc2-data74, iic1 ]
+
+      - if:
+          properties:
+            function:
+              const: lpuart
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ iic3, iic4, xspi1-data74, xspi1-data30, sdhc2-data74,
+                        sdhc2-base, uart1-soutsin, uart2-soutsin ]
+
+      - if:
+          properties:
+            function:
+              const: reset-req
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ reset-req ]
+
+      - if:
+          properties:
+            function:
+              const: rgmii
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ ec1-sai4-5, ec1-sai3-6 ]
+
+      - if:
+          properties:
+            function:
+              const: sai-rx
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ sdhc1-base, ec1-sai4-5, ec1-sai3-6 ]
+
+      - if:
+          properties:
+            function:
+              const: sai-tx
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ sdhc1-base, ec1-sai4-5, ec1-sai3-6 ]
+
+      - if:
+          properties:
+            function:
+              const: sdhc
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ iic2, sdhc1-base, sdhc2-data74, sdhc2-base ]
+
+      - if:
+          properties:
+            function:
+              const: sdhc-clk
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ iic5, iic6 ]
+
+      - if:
+          properties:
+            function:
+              const: spi
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ sdhc1-base, sdhc2-base, usb-drvvbus, usb-pwrfault,
+                        spi3 ]
+
+      - if:
+          properties:
+            function:
+              const: switch-1588
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ spi3 ]
+
+      - if:
+          properties:
+            function:
+              const: uart
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ uart1-soutsin, uart2-soutsin ]
+
+      - if:
+          properties:
+            function:
+              const: usb
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ iic6, usb-drvvbus, usb-pwrfault ]
+
+required:
+  - compatible
+  - reg
+
+allOf:
+  - $ref: pinctrl.yaml#
+
+unevaluatedProperties: false
+
+examples:
+  - |
+    pinctrl@12c {
+        compatible = "fsl,ls1028a-rcw-pinmux";
+        reg = <0x12c 0xc>, <0x168 0x4>;
+
+        iic3-i2c-pins {
+            function = "i2c";
+            groups = "iic3";
+        };
+
+        iic3-gpio-pins {
+            function = "gpio";
+            groups = "iic3";
+        };
+    };
