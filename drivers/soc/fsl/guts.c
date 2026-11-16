@@ -683,11 +683,20 @@ static const struct fsl_soc_data ls2088a_data = {
 	.num_serdes_lanes = 8,
 };
 
+static const struct fsl_soc_pmux_mask ls1028a_pmux[] = {
+	{ 12, GENMASK(26, 0) },
+	{ 13, GENMASK(8, 0) | GENMASK(14, 12) },
+	{ 14, GENMASK(10, 3) },
+	{ 27, GENMASK(6, 1) | GENMASK(11, 8) | GENMASK(29, 26) },
+	{}
+};
+
 static const struct fsl_soc_data ls1028a_data = {
 	.sfp_compat = "fsl,ls1028a-sfp",
 	.uid_offset = 0x21c,
 	.num_serdes_blocks = 1,
 	.num_serdes_lanes = 4,
+	.pmux = ls1028a_pmux,
 };
 
 static const struct fsl_soc_pmux_mask lx2160a_pmux[] = {
