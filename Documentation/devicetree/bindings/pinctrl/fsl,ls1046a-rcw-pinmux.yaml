@@ -1,0 +1,387 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/pinctrl/fsl,ls1046a-rcw-pinmux.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: NXP LS1046A RCW pad muxes
+
+maintainers:
+  - Vladimir Oltean <vladimir.oltean@nxp.com>
+
+description:
+  The LS1046A muxes its UART, IRQ, SPI, SDHC, IFC, Ethernet, MDIO, USB, IIC2,
+  ASLEEP and RTC pads based on its RCW. The related fields are from the
+  read-only RCWSR12 to RCWSR14 registers of DCFG (RCWSR11 to RCWSR13 in the
+  zero-based numbering of the reference manual), and can be changed at runtime
+  by writing the RCW override registers in the DCSR view of DCFG. The node is
+  a child of the DCFG node, which owns both views. Its reg is the RCWSR12 to
+  RCWSR14 window of the CCSR view, and the override registers are at the same
+  offsets of the DCSR view.
+
+  Most of the groups combine a BASE field of the RCW with an EXT one, which
+  takes over some of the pads of the group when it is not 0. The functions
+  named after what the EXT field selects (flextimer, lpuart*, qspi, ifc-cs,
+  sdhc-clk-sync and spi-no-sck) only set the EXT field, and keep the BASE one,
+  which still decides on the pads that EXT does not take over. All the other
+  functions of such a group clear the EXT field and set the BASE one. The
+  ifc-f group has the IFC_A_22_24 bit in place of a BASE field, so ifc and
+  ifc-wp clear its EXT field and clear or set that bit, while qspi sets EXT only.
+  The sdhc function of the spi group is the SDHC_DAT4 to SDHC_DAT7 alternate
+  of the SPI chip selects.
+
+  The IRQ3 to IRQ11 pads are muxed all together by the irq group, whose irq
+  and gpio functions apply to the nine IRQ_BASE bits at once. The IIC1 pads
+  have no alternate function, and the IIC3 and IIC4 ones are not muxed by the
+  RCW but by fsl,ls1046a-scfg-pinmux.
+
+properties:
+  compatible:
+    const: fsl,ls1046a-rcw-pinmux
+
+  reg:
+    items:
+      - description: RCWSR12 to RCWSR14
+
+patternProperties:
+  '-pins$':
+    type: object
+    $ref: pinmux-node.yaml#
+    additionalProperties: false
+
+    properties:
+      function:
+        enum: [ asleep, flextimer, gpio, i2c, ifc, ifc-cs, ifc-rb, ifc-wp,
+                irq, lpuart1-2, lpuart1-2-4, lpuart2-3, lpuart3-5-6, mdio,
+                qspi, rgmii, rtc, sdhc, sdhc-clk-sync, sdhc-dir, spi,
+                spi-no-sck, tsec-1588, uart1, uart1-2, uart1-2-rtscts,
+                uart1-4, uart1-rtscts, usb ]
+
+      groups:
+        items:
+          enum: [ iic2, uart, irq, spi, sdhc, asleep, rtc, ifc-a, ifc-d,
+                  ifc-e1, ifc-f, ec1, ec2, em1, em2, usb-drvvbus,
+                  usb-pwrfault ]
+
+    required:
+      - function
+      - groups
+
+    allOf:
+      - if:
+          properties:
+            function:
+              const: asleep
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ asleep ]
+
+      - if:
+          properties:
+            function:
+              const: flextimer
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ iic2, uart, irq, sdhc, ifc-a, ifc-d, ifc-e1, ec1, ec2 ]
+
+      - if:
+          properties:
+            function:
+              const: gpio
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ iic2, uart, irq, spi, sdhc, asleep, rtc, ifc-a,
+                        ifc-d, ifc-e1, ec1, ec2, em1, em2, usb-drvvbus,
+                        usb-pwrfault ]
+
+      - if:
+          properties:
+            function:
+              const: i2c
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ iic2 ]
+
+      - if:
+          properties:
+            function:
+              const: ifc
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ ifc-a, ifc-d, ifc-e1, ifc-f ]
+
+      - if:
+          properties:
+            function:
+              const: ifc-cs
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ ifc-a ]
+
+      - if:
+          properties:
+            function:
+              const: ifc-rb
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ ifc-a ]
+
+      - if:
+          properties:
+            function:
+              const: ifc-wp
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ ifc-f ]
+
+      - if:
+          properties:
+            function:
+              const: irq
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ irq ]
+
+      - if:
+          properties:
+            function:
+              const: lpuart1-2
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ uart ]
+
+      - if:
+          properties:
+            function:
+              const: lpuart1-2-4
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ uart ]
+
+      - if:
+          properties:
+            function:
+              const: lpuart2-3
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ sdhc ]
+
+      - if:
+          properties:
+            function:
+              const: lpuart3-5-6
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ sdhc ]
+
+      - if:
+          properties:
+            function:
+              const: mdio
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ em1, em2 ]
+
+      - if:
+          properties:
+            function:
+              const: qspi
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ ifc-a, ifc-d, ifc-e1, ifc-f ]
+
+      - if:
+          properties:
+            function:
+              const: rgmii
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ ec1, ec2 ]
+
+      - if:
+          properties:
+            function:
+              const: rtc
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ rtc ]
+
+      - if:
+          properties:
+            function:
+              const: sdhc
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ iic2, spi, sdhc ]
+
+      - if:
+          properties:
+            function:
+              const: sdhc-clk-sync
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ spi ]
+
+      - if:
+          properties:
+            function:
+              const: sdhc-dir
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ spi ]
+
+      - if:
+          properties:
+            function:
+              const: spi
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ spi ]
+
+      - if:
+          properties:
+            function:
+              const: spi-no-sck
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ spi ]
+
+      - if:
+          properties:
+            function:
+              const: tsec-1588
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ ec2 ]
+
+      - if:
+          properties:
+            function:
+              const: uart1
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ uart ]
+
+      - if:
+          properties:
+            function:
+              const: uart1-2
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ uart ]
+
+      - if:
+          properties:
+            function:
+              const: uart1-2-rtscts
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ uart ]
+
+      - if:
+          properties:
+            function:
+              const: uart1-4
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ uart ]
+
+      - if:
+          properties:
+            function:
+              const: uart1-rtscts
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ uart ]
+
+      - if:
+          properties:
+            function:
+              const: usb
+        then:
+          properties:
+            groups:
+              items:
+                enum: [ usb-drvvbus, usb-pwrfault ]
+
+required:
+  - compatible
+  - reg
+
+allOf:
+  - $ref: pinctrl.yaml#
+
+unevaluatedProperties: false
+
+examples:
+  - |
+    pinctrl@12c {
+        compatible = "fsl,ls1046a-rcw-pinmux";
+        reg = <0x12c 0xc>;
+
+        iic2-i2c-pins {
+            function = "i2c";
+            groups = "iic2";
+        };
+
+        iic2-gpio-pins {
+            function = "gpio";
+            groups = "iic2";
+        };
+    };
