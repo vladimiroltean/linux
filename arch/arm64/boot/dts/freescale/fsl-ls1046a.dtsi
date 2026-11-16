@@ -347,6 +347,31 @@
 					<11 0 &gic GIC_SPI 151 IRQ_TYPE_LEVEL_HIGH>;
 				interrupt-map-mask = <0xf 0x0>;
 			};
+
+			pinctrl@40c {
+				compatible = "fsl,ls1046a-scfg-pinmux";
+				reg = <0x40c 0x4>;
+
+				i2c2_pins: iic3-i2c-pins {
+					function = "i2c";
+					groups = "iic3-scl", "iic3-sda";
+				};
+
+				gpio4_11_10_pins: iic3-gpio-pins {
+					function = "gpio";
+					groups = "iic3-scl", "iic3-sda";
+				};
+
+				i2c3_pins: iic4-i2c-pins {
+					function = "i2c";
+					groups = "iic4-scl", "iic4-sda";
+				};
+
+				gpio4_13_12_pins: iic4-gpio-pins {
+					function = "gpio";
+					groups = "iic4-scl", "iic4-sda";
+				};
+			};
 		};
 
 		crypto: crypto@1700000 {
@@ -485,11 +510,29 @@
 		};
 
 		dcfg: dcfg@1ee0000 {
-			compatible = "fsl,ls1046a-dcfg", "syscon";
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "fsl,ls1046a-dcfg", "syscon", "simple-mfd";
 			reg = <0x0 0x1ee0000 0x0 0x1000>,
 			      <0x0 0x20140000 0x0 0x1000>;
 			reg-names = "dcfg_ccsr", "dcfg_dcsr";
+			ranges = <0x0 0x0 0x1ee0000 0x1000>;
 			big-endian;
+
+			pinctrl@12c {
+				compatible = "fsl,ls1046a-rcw-pinmux";
+				reg = <0x12c 0xc>;
+
+				i2c1_pins: iic2-i2c-pins {
+					function = "i2c";
+					groups = "iic2";
+				};
+
+				gpio4_3_2_pins: iic2-gpio-pins {
+					function = "gpio";
+					groups = "iic2";
+				};
+			};
 		};
 
 		clockgen: clocking@1ee1000 {
