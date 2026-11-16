@@ -1,0 +1,74 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/pinctrl/fsl,ls1046a-scfg-pinmux.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: NXP LS1046A SCFG pad muxes
+
+maintainers:
+  - Vladimir Oltean <vladimir.oltean@nxp.com>
+
+description:
+  The LS1046A muxes its IIC3 and IIC4 pads with the SCFG_RCWPMUXCR0 register
+  of SCFG, an extension of the RCW pad muxes which are not in the RCW itself.
+  The register is writable at runtime, and is reset to select the GPIO
+  function of the pads. The node is a child of the SCFG node, and its reg is
+  the SCFG_RCWPMUXCR0 register.
+
+  Each of the SCL and SDA pads of the IIC3 and IIC4 buses has a selector of its
+  own, and is a group by itself. They have the same functions, but the signals
+  differ per pad, such as USB DRVVBUS on the SCL ones and PWRFAULT on the SDA
+  ones, or the distinct EVT_B and FlexTimer signals.
+
+properties:
+  compatible:
+    const: fsl,ls1046a-scfg-pinmux
+
+  reg:
+    items:
+      - description: SCFG_RCWPMUXCR0
+
+patternProperties:
+  '-pins$':
+    type: object
+    $ref: pinmux-node.yaml#
+    additionalProperties: false
+
+    properties:
+      function:
+        enum: [ evt, flextimer, gpio, i2c, usb ]
+
+      groups:
+        items:
+          enum: [ iic3-scl, iic3-sda, iic4-scl, iic4-sda ]
+
+    required:
+      - function
+      - groups
+
+required:
+  - compatible
+  - reg
+
+allOf:
+  - $ref: pinctrl.yaml#
+
+unevaluatedProperties: false
+
+examples:
+  - |
+    pinctrl@40c {
+        compatible = "fsl,ls1046a-scfg-pinmux";
+        reg = <0x40c 0x4>;
+
+        iic3-i2c-pins {
+            function = "i2c";
+            groups = "iic3-scl", "iic3-sda";
+        };
+
+        iic3-gpio-pins {
+            function = "gpio";
+            groups = "iic3-scl", "iic3-sda";
+        };
+    };
