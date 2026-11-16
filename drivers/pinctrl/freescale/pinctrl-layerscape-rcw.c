@@ -5,7 +5,6 @@
  * Copyright 2026 Free Mobile - Vincent Jardin
  */
 
-#include <linux/bitfield.h>
 #include <linux/bits.h>
 #include <linux/fsl/guts.h>
 #include <linux/module.h>
@@ -20,9 +19,16 @@
 #include "../core.h"
 #include "../pinmux.h"
 
+/*
+ * @val and @mask are relative to the shift of the group. A @mask of 0 stands
+ * for the field of the group, @width bits wide: that is what a function whose
+ * encoding is the whole field has. A function which depends on a second field
+ * of the group, or on one only, gives its @mask.
+ */
 struct rcw_pmux_func {
 	const char *name;
-	u8 val;
+	u32 val;
+	u32 mask;
 };
 
 struct rcw_pmux_group {
@@ -41,6 +47,8 @@ struct rcw_pmux_soc {
 };
 
 #define RCW_PMUX_FUNC(_name, _val)	{ .name = _name, .val = _val }
+#define RCW_PMUX_FUNC_MASK(_name, _val, _mask)				\
+	{ .name = _name, .val = _val, .mask = _mask }
 #define RCW_PMUX_GROUP(_name, _rcwsr, _shift, _width, _funcs)		\
 	{								\
 		.name = _name, .rcwsr = _rcwsr,				\
@@ -325,9 +333,12 @@ struct rcw_pmux {
 	struct pinctrl_pin_desc *pins;
 };
 
-static u32 rcw_pmux_group_mask(const struct rcw_pmux_group *group)
+static u32 rcw_pmux_func_mask(const struct rcw_pmux_group *group,
+			      const struct rcw_pmux_func *func)
 {
-	return GENMASK(group->shift + group->width - 1, group->shift);
+	u32 mask = func->mask ?: GENMASK(group->width - 1, 0);
+
+	return mask << group->shift;
 }
 
 static const struct rcw_pmux_func *
@@ -354,14 +365,16 @@ static void rcw_pmux_pin_dbg_show(struct pinctrl_dev *pctldev,
 	if (fsl_guts_pmux_read(group->rcwsr, &val))
 		return;
 
-	val = field_get(rcw_pmux_group_mask(group), val);
 	for (i = 0; i < group->nfuncs; i++) {
-		if (group->funcs[i].val == val) {
-			seq_puts(s, group->funcs[i].name);
+		const struct rcw_pmux_func *func = &group->funcs[i];
+
+		if ((val & rcw_pmux_func_mask(group, func)) ==
+		    func->val << group->shift) {
+			seq_puts(s, func->name);
 			return;
 		}
 	}
-	seq_printf(s, "0x%x", val);
+	seq_printf(s, "0x%x", val >> group->shift);
 }
 
 static const struct pinctrl_ops rcw_pmux_pctlops = {
@@ -381,7 +394,6 @@ static int rcw_pmux_set_mux(struct pinctrl_dev *pctldev,
 	const struct rcw_pmux_group *group;
 	const struct rcw_pmux_func *mux;
 	const struct group_desc *grp;
-	u32 mask;
 
 	func = pinmux_generic_get_function(pctldev, fsel);
 	grp = pinctrl_generic_get_group(pctldev, gsel);
@@ -396,10 +408,8 @@ static int rcw_pmux_set_mux(struct pinctrl_dev *pctldev,
 		return -EINVAL;
 	}
 
-	mask = rcw_pmux_group_mask(group);
-
-	return fsl_guts_pmux_override(group->rcwsr, field_prep(mask, mux->val),
-				      mask);
+	return fsl_guts_pmux_override(group->rcwsr, mux->val << group->shift,
+				      rcw_pmux_func_mask(group, mux));
 }
 
 static const struct pinmux_ops rcw_pmux_pmxops = {
