@@ -68,10 +68,10 @@ patternProperties:
     $ref: /schemas/clock/fsl,flexspi-clock.yaml#
 
   "^pinctrl@[0-9a-f]+$":
-    $ref: /schemas/pinctrl/fsl,lx2160a-rcw-pinmux.yaml#
+    type: object
     description:
-      The pad muxes of the RCW on the LX2160A, at their RCWSR12 to RCWSR14
-      and RCWSR27 windows, overridden through the DCSR view of this block.
+      The pad muxes of the RCW, at their RCWSR12 to RCWSR14 and RCWSR27
+      windows, overridden through the DCSR view of this block.
 
 required:
   - compatible
@@ -79,11 +79,33 @@ required:
 
 allOf:
   - if:
+      properties:
+        compatible:
+          contains:
+            const: fsl,ls1028a-dcfg
+    then:
+      patternProperties:
+        "^pinctrl@[0-9a-f]+$":
+          $ref: /schemas/pinctrl/fsl,ls1028a-rcw-pinmux.yaml#
+
+  - if:
+      properties:
+        compatible:
+          contains:
+            const: fsl,lx2160a-dcfg
+    then:
+      patternProperties:
+        "^pinctrl@[0-9a-f]+$":
+          $ref: /schemas/pinctrl/fsl,lx2160a-rcw-pinmux.yaml#
+
+  - if:
       not:
         properties:
           compatible:
             contains:
-              const: fsl,lx2160a-dcfg
+              enum:
+                - fsl,ls1028a-dcfg
+                - fsl,lx2160a-dcfg
     then:
       patternProperties:
         "^pinctrl@[0-9a-f]+$": false
