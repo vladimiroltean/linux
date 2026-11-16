@@ -205,6 +205,118 @@ static const struct rcw_pmux_soc lx2160a_soc = {
 	.ngroups = ARRAY_SIZE(lx2160a_groups),
 };
 
+/* LS1028A: RCWSR12..14 and RCWSR27 */
+static const struct rcw_pmux_func ls1028a_iic3_funcs[] = {
+	RCW_PMUX_FUNC("i2c", 0), RCW_PMUX_FUNC("gpio", 1),
+	RCW_PMUX_FUNC("can", 2), RCW_PMUX_FUNC("lpuart", 3),
+	RCW_PMUX_FUNC("flextimer", 4), RCW_PMUX_FUNC("evt", 6),
+};
+
+static const struct rcw_pmux_func ls1028a_iic5_funcs[] = {
+	RCW_PMUX_FUNC("i2c", 0), RCW_PMUX_FUNC("gpio", 1),
+	RCW_PMUX_FUNC("sdhc-clk", 2), RCW_PMUX_FUNC("evt", 6),
+};
+
+static const struct rcw_pmux_func ls1028a_iic6_funcs[] = {
+	RCW_PMUX_FUNC("i2c", 0), RCW_PMUX_FUNC("gpio", 1),
+	RCW_PMUX_FUNC("sdhc-clk", 2), RCW_PMUX_FUNC("usb", 3),
+	RCW_PMUX_FUNC("evt", 6),
+};
+
+static const struct rcw_pmux_func ls1028a_xspi1_data_funcs[] = {
+	RCW_PMUX_FUNC("flexspi", 0), RCW_PMUX_FUNC("gpio", 1),
+	RCW_PMUX_FUNC("lpuart", 3), RCW_PMUX_FUNC("flextimer", 4),
+};
+
+static const struct rcw_pmux_func ls1028a_xspi1_base_funcs[] = {
+	RCW_PMUX_FUNC("flexspi", 0), RCW_PMUX_FUNC("gpio", 1),
+	RCW_PMUX_FUNC("flextimer", 4),
+};
+
+static const struct rcw_pmux_func ls1028a_sdhc1_base_funcs[] = {
+	RCW_PMUX_FUNC("sdhc", 0), RCW_PMUX_FUNC("gpio", 1),
+	RCW_PMUX_FUNC("spi", 2), RCW_PMUX_FUNC("sai-tx", 3),
+	RCW_PMUX_FUNC("sai-rx", 4),
+};
+
+static const struct rcw_pmux_func ls1028a_sdhc2_data74_funcs[] = {
+	RCW_PMUX_FUNC("sdhc", 0), RCW_PMUX_FUNC("gpio", 1),
+	RCW_PMUX_FUNC("i2c", 2), RCW_PMUX_FUNC("lpuart", 3),
+	RCW_PMUX_FUNC("flextimer", 4), RCW_PMUX_FUNC("flexspi", 6),
+};
+
+static const struct rcw_pmux_func ls1028a_sdhc2_base_funcs[] = {
+	RCW_PMUX_FUNC("sdhc", 0), RCW_PMUX_FUNC("gpio", 1),
+	RCW_PMUX_FUNC("spi", 2), RCW_PMUX_FUNC("lpuart", 3),
+	RCW_PMUX_FUNC("flextimer", 4), RCW_PMUX_FUNC("flexspi", 6),
+};
+
+static const struct rcw_pmux_func ls1028a_uart_funcs[] = {
+	RCW_PMUX_FUNC("uart", 0), RCW_PMUX_FUNC("gpio", 1),
+	RCW_PMUX_FUNC("lpuart", 3), RCW_PMUX_FUNC("flextimer", 4),
+};
+
+static const struct rcw_pmux_func ls1028a_clk_out_funcs[] = {
+	RCW_PMUX_FUNC("clk-out", 0), RCW_PMUX_FUNC("gpio", 1),
+	RCW_PMUX_FUNC("flextimer", 2), RCW_PMUX_FUNC("evt", 6),
+};
+
+static const struct rcw_pmux_func ls1028a_ec1_funcs[] = {
+	RCW_PMUX_FUNC("rgmii", 0), RCW_PMUX_FUNC("gpio", 1),
+	RCW_PMUX_FUNC("sai-tx", 2), RCW_PMUX_FUNC("sai-rx", 3),
+	RCW_PMUX_FUNC("flextimer", 4), RCW_PMUX_FUNC("ec1-1588", 5),
+};
+
+static const struct rcw_pmux_func ls1028a_usb_funcs[] = {
+	RCW_PMUX_FUNC("usb", 0), RCW_PMUX_FUNC("gpio", 1),
+	RCW_PMUX_FUNC("spi", 2),
+};
+
+static const struct rcw_pmux_func ls1028a_spi3_funcs[] = {
+	RCW_PMUX_FUNC("spi", 0), RCW_PMUX_FUNC("gpio", 1),
+	RCW_PMUX_FUNC("ec1-1588", 2), RCW_PMUX_FUNC("switch-1588", 3),
+};
+
+static const struct rcw_pmux_func ls1028a_gtx_clk125_funcs[] = {
+	RCW_PMUX_FUNC("gtx-clk", 0), RCW_PMUX_FUNC("gpio", 1),
+	RCW_PMUX_FUNC("ec1-1722", 2),
+};
+
+static const struct rcw_pmux_group ls1028a_groups[] = {
+	/* RCWSR12 */
+	RCW_PMUX_GROUP("iic2", 12, 0, 3, fsl_lsch32_iic2_funcs),
+	RCW_PMUX_GROUP("iic3", 12, 3, 3, ls1028a_iic3_funcs),
+	RCW_PMUX_GROUP("iic4", 12, 6, 3, ls1028a_iic3_funcs),
+	RCW_PMUX_GROUP("iic5", 12, 9, 3, ls1028a_iic5_funcs),
+	RCW_PMUX_GROUP("iic6", 12, 12, 3, ls1028a_iic6_funcs),
+	RCW_PMUX_GROUP("xspi1-data74", 12, 15, 3, ls1028a_xspi1_data_funcs),
+	RCW_PMUX_GROUP("xspi1-data30", 12, 18, 3, ls1028a_xspi1_data_funcs),
+	RCW_PMUX_GROUP("xspi1-base", 12, 21, 3, ls1028a_xspi1_base_funcs),
+	RCW_PMUX_GROUP("sdhc1-base", 12, 24, 3, ls1028a_sdhc1_base_funcs),
+	/* RCWSR13 */
+	RCW_PMUX_GROUP("sdhc2-data74", 13, 0, 3, ls1028a_sdhc2_data74_funcs),
+	RCW_PMUX_GROUP("sdhc2-base", 13, 3, 3, ls1028a_sdhc2_base_funcs),
+	RCW_PMUX_GROUP("uart1-soutsin", 13, 6, 3, ls1028a_uart_funcs),
+	RCW_PMUX_GROUP("uart2-soutsin", 13, 12, 3, ls1028a_uart_funcs),
+	/* RCWSR14 */
+	RCW_PMUX_GROUP("clk-out", 14, 3, 3, ls1028a_clk_out_funcs),
+	RCW_PMUX_GROUP("asleep", 14, 6, 3, fsl_lsch32_asleep_funcs),
+	RCW_PMUX_GROUP("reset-req", 14, 9, 1, fsl_lsch32_reset_req_funcs),
+	RCW_PMUX_GROUP("iic1", 14, 10, 1, fsl_lsch32_iic1_funcs),
+	/* RCWSR27 */
+	RCW_PMUX_GROUP("ec1-sai4-5", 27, 1, 3, ls1028a_ec1_funcs),
+	RCW_PMUX_GROUP("ec1-sai3-6", 27, 4, 3, ls1028a_ec1_funcs),
+	RCW_PMUX_GROUP("usb-drvvbus", 27, 8, 2, ls1028a_usb_funcs),
+	RCW_PMUX_GROUP("usb-pwrfault", 27, 10, 2, ls1028a_usb_funcs),
+	RCW_PMUX_GROUP("spi3", 27, 26, 2, ls1028a_spi3_funcs),
+	RCW_PMUX_GROUP("gtx-clk125", 27, 28, 2, ls1028a_gtx_clk125_funcs),
+};
+
+static const struct rcw_pmux_soc ls1028a_soc = {
+	.groups = ls1028a_groups,
+	.ngroups = ARRAY_SIZE(ls1028a_groups),
+};
+
 struct rcw_pmux {
 	struct device *dev;
 	struct pinctrl_dev *pctl;
@@ -409,6 +521,7 @@ static int rcw_pmux_probe(struct platform_device *pdev)
 }
 
 static const struct of_device_id rcw_pmux_of_match[] = {
+	{ .compatible = "fsl,ls1028a-rcw-pinmux", .data = &ls1028a_soc },
 	{ .compatible = "fsl,lx2160a-rcw-pinmux", .data = &lx2160a_soc },
 	{ }
 };
