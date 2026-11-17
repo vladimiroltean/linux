@@ -670,6 +670,24 @@ static const struct fsl_soc_data ls1088a_data = {
 	.num_serdes_lanes = 4,
 };
 
+static const struct fsl_soc_pmux_mask ls1043a_pmux[] = {
+	/* UART_EXT..SDHC_BASE, IRQ_BASE, SPI_BASE; not IRQ_OUT */
+	{ 12, GENMASK(29, 12) | GENMASK(10, 0) },
+	/* IFC_GRP_A_EXT..F_EXT, E1_BASE, D_BASE, A_BASE, A_22_24 */
+	{ 13, GENMASK(31, 29) | GENMASK(22, 14) | BIT(10) | BIT(8) |
+	      GENMASK(3, 2) | BIT(0) },
+	/* EC1, EC2, EM1, EM2, USB_DRVVBUS, USB_PWRFAULT, QE_CLK_OVRRIDE,
+	 * IIC2_EXT
+	 */
+	{ 14, GENMASK(31, 26) | BIT(22) | BIT(21) | BIT(18) | BIT(17) |
+	      BIT(10) | GENMASK(2, 0) },
+	{}
+};
+
+static const struct fsl_soc_data ls1043a_data = {
+	.pmux = ls1043a_pmux,
+};
+
 static const struct fsl_soc_pmux_mask ls1046a_pmux[] = {
 	{ 12, GENMASK(29, 12) | GENMASK(10, 0) },
 	{ 13, GENMASK(31, 29) | GENMASK(22, 14) | BIT(10) | BIT(8) |
@@ -743,7 +761,7 @@ static const struct of_device_id fsl_guts_of_match[] = {
 	{ .compatible = "fsl,mpc8569-guts", },
 	{ .compatible = "fsl,mpc8572-guts", },
 	{ .compatible = "fsl,ls1021a-dcfg", },
-	{ .compatible = "fsl,ls1043a-dcfg", },
+	{ .compatible = "fsl,ls1043a-dcfg", .data = &ls1043a_data},
 	{ .compatible = "fsl,ls2080a-dcfg", .data = &ls2088a_data},
 	{ .compatible = "fsl,ls1088a-dcfg", .data = &ls1088a_data},
 	{ .compatible = "fsl,ls1012a-dcfg", },
