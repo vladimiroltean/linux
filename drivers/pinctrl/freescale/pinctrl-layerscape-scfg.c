@@ -65,6 +65,33 @@ static const struct scfg_pmux_soc ls1046a_soc = {
 	.ngroups = ARRAY_SIZE(ls1046a_groups),
 };
 
+/* LS1043A: as on the LS1046A, with QUICC Engine signals in addition */
+static const struct scfg_pmux_func ls1043a_iic3_funcs[] = {
+	SCFG_PMUX_FUNC("i2c", 0), SCFG_PMUX_FUNC("gpio", 1),
+	SCFG_PMUX_FUNC("evt", 2), SCFG_PMUX_FUNC("usb", 3),
+	SCFG_PMUX_FUNC("qe-brg", 4), SCFG_PMUX_FUNC("flextimer", 5),
+	SCFG_PMUX_FUNC("qe-clk", 6),
+};
+
+static const struct scfg_pmux_func ls1043a_iic4_funcs[] = {
+	SCFG_PMUX_FUNC("i2c", 0), SCFG_PMUX_FUNC("gpio", 1),
+	SCFG_PMUX_FUNC("evt", 2), SCFG_PMUX_FUNC("usb", 3),
+	SCFG_PMUX_FUNC("qe-tdm", 4), SCFG_PMUX_FUNC("flextimer", 5),
+	SCFG_PMUX_FUNC("qe-ucc", 6),
+};
+
+static const struct scfg_pmux_group ls1043a_groups[] = {
+	SCFG_PMUX_GROUP("iic3-scl", 12, ls1043a_iic3_funcs),
+	SCFG_PMUX_GROUP("iic3-sda", 8, ls1043a_iic3_funcs),
+	SCFG_PMUX_GROUP("iic4-scl", 4, ls1043a_iic4_funcs),
+	SCFG_PMUX_GROUP("iic4-sda", 0, ls1043a_iic4_funcs),
+};
+
+static const struct scfg_pmux_soc ls1043a_soc = {
+	.groups = ls1043a_groups,
+	.ngroups = ARRAY_SIZE(ls1043a_groups),
+};
+
 struct scfg_pmux {
 	struct device *dev;
 	struct pinctrl_dev *pctl;
@@ -262,6 +289,7 @@ static int scfg_pmux_probe(struct platform_device *pdev)
 }
 
 static const struct of_device_id scfg_pmux_of_match[] = {
+	{ .compatible = "fsl,ls1043a-scfg-pinmux", .data = &ls1043a_soc },
 	{ .compatible = "fsl,ls1046a-scfg-pinmux", .data = &ls1046a_soc },
 	{}
 };
