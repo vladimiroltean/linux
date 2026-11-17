@@ -283,3 +283,18 @@ config PINCTRL_IMXRT1170
 	select PINCTRL_IMX
 	help
 	  Say Y here to enable the imxrt1170 pinctrl driver
+
+config PINCTRL_LAYERSCAPE_RCW
+	bool "NXP Layerscape RCW pad-mux driver"
+	depends on OF
+	depends on ARCH_LAYERSCAPE || COMPILE_TEST
+	default ARCH_LAYERSCAPE
+	select FSL_GUTS
+	select GENERIC_PINCTRL_GROUPS
+	select GENERIC_PINMUX_FUNCTIONS
+	select GENERIC_PINCONF
+	help
+	  Say Y here to mux the pads of the Layerscape SoCs at runtime. The
+	  pads are muxed by fields of the RCW: the driver changes it in the
+	  DCSR view of the DCFG that fsl-guts drives.
+	  The I2C bus recovery needs it to switch the pads of a bus to GPIO.
