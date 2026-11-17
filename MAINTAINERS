@@ -20312,6 +20312,7 @@ L:	imx@lists.linux.dev
 S:	Maintained
 F:	Documentation/devicetree/bindings/pinctrl/fsl,ls1028a-rcw-pinmux.yaml
 F:	Documentation/devicetree/bindings/pinctrl/fsl,ls1043a-rcw-pinmux.yaml
+F:	Documentation/devicetree/bindings/pinctrl/fsl,ls1043a-scfg-pinmux.yaml
 F:	Documentation/devicetree/bindings/pinctrl/fsl,ls1046a-rcw-pinmux.yaml
 F:	Documentation/devicetree/bindings/pinctrl/fsl,ls1046a-scfg-pinmux.yaml
 F:	Documentation/devicetree/bindings/pinctrl/fsl,lx2160a-rcw-pinmux.yaml
