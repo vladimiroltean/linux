@@ -491,6 +491,68 @@ static const struct rcw_pmux_soc ls1046a_soc = {
 	.ngroups = ARRAY_SIZE(ls1046a_groups),
 };
 
+/*
+ * LS1043A: RCWSR12..14, as on the LS1046A, with the QUICC Engine alternates
+ * of the IRQ and IIC2 pads in addition.
+ */
+static const struct rcw_pmux_func ls1043a_irq_funcs[] = {
+	RCW_PMUX_FUNC_MASK("irq", 0, LSCH2_IRQ_ALL),
+	RCW_PMUX_FUNC_MASK("gpio", LSCH2_IRQ_BASE, LSCH2_IRQ_ALL),
+	RCW_PMUX_FUNC_MASK("qe-tdm", 1 << 22, LSCH2_IRQ_EXT),
+	RCW_PMUX_FUNC_MASK("qe-ucc", 2 << 22, LSCH2_IRQ_EXT),
+	RCW_PMUX_FUNC_MASK("flextimer", 3 << 22, LSCH2_IRQ_EXT),
+};
+
+/*
+ * IIC2 group: IIC2_EXT at 0, and QE_CLK_OVRRIDE at 10, which swaps CLK9 and
+ * BRGO2 on the SCL pad of the qe-clk and qe-brg encodings, and is to be 0
+ * otherwise. The bits in between are other fields.
+ */
+#define LS1043A_IIC2_EXT	GENMASK(2, 0)
+#define LS1043A_IIC2_QE_CLK_OVR	BIT(10)
+#define LS1043A_IIC2_ALL	(LS1043A_IIC2_EXT | LS1043A_IIC2_QE_CLK_OVR)
+static const struct rcw_pmux_func ls1043a_iic2_funcs[] = {
+	RCW_PMUX_FUNC_MASK("i2c", 0, LS1043A_IIC2_ALL),
+	RCW_PMUX_FUNC_MASK("sdhc", 1, LS1043A_IIC2_ALL),
+	RCW_PMUX_FUNC_MASK("gpio", 2, LS1043A_IIC2_ALL),
+	RCW_PMUX_FUNC_MASK("flextimer", 3, LS1043A_IIC2_ALL),
+	RCW_PMUX_FUNC_MASK("qe-si", 4, LS1043A_IIC2_ALL),
+	RCW_PMUX_FUNC_MASK("qe-clk", 5, LS1043A_IIC2_ALL),
+	RCW_PMUX_FUNC_MASK("qe-brg", 6, LS1043A_IIC2_ALL),
+	RCW_PMUX_FUNC_MASK("qe-brg-clk", 5 | LS1043A_IIC2_QE_CLK_OVR,
+			   LS1043A_IIC2_ALL),
+	RCW_PMUX_FUNC_MASK("qe-clk-brg", 6 | LS1043A_IIC2_QE_CLK_OVR,
+			   LS1043A_IIC2_ALL),
+};
+
+static const struct rcw_pmux_group ls1043a_groups[] = {
+	/* RCWSR12 */
+	RCW_PMUX_GROUP("uart", 12, 15, 3, fsl_lsch2_uart_funcs),
+	RCW_PMUX_GROUP("irq", 12, 2, 9, ls1043a_irq_funcs),
+	RCW_PMUX_GROUP("spi", 12, 0, 2, fsl_lsch2_spi_funcs),
+	RCW_PMUX_GROUP("sdhc", 12, 12, 1, fsl_lsch2_sdhc_funcs),
+	RCW_PMUX_GROUP("asleep", 12, 14, 1, fsl_lsch2_asleep_funcs),
+	RCW_PMUX_GROUP("rtc", 12, 13, 1, fsl_lsch2_rtc_funcs),
+	/* RCWSR13 */
+	RCW_PMUX_GROUP("ifc-a", 13, 2, 2, fsl_lsch2_ifc_a_funcs),
+	RCW_PMUX_GROUP("ifc-d", 13, 8, 1, fsl_lsch2_ifc_d_funcs),
+	RCW_PMUX_GROUP("ifc-e1", 13, 10, 1, fsl_lsch2_ifc_e1_funcs),
+	RCW_PMUX_GROUP("ifc-f", 13, 0, 1, fsl_lsch2_ifc_f_funcs),
+	/* RCWSR14 */
+	RCW_PMUX_GROUP("ec1", 14, 29, 3, fsl_lsch2_ec1_funcs),
+	RCW_PMUX_GROUP("ec2", 14, 26, 3, fsl_lsch2_ec2_funcs),
+	RCW_PMUX_GROUP("em1", 14, 22, 1, fsl_lsch2_mdio_funcs),
+	RCW_PMUX_GROUP("em2", 14, 21, 1, fsl_lsch2_mdio_funcs),
+	RCW_PMUX_GROUP("usb-drvvbus", 14, 18, 1, fsl_lsch2_usb_funcs),
+	RCW_PMUX_GROUP("usb-pwrfault", 14, 17, 1, fsl_lsch2_usb_funcs),
+	RCW_PMUX_GROUP("iic2", 14, 0, 3, ls1043a_iic2_funcs),
+};
+
+static const struct rcw_pmux_soc ls1043a_soc = {
+	.groups = ls1043a_groups,
+	.ngroups = ARRAY_SIZE(ls1043a_groups),
+};
+
 struct rcw_pmux {
 	struct device *dev;
 	struct pinctrl_dev *pctl;
@@ -698,6 +760,7 @@ static int rcw_pmux_probe(struct platform_device *pdev)
 
 static const struct of_device_id rcw_pmux_of_match[] = {
 	{ .compatible = "fsl,ls1028a-rcw-pinmux", .data = &ls1028a_soc },
+	{ .compatible = "fsl,ls1043a-rcw-pinmux", .data = &ls1043a_soc },
 	{ .compatible = "fsl,ls1046a-rcw-pinmux", .data = &ls1046a_soc },
 	{ .compatible = "fsl,lx2160a-rcw-pinmux", .data = &lx2160a_soc },
 	{ }
