@@ -298,3 +298,18 @@ config PINCTRL_LAYERSCAPE_RCW
 	  pads are muxed by fields of the RCW: the driver changes it in the
 	  DCSR view of the DCFG that fsl-guts drives.
 	  The I2C bus recovery needs it to switch the pads of a bus to GPIO.
+
+config PINCTRL_LAYERSCAPE_SCFG
+	bool "NXP Layerscape SCFG pad-mux driver"
+	depends on OF
+	depends on ARCH_LAYERSCAPE || COMPILE_TEST
+	default ARCH_LAYERSCAPE
+	select GENERIC_PINCTRL_GROUPS
+	select GENERIC_PINMUX_FUNCTIONS
+	select GENERIC_PINCONF
+	select MFD_SYSCON
+	help
+	  Say Y here to mux the pads of the Layerscape SoCs which an extension
+	  of the RCW muxes, in a register of the SCFG. The driver writes it
+	  through the syscon of the SCFG.
+	  The I2C bus recovery needs it to switch the pads of a bus to GPIO.

@@ -20305,7 +20305,7 @@ F:	Documentation/devicetree/bindings/clock/*imx*
 F:	drivers/clk/imx/
 F:	include/dt-bindings/clock/*imx*
 
-NXP LAYERSCAPE RCW PAD-MUX DRIVER
+NXP LAYERSCAPE RCW AND SCFG PAD-MUX DRIVERS
 M:	Vincent Jardin <vjardin@free.fr>
 L:	linux-gpio@vger.kernel.org
 L:	imx@lists.linux.dev
@@ -20315,6 +20315,7 @@ F:	Documentation/devicetree/bindings/pinctrl/fsl,ls1046a-rcw-pinmux.yaml
 F:	Documentation/devicetree/bindings/pinctrl/fsl,ls1046a-scfg-pinmux.yaml
 F:	Documentation/devicetree/bindings/pinctrl/fsl,lx2160a-rcw-pinmux.yaml
 F:	drivers/pinctrl/freescale/pinctrl-layerscape-rcw.c
+F:	drivers/pinctrl/freescale/pinctrl-layerscape-scfg.c
 
 NXP NETC ETHERNET SWITCH DRIVER
 M:	Wei Fang <wei.fang@nxp.com>
