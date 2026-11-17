@@ -852,16 +852,6 @@
 					groups = "sdhc1-dir";
 				};
 
-				gpio1_18_15_pins: iic8-iic7-gpio-pins {
-					function = "gpio";
-					groups = "sdhc2-data74";
-				};
-
-				i2c6_i2c7_pins: iic8-iic7-i2c-pins {
-					function = "i2c";
-					groups = "sdhc2-data74";
-				};
-
 				i2c0_pins: iic1-i2c-pins {
 					function = "i2c";
 					groups = "iic1";
@@ -1038,11 +1028,6 @@
 			clock-names = "ipg";
 			clocks = <&clockgen QORIQ_CLK_PLATFORM_PLL
 					    QORIQ_CLK_PLL_DIV(16)>;
-			pinctrl-names = "default", "gpio";
-			pinctrl-0 = <&i2c6_i2c7_pins>;
-			pinctrl-1 = <&gpio1_18_15_pins>;
-			scl-gpios = <&gpio1 16 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
-			sda-gpios = <&gpio1 15 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
 			status = "disabled";
 		};
 
@@ -1055,11 +1040,6 @@
 			clock-names = "ipg";
 			clocks = <&clockgen QORIQ_CLK_PLATFORM_PLL
 					    QORIQ_CLK_PLL_DIV(16)>;
-			pinctrl-names = "default", "gpio";
-			pinctrl-0 = <&i2c6_i2c7_pins>;
-			pinctrl-1 = <&gpio1_18_15_pins>;
-			scl-gpios = <&gpio1 18 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
-			sda-gpios = <&gpio1 17 (GPIO_ACTIVE_HIGH | GPIO_OPEN_DRAIN)>;
 			status = "disabled";
 		};
 
