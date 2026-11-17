@@ -49,7 +49,8 @@ patternProperties:
   "^pinctrl@[a-f0-9]+$":
     type: object
     description:
-      The pad muxes of the SCFG_RCWPMUXCR0 register, on the LS1046A only.
+      The pad muxes of the SCFG_RCWPMUXCR0 register, on the LS1043A and the
+      LS1046A only.
 
 required:
   - compatible
@@ -60,12 +61,31 @@ allOf:
       properties:
         compatible:
           contains:
+            const: fsl,ls1043a-scfg
+    then:
+      patternProperties:
+        "^pinctrl@[a-f0-9]+$":
+          $ref: /schemas/pinctrl/fsl,ls1043a-scfg-pinmux.yaml#
+
+  - if:
+      properties:
+        compatible:
+          contains:
             const: fsl,ls1046a-scfg
     then:
       patternProperties:
         "^pinctrl@[a-f0-9]+$":
           $ref: /schemas/pinctrl/fsl,ls1046a-scfg-pinmux.yaml#
-    else:
+
+  - if:
+      not:
+        properties:
+          compatible:
+            contains:
+              enum:
+                - fsl,ls1043a-scfg
+                - fsl,ls1046a-scfg
+    then:
       patternProperties:
         "^pinctrl@[a-f0-9]+$": false
 
