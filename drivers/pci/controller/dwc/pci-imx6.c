@@ -1449,6 +1449,10 @@ static int imx_pcie_host_init(struct dw_pcie_rp *pp)
 		pp->bridge->disable_device = imx_pcie_disable_device;
 	}
 
+	ret = clk_bulk_prepare_enable(imx_pcie->num_clks, imx_pcie->clks);
+	if (ret)
+		goto err_pwrctrl_power_off;
+
 	if (imx_pcie->drvdata->select_ref_clk_src)
 		imx_pcie->drvdata->select_ref_clk_src(imx_pcie);
 
