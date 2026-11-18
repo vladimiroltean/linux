@@ -23,7 +23,6 @@ properties:
               - fsl,ls1012a-dcfg
               - fsl,ls1021a-dcfg
               - fsl,ls1043a-dcfg
-              - fsl,ls1046a-dcfg
               - fsl,ls1088a-dcfg
               - fsl,ls2080a-dcfg
               - fsl,lx2160a-dcfg
@@ -32,6 +31,7 @@ properties:
       - items:
           - enum:
               - fsl,ls1028a-dcfg
+              - fsl,ls1046a-dcfg
               - fsl,lx2160a-dcfg
           - const: syscon
           - const: simple-mfd
@@ -92,6 +92,16 @@ allOf:
       properties:
         compatible:
           contains:
+            const: fsl,ls1046a-dcfg
+    then:
+      patternProperties:
+        "^pinctrl@[0-9a-f]+$":
+          $ref: /schemas/pinctrl/fsl,ls1046a-rcw-pinmux.yaml#
+
+  - if:
+      properties:
+        compatible:
+          contains:
             const: fsl,lx2160a-dcfg
     then:
       patternProperties:
@@ -105,6 +115,7 @@ allOf:
             contains:
               enum:
                 - fsl,ls1028a-dcfg
+                - fsl,ls1046a-dcfg
                 - fsl,lx2160a-dcfg
     then:
       patternProperties:
