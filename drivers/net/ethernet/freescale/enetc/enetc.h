@@ -54,6 +54,7 @@ struct enetc_tx_swbd {
 	u8 is_xdp_tx:1;
 	u8 is_xdp_redirect:1;
 	u8 qbv_en:1;
+	u8 dbg_wb:1;
 };
 
 struct enetc_skb_cb {

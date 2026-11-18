@@ -343,6 +343,8 @@ static u32 enetc_update_ptp_sync_msg(struct enetc_ndev_priv *priv,
 	return lo & ENETC_TXBD_TSTAMP;
 }
 
+static bool enetc_skb_l4_too_deep(const struct sk_buff *skb);
+
 static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb)
 {
 	bool do_vlan, do_onestep_tstamp = false, do_twostep_tstamp = false;
@@ -407,6 +409,7 @@ static int enetc_map_tx_buffs(struct enetc_bdr *tx_ring, struct sk_buff *skb)
 	tx_swbd->len = len;
 	tx_swbd->is_dma_page = 0;
 	tx_swbd->dir = DMA_TO_DEVICE;
+	tx_swbd->dbg_wb = enetc_skb_l4_too_deep(skb);
 	count++;
 
 	do_vlan = skb_vlan_tag_present(skb);
@@ -1317,6 +1320,16 @@ static bool enetc_clean_tx_ring(struct enetc_bdr *tx_ring, int napi_budget)
 		struct xdp_frame *xdp_frame = enetc_tx_swbd_get_xdp_frame(tx_swbd);
 		struct sk_buff *skb = enetc_tx_swbd_get_skb(tx_swbd);
 		bool is_eof = tx_swbd->is_eof;
+
+		if (unlikely(tx_swbd->dbg_wb) && net_ratelimit()) {
+			union enetc_tx_bd *txbd = ENETC_TXBD(*tx_ring, i);
+
+			netdev_info(ndev,
+				    "txbd wb: ring %d bd %d flags 0x%02x status 0x%02x lso_err_count %u raw %16phN\n",
+				    tx_ring->index, i, txbd->wb.flags,
+				    txbd->wb.status,
+				    le16_to_cpu(txbd->wb.lso_err_count), txbd);
+		}
 
 		if (unlikely(tx_swbd->check_wb)) {
 			union enetc_tx_bd *txbd = ENETC_TXBD(*tx_ring, i);
