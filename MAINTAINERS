@@ -28043,7 +28043,7 @@ T:	git git://linuxtv.org/mhadli/v4l-dvb-davinci_devices.git
 F:	drivers/media/platform/ti/davinci/
 F:	include/media/davinci/
 
-TI DS125DF111 RETIMER PHY DRIVER
+TI DS110DF111/DS125DF111 RETIMER PHY DRIVER
 M:	Ioana Ciornei <ioana.ciornei@nxp.com>
 L:	linux-phy@lists.infradead.org (moderated for non-subscribers)
 S:	Maintained

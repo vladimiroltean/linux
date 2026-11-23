@@ -275,6 +275,7 @@ static int ds125df111_probe(struct i2c_client *client)
 }
 
 static const struct of_device_id ds125df111_dt_ids[] = {
+	{ .compatible = "ti,ds110df111", },
 	{ .compatible = "ti,ds125df111", },
 	{}
 };
@@ -290,5 +291,5 @@ static struct i2c_driver ds125df111_driver = {
 module_i2c_driver(ds125df111_driver);
 
 MODULE_AUTHOR("Ioana Ciornei <ioana.ciornei@nxp.com>");
-MODULE_DESCRIPTION("TI DS125DF111 Retimer driver");
+MODULE_DESCRIPTION("TI DS110DF111/DS125DF111 Retimer driver");
 MODULE_LICENSE("GPL");
