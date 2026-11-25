@@ -62,6 +62,12 @@
 		compatible = "onnn,cat24c05", "atmel,24c04";
 		reg = <0x52>;
 	};
+
+	ti_retimer: retimer@18 {
+		compatible = "ti,ds110df111";
+		reg = <0x18>;
+		#phy-cells = <1>;
+	};
 };
 
 &i2c3 {
@@ -120,6 +126,15 @@
 	};
 };
 
+&serdes1 {
+	status = "okay";
+};
+
+&serdes1_lane_c {
+	phys = <&ti_retimer 0>, <&ti_retimer 1>;
+	phy-names = "tx", "rx";
+};
+
 &usb1 {
 	dr_mode = "otg";
 };
@@ -155,6 +170,8 @@
 	ethernet@f2000 { /* 10GEC2 */
 		phy-connection-type = "10gbase-r";
 		managed = "in-band-status";
+		phys = <&serdes1 2>;
+		phy-names = "serdes";
 	};
 
 	mdio@fc000 {
