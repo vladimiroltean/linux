@@ -79,6 +79,8 @@
 #define PLLnCR0_FRATE_4G		0x7
 #define PLLnCR0_FRATE_3_125G		0x9
 #define PLLnCR0_FRATE_3G		0xa
+#define PLLnCR0_DLYDIV_SEL		GENMASK(1, 0)
+#define PLLnCR0_DLYDIV_SEL_312_5_MHZ	1
 
 /* Per SerDes lane registers */
 
@@ -305,6 +307,15 @@ static void lynx_10g_pll_read_configuration(struct lynx_pll *pll)
 
 	if (!pll->enabled)
 		return;
+
+	/* Someone else, e.g. the RCW for the Felix switch clock on LS1028A,
+	 * already uses EX_DLY_CLK: never turn it off.
+	 */
+	if (FIELD_GET(PLLnCR0_DLYDIV_SEL, val)) {
+		dev_dbg(pll->priv->dev, "PLL%c: PLLnCR0[DLYDIV_SEL] found set\n",
+			pll->id == 0 ? 'F' : 'S');
+		pll->ex_dly_clk_use_count = 1;
+	}
 
 	switch (pll->frate_sel) {
 	case PLLnCR0_FRATE_5G:
@@ -1198,6 +1209,109 @@ static int lynx_10g_validate(struct phy *phy, enum phy_mode mode, int submode,
 	return 0;
 }
 
+/* Whether the lane mode needs the PLL to generate a 312.5 MHz clock through
+ * EX_DLY_CLK. No lane mode does yet.
+ */
+static bool lynx_10g_lane_mode_needs_ex_dly_clk(enum lynx_lane_mode mode)
+{
+	return false;
+}
+
+/* Is any lane other than @lane powered up and clocked by @pll? Lanes are
+ * judged by their registers, not by the driver state, as the firmware may
+ * have left a lane without a consumer running. Called with the pcc_lock held;
+ * no lane lock is taken.
+ */
+static bool lynx_10g_pll_has_active_sibling(struct lynx_lane *lane,
+					    struct lynx_pll *pll)
+{
+	struct lynx_priv *priv = lane->priv;
+	bool is_pllf = pll->id == 0;
+	u32 gcr0;
+
+	lockdep_assert_held(&priv->pcc_lock);
+
+	for (int i = priv->info->first_lane; i < priv->info->num_lanes; i++) {
+		if (i == lane->id)
+			continue;
+
+		gcr0 = lynx_read(priv, LNaGCR0(i));
+		if ((gcr0 & (LNaGCR0_RX_PD | LNaGCR0_TX_PD)) ==
+		    (LNaGCR0_RX_PD | LNaGCR0_TX_PD))
+			continue;
+
+		if (!!(gcr0 & LNaGCR0_TPLL_PLLF) == is_pllf ||
+		    !!(gcr0 & LNaGCR0_RPLL_PLLF) == is_pllf)
+			return true;
+	}
+
+	return false;
+}
+
+/* Enabling EX_DLY_CLK is meant not to affect the lanes mapped to the PLL, but
+ * this was only verified for a PLL with no other powered lane. The effect on a
+ * lane that is under traffic is the open shared-PLL measurement.
+ */
+static int lynx_10g_lane_get_ex_dly_clk(struct lynx_lane *lane,
+					enum lynx_lane_mode mode)
+{
+	struct lynx_priv *priv = lane->priv;
+	struct lynx_pll *pll;
+
+	if (!lynx_10g_lane_mode_needs_ex_dly_clk(mode))
+		return 0;
+
+	pll = lynx_pll_get(priv, mode);
+	if (!pll)
+		return -EINVAL;
+
+	spin_lock(&priv->pcc_lock);
+
+	if (pll->ex_dly_clk_use_count++)
+		goto out;
+
+	/* PROTO: warn and proceed, as the downstream driver does. The posted
+	 * form is to return -EBUSY here, or to handle the sibling lane.
+	 */
+	if (lynx_10g_pll_has_active_sibling(lane, pll))
+		dev_warn(&lane->phy->dev,
+			 "PLL%c feeds another powered lane, turning on EX_DLY_CLK anyway\n",
+			 pll->id == 0 ? 'F' : 'S');
+
+	dev_info(priv->dev, "Turning on EX_DLY_CLK on PLL%c\n",
+		 pll->id == 0 ? 'F' : 'S');
+	lynx_rmw(priv, PLLnCR0(pll->id), PLLnCR0_DLYDIV_SEL_312_5_MHZ,
+		 PLLnCR0_DLYDIV_SEL);
+out:
+	spin_unlock(&priv->pcc_lock);
+
+	return 0;
+}
+
+static void lynx_10g_lane_put_ex_dly_clk(struct lynx_lane *lane,
+					 enum lynx_lane_mode mode)
+{
+	struct lynx_priv *priv = lane->priv;
+	struct lynx_pll *pll;
+
+	if (!lynx_10g_lane_mode_needs_ex_dly_clk(mode))
+		return;
+
+	pll = lynx_pll_get(priv, mode);
+	if (!pll)
+		return;
+
+	spin_lock(&priv->pcc_lock);
+
+	if (!--pll->ex_dly_clk_use_count) {
+		dev_info(priv->dev, "Turning off EX_DLY_CLK on PLL%c\n",
+			 pll->id == 0 ? 'F' : 'S');
+		lynx_rmw(priv, PLLnCR0(pll->id), 0, PLLnCR0_DLYDIV_SEL);
+	}
+
+	spin_unlock(&priv->pcc_lock);
+}
+
 static int lynx_10g_set_mode(struct phy *phy, enum phy_mode mode, int submode)
 {
 	struct lynx_lane *lane = phy_get_drvdata(phy);
@@ -1215,6 +1329,10 @@ static int lynx_10g_set_mode(struct phy *phy, enum phy_mode mode, int submode)
 
 	if (lane_mode == lane->mode)
 		return 0;
+
+	err = lynx_10g_lane_get_ex_dly_clk(lane, lane_mode);
+	if (err)
+		return err;
 
 	/* If the lane is powered up, put the lane into the halt state while
 	 * the reconfiguration is being done.
@@ -1237,9 +1355,12 @@ static int lynx_10g_set_mode(struct phy *phy, enum phy_mode mode, int submode)
 	lynx_10g_lane_remap_pll(lane, lane_mode);
 	WARN_ON(lynx_10g_lane_enable_pcvt(lane, lane_mode));
 
+	lynx_10g_lane_put_ex_dly_clk(lane, lane->mode);
 	lane->mode = lane_mode;
 
 out:
+	if (err)
+		lynx_10g_lane_put_ex_dly_clk(lane, lane_mode);
 	if (powered_up) {
 		/* The RM says to wait for at least 120 ns */
 		usleep_range(1, 2);

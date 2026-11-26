@@ -29,6 +29,8 @@ struct lynx_pll {
 	int frate_sel;
 	bool enabled;
 	bool locked;
+	/* Number of users of PLLnCR0[DLYDIV_SEL], protected by the pcc_lock */
+	unsigned int ex_dly_clk_use_count;
 	DECLARE_BITMAP(supported, LANE_MODE_MAX);
 };
 
