@@ -59,6 +59,12 @@ static unsigned int lynx_pcs_inband_caps(struct phylink_pcs *pcs,
 	case PHY_INTERFACE_MODE_10G_QXGMII:
 		return LINK_INBAND_ENABLE;
 
+	case PHY_INTERFACE_MODE_1000BASEKX:
+		/* Clause 73 negotiates the medium, there is no MAC-PCS in-band
+		 * exchange to enable or disable.
+		 */
+		return 0;
+
 	default:
 		return 0;
 	}
@@ -87,6 +93,24 @@ static void lynx_pcs_get_state_usxgmii(struct mdio_device *pcs,
 	phylink_decode_usxgmii_word(state, lpa);
 }
 
+static void lynx_pcs_get_state_kx(struct mdio_device *pcs,
+				  struct phylink_link_state *state)
+{
+	int bmsr;
+
+	bmsr = mdiodev_read(pcs, MII_BMSR);
+	if (bmsr < 0) {
+		state->link = false;
+		return;
+	}
+
+	state->link = !!(bmsr & BMSR_LSTATUS);
+	if (state->link) {
+		state->speed = SPEED_1000;
+		state->duplex = DUPLEX_FULL;
+	}
+}
+
 static void lynx_pcs_get_state(struct phylink_pcs *pcs, unsigned int neg_mode,
 			       struct phylink_link_state *state)
 {
@@ -106,6 +130,9 @@ static void lynx_pcs_get_state(struct phylink_pcs *pcs, unsigned int neg_mode,
 	case PHY_INTERFACE_MODE_10GBASER:
 	case PHY_INTERFACE_MODE_25GBASER:
 		phylink_mii_c45_pcs_get_state(lynx->mdio, state);
+		break;
+	case PHY_INTERFACE_MODE_1000BASEKX:
+		lynx_pcs_get_state_kx(lynx->mdio, state);
 		break;
 	default:
 		break;
@@ -153,6 +180,32 @@ static int lynx_pcs_config_giga(struct mdio_device *pcs,
 	if (err)
 		return err;
 
+	return phylink_mii_c22_pcs_config(pcs, interface, advertising,
+					  neg_mode);
+}
+
+static int lynx_pcs_config_kx(struct mdio_device *pcs,
+			      phy_interface_t interface,
+			      const unsigned long *advertising,
+			      unsigned int neg_mode)
+{
+	int err;
+
+	/* 1G speed, no SGMII, no SGMII AN: IF_MODE = 0x0008, as step 3 of the
+	 * 1000Base-KX initialization sequence in the SerDes chapter of the
+	 * LS2088A reference manual. Programmed on every call: the lane mode
+	 * change that precedes it resets the block.
+	 */
+	err = mdiodev_modify(pcs, IF_MODE,
+			     IF_MODE_SGMII_EN | IF_MODE_USE_SGMII_AN |
+			     IF_MODE_SPEED_MSK,
+			     IF_MODE_SPEED(SGMII_SPEED_1000));
+	if (err)
+		return err;
+
+	/* Clause 37 stays off (neg_mode is NONE). No PCS reset here: it
+	 * would restart the Clause 73 negotiation.
+	 */
 	return phylink_mii_c22_pcs_config(pcs, interface, advertising,
 					  neg_mode);
 }
@@ -230,6 +283,9 @@ static int lynx_pcs_config(struct phylink_pcs *pcs, unsigned int neg_mode,
 	case PHY_INTERFACE_MODE_2500BASEX:
 		return lynx_pcs_config_giga(lynx->mdio, ifmode, advertising,
 					    neg_mode);
+	case PHY_INTERFACE_MODE_1000BASEKX:
+		return lynx_pcs_config_kx(lynx->mdio, ifmode, advertising,
+					  neg_mode);
 	case PHY_INTERFACE_MODE_USXGMII:
 	case PHY_INTERFACE_MODE_10G_QXGMII:
 		return lynx_pcs_config_usxgmii(lynx->mdio, ifmode, advertising,
@@ -325,6 +381,7 @@ static const phy_interface_t lynx_interfaces[] = {
 	PHY_INTERFACE_MODE_SGMII,
 	PHY_INTERFACE_MODE_QSGMII,
 	PHY_INTERFACE_MODE_1000BASEX,
+	PHY_INTERFACE_MODE_1000BASEKX,
 	PHY_INTERFACE_MODE_2500BASEX,
 	PHY_INTERFACE_MODE_10GBASER,
 	PHY_INTERFACE_MODE_25GBASER,
