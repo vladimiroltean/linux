@@ -68,6 +68,7 @@ properties:
       - xgmii
       - trgmii
       - 1000base-x
+      - 1000base-kx
       - 2500base-x
       - 5gbase-r
       - rxaui
