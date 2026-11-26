@@ -35,6 +35,14 @@ config PCS_XPCS_ROCKCHIP
 
 endif # PCS_XPCS
 
+config PCS_MTIP_ANLT
+	tristate
+	select PHYLINK
+	help
+	  This module provides a Clause 73 autonegotiation implementation for
+	  the MoreThanIP AN/LT block, which is part of the Layerscape and QorIQ
+	  Ethernet SERDES, as a block that phylink drives next to the PCS.
+
 config PCS_LYNX
 	tristate
 	help
