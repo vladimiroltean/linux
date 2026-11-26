@@ -1253,40 +1253,10 @@ static bool lynx_10g_lane_mode_needs_ex_dly_clk(enum lynx_lane_mode mode)
 	return mode == LANE_MODE_1000BASEKX;
 }
 
-/* Is any lane other than @lane powered up and clocked by @pll? Lanes are
- * judged by their registers, not by the driver state, as the firmware may
- * have left a lane without a consumer running. Called with the pcc_lock held;
- * no lane lock is taken.
- */
-static bool lynx_10g_pll_has_active_sibling(struct lynx_lane *lane,
-					    struct lynx_pll *pll)
-{
-	struct lynx_priv *priv = lane->priv;
-	bool is_pllf = pll->id == 0;
-	u32 gcr0;
-
-	lockdep_assert_held(&priv->pcc_lock);
-
-	for (int i = priv->info->first_lane; i < priv->info->num_lanes; i++) {
-		if (i == lane->id)
-			continue;
-
-		gcr0 = lynx_read(priv, LNaGCR0(i));
-		if ((gcr0 & (LNaGCR0_RX_PD | LNaGCR0_TX_PD)) ==
-		    (LNaGCR0_RX_PD | LNaGCR0_TX_PD))
-			continue;
-
-		if (!!(gcr0 & LNaGCR0_TPLL_PLLF) == is_pllf ||
-		    !!(gcr0 & LNaGCR0_RPLL_PLLF) == is_pllf)
-			return true;
-	}
-
-	return false;
-}
-
-/* Enabling EX_DLY_CLK is meant not to affect the lanes mapped to the PLL, but
- * this was only verified for a PLL with no other powered lane. The effect on a
- * lane that is under traffic is the open shared-PLL measurement.
+/* EX_DLY_CLK is a property of the PLL, and does not affect the other lanes
+ * that use it. It is shared by all the 1000Base-KX lanes of the PLL, and may
+ * have been enabled by the RCW for other purposes (the use count then starts
+ * at 1), so it is reference counted, and only turned off by the last user.
  */
 static int lynx_10g_lane_get_ex_dly_clk(struct lynx_lane *lane,
 					enum lynx_lane_mode mode)
@@ -1305,14 +1275,6 @@ static int lynx_10g_lane_get_ex_dly_clk(struct lynx_lane *lane,
 
 	if (pll->ex_dly_clk_use_count++)
 		goto out;
-
-	/* PROTO: warn and proceed, as the downstream driver does. The posted
-	 * form is to return -EBUSY here, or to handle the sibling lane.
-	 */
-	if (lynx_10g_pll_has_active_sibling(lane, pll))
-		dev_warn(&lane->phy->dev,
-			 "PLL%c feeds another powered lane, turning on EX_DLY_CLK anyway\n",
-			 pll->id == 0 ? 'F' : 'S');
 
 	dev_info(priv->dev, "Turning on EX_DLY_CLK on PLL%c\n",
 		 pll->id == 0 ? 'F' : 'S');
