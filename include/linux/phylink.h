@@ -134,6 +134,63 @@ enum phylink_op_type {
 	PHYLINK_DEV,
 };
 
+struct phylink_anlt;
+
+/**
+ * struct phylink_anlt_ops - Clause 73 autonegotiation operations
+ * @anlt_get_caps: report the interfaces and the link modes the negotiation
+ *	can resolve to, which must include %ETHTOOL_LINK_MODE_Autoneg_BIT and
+ *	the pause bits the block can advertise. Must not access hardware: it is
+ *	called from phylink_create() before the first validation.
+ * @anlt_config: start, or reprogram, the negotiation for @interface
+ *	advertising the link modes in @advertising. Whether the negotiation
+ *	runs is taken from the %ETHTOOL_LINK_MODE_Autoneg_BIT of the
+ *	advertisement: with it clear the negotiation is stopped and the link
+ *	is forced. Returns a negative error code, 0 if nothing that needs a
+ *	restart changed, or a positive value if the advertisement changed and
+ *	the negotiation must be restarted by the caller.
+ * @anlt_restart: restart the negotiation.
+ * @anlt_get_state: complement the state read from the PCS with the result of
+ *	the negotiation. May only narrow @state->link, and fills in the speed,
+ *	duplex, pause, lp_advertising and an_complete members.
+ * @anlt_disable: stop the negotiation and any deferred work it started.
+ *	Idempotent, and must not access hardware that was not configured by
+ *	@anlt_config. Must cancel that work even if the negotiation was never
+ *	started. Does not return before that work has finished, and
+ *	phylink_anlt_change() is not to be called after it has returned.
+ *
+ * The operations are called with the phylink state mutex held, or without
+ * any phylink lock. They must not take it, and must not call back into
+ * phylink other than through phylink_anlt_change(). They may be called
+ * concurrently with one another: the block serialises them with its own
+ * lock.
+ */
+struct phylink_anlt_ops {
+	void (*anlt_get_caps)(struct phylink_anlt *anlt,
+			      unsigned long *interfaces,
+			      unsigned long *linkmodes);
+	int (*anlt_config)(struct phylink_anlt *anlt, phy_interface_t interface,
+			   const unsigned long *advertising);
+	void (*anlt_restart)(struct phylink_anlt *anlt);
+	void (*anlt_get_state)(struct phylink_anlt *anlt,
+			       struct phylink_link_state *state);
+	void (*anlt_disable)(struct phylink_anlt *anlt);
+};
+
+/**
+ * struct phylink_anlt - a Clause 73 autonegotiation block
+ * @ops: the operations.
+ * @pl: the phylink instance using this block. Set by phylink_create() and
+ *	cleared by phylink_destroy().
+ *
+ * Usually embedded in the object of the PCS driver that owns the registers.
+ * The MAC driver passes it to phylink in &phylink_config.anlt.
+ */
+struct phylink_anlt {
+	const struct phylink_anlt_ops *ops;
+	struct phylink *pl;
+};
+
 /**
  * struct phylink_config - PHYLINK configuration structure
  * @dev: a pointer to a struct device associated with the MAC
@@ -160,6 +217,10 @@ enum phylink_op_type {
  * @wol_phy_legacy: Use Wake-on-Lan with PHY even if phy_can_wakeup() is false
  * @wol_phy_speed_ctrl: Use phy speed control on suspend/resume
  * @wol_mac_support: Bitmask of MAC supported %WAKE_* options
+ * @anlt: optional Clause 73 autonegotiation block, for the interfaces it
+ *	  reports in &phylink_anlt_ops.anlt_get_caps. The Autoneg bit of the
+ *	  advertisement turns the negotiation on or off; the interface does not
+ *	  change. See &struct phylink_anlt_ops.
  */
 struct phylink_config {
 	struct device *dev;
@@ -182,6 +243,8 @@ struct phylink_config {
 	bool wol_phy_legacy;
 	bool wol_phy_speed_ctrl;
 	u32 wol_mac_support;
+
+	struct phylink_anlt *anlt;
 };
 
 void phylink_limit_mac_speed(struct phylink_config *config, u32 max_speed);
