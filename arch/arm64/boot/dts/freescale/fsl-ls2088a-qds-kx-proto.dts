@@ -1,0 +1,22 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+/*
+ * LS2088A QDS with DPMAC 4 on SerDes 1 lane E in 1000Base-KX, negotiated with
+ * Clause 73. Requires an RCW that leaves lane E for DPMAC 4 and a Lynx PCS at
+ * address 0 of the DPMAC 4 PCS MDIO bus.
+ */
+
+#include "fsl-ls2088a-qds.dts"
+
+&serdes1 {
+	status = "okay";
+};
+
+&pcs_mdio4 {
+	status = "okay";
+};
+
+&dpmac4 {
+	phy-mode = "1000base-kx";
+	managed = "in-band-status";
+	phys = <&serdes1 4>;
+};
