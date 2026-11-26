@@ -6,6 +6,7 @@
 #include <linux/mdio.h>
 #include <linux/phylink.h>
 #include <linux/pcs-lynx.h>
+#include <linux/pcs/pcs-mtip-anlt.h>
 #include <linux/property.h>
 
 #define SGMII_CLOCK_PERIOD_NS		8 /* PCS is clocked at 125 MHz */
@@ -29,6 +30,7 @@
 struct lynx_pcs {
 	struct phylink_pcs pcs;
 	struct mdio_device *mdio;
+	struct mtip_anlt *mtip;
 };
 
 enum sgmii_speed {
@@ -389,6 +391,43 @@ static const phy_interface_t lynx_interfaces[] = {
 	PHY_INTERFACE_MODE_10G_QXGMII,
 };
 
+/* The Clause 73 block answers at the address of the PCS, in the Auto-Negotiation
+ * MMD, once the lane is in 1000Base-KX. Its registers are not accessed before
+ * phylink configures the link.
+ */
+static int lynx_pcs_anlt_read(void *ctx, int reg)
+{
+	struct lynx_pcs *lynx = ctx;
+
+	return mdiodev_c45_read(lynx->mdio, MDIO_MMD_AN, reg);
+}
+
+static int lynx_pcs_anlt_write(void *ctx, int reg, u16 val)
+{
+	struct lynx_pcs *lynx = ctx;
+
+	return mdiodev_c45_write(lynx->mdio, MDIO_MMD_AN, reg, val);
+}
+
+static int lynx_pcs_anlt_modify(void *ctx, int reg, u16 mask, u16 val)
+{
+	struct lynx_pcs *lynx = ctx;
+
+	return mdiodev_c45_modify(lynx->mdio, MDIO_MMD_AN, reg, mask, val);
+}
+
+static const struct mtip_anlt_access lynx_pcs_anlt_access = {
+	.read = lynx_pcs_anlt_read,
+	.write = lynx_pcs_anlt_write,
+	.modify = lynx_pcs_anlt_modify,
+};
+
+struct phylink_anlt *lynx_pcs_to_anlt(struct phylink_pcs *pcs)
+{
+	return mtip_anlt_to_phylink(phylink_pcs_to_lynx(pcs)->mtip);
+}
+EXPORT_SYMBOL_GPL(lynx_pcs_to_anlt);
+
 static struct phylink_pcs *lynx_pcs_create(struct mdio_device *mdio)
 {
 	struct lynx_pcs *lynx;
@@ -402,6 +441,16 @@ static struct phylink_pcs *lynx_pcs_create(struct mdio_device *mdio)
 	lynx->mdio = mdio;
 	lynx->pcs.ops = &lynx_pcs_phylink_ops;
 	lynx->pcs.poll = true;
+
+	lynx->mtip = mtip_anlt_create(&mdio->dev, &lynx_pcs_anlt_access, lynx);
+	if (IS_ERR(lynx->mtip)) {
+		struct phylink_pcs *err = ERR_CAST(lynx->mtip);
+
+		mdio_device_put(mdio);
+		kfree(lynx);
+
+		return err;
+	}
 
 	for (i = 0; i < ARRAY_SIZE(lynx_interfaces); i++)
 		__set_bit(lynx_interfaces[i], lynx->pcs.supported_interfaces);
@@ -472,6 +521,7 @@ void lynx_pcs_destroy(struct phylink_pcs *pcs)
 {
 	struct lynx_pcs *lynx = phylink_pcs_to_lynx(pcs);
 
+	mtip_anlt_destroy(lynx->mtip);
 	mdio_device_put(lynx->mdio);
 	kfree(lynx);
 }

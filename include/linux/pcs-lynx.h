@@ -12,6 +12,8 @@
 struct phylink_pcs *lynx_pcs_create_mdiodev(struct mii_bus *bus, int addr);
 struct phylink_pcs *lynx_pcs_create_fwnode(struct fwnode_handle *node);
 
+struct phylink_anlt *lynx_pcs_to_anlt(struct phylink_pcs *pcs);
+
 void lynx_pcs_destroy(struct phylink_pcs *pcs);
 
 #endif /* __LINUX_PCS_LYNX_H */
