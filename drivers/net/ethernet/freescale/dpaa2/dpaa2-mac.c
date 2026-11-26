@@ -277,6 +277,7 @@ static enum dpmac_eth_if dpmac_eth_if_mode(phy_interface_t if_mode)
 	case PHY_INTERFACE_MODE_10GBASER:
 		return DPMAC_ETH_IF_XFI;
 	case PHY_INTERFACE_MODE_1000BASEX:
+	case PHY_INTERFACE_MODE_1000BASEKX:
 		return DPMAC_ETH_IF_1000BASEX;
 	case PHY_INTERFACE_MODE_25GBASER:
 		return DPMAC_ETH_IF_CAUI;
@@ -492,6 +493,47 @@ static void dpaa2_pcs_destroy(struct dpaa2_mac *mac)
 	}
 }
 
+/* 1000base-kx is negotiated with Clause 73, which phylink needs a block for.
+ * It comes from the PCS, so require what it takes to use it: in-band status in
+ * the firmware node, a PCS with such a block, and a SerDes lane that can be
+ * put in the mode.
+ */
+static int dpaa2_mac_anlt_setup(struct dpaa2_mac *mac,
+				struct fwnode_handle *dpmac_node)
+{
+	struct phylink_anlt *anlt = NULL;
+	const char *managed;
+	int err;
+
+	if (fwnode_property_read_string(dpmac_node, "managed", &managed) ||
+	    strcmp(managed, "in-band-status")) {
+		netdev_err(mac->net_dev,
+			   "1000base-kx requires managed = \"in-band-status\"\n");
+		return -EINVAL;
+	}
+
+	if (mac->pcs)
+		anlt = lynx_pcs_to_anlt(mac->pcs);
+	if (!anlt || !mac->serdes_phy) {
+		netdev_err(mac->net_dev,
+			   "1000base-kx requires a PCS with autonegotiation and a SerDes lane\n");
+		return -EINVAL;
+	}
+
+	err = phy_validate(mac->serdes_phy, PHY_MODE_ETHERNET,
+			   PHY_INTERFACE_MODE_1000BASEKX, NULL);
+	if (err) {
+		netdev_err(mac->net_dev,
+			   "SerDes lane does not support 1000base-kx: %pe\n",
+			   ERR_PTR(err));
+		return err;
+	}
+
+	mac->phylink_config.anlt = anlt;
+
+	return 0;
+}
+
 static void dpaa2_mac_set_supported_interfaces(struct dpaa2_mac *mac)
 {
 	int intf, err;
@@ -525,6 +567,13 @@ static void dpaa2_mac_set_supported_interfaces(struct dpaa2_mac *mac)
 	 */
 	for (intf = 0; intf < PHY_INTERFACE_MODE_MAX; intf++) {
 		if (intf == PHY_INTERFACE_MODE_NA)
+			continue;
+
+		/* 1000base-kx is only for the DPMACs that opted in with it in
+		 * the firmware node, and have a Clause 73 block to negotiate it
+		 */
+		if (intf == PHY_INTERFACE_MODE_1000BASEKX &&
+		    intf != mac->if_mode)
 			continue;
 
 		err = phy_validate(mac->serdes_phy, PHY_MODE_ETHERNET, intf, NULL);
@@ -619,6 +668,12 @@ int dpaa2_mac_connect(struct dpaa2_mac *mac)
 	mac->phylink_config.mac_capabilities = MAC_SYM_PAUSE | MAC_ASYM_PAUSE |
 		MAC_10FD | MAC_100FD | MAC_1000FD | MAC_2500FD | MAC_5000FD |
 		MAC_10000FD | MAC_25000FD;
+
+	if (mac->if_mode == PHY_INTERFACE_MODE_1000BASEKX) {
+		err = dpaa2_mac_anlt_setup(mac, dpmac_node);
+		if (err)
+			goto err_pcs_destroy;
+	}
 
 	dpaa2_mac_set_supported_interfaces(mac);
 
