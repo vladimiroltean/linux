@@ -800,6 +800,7 @@ int phylink_set_fixed_link(struct phylink *,
 
 void phylink_mac_change(struct phylink *, bool up);
 void phylink_pcs_change(struct phylink_pcs *, bool up);
+void phylink_anlt_change(struct phylink_anlt *anlt, bool up);
 
 int phylink_pcs_pre_init(struct phylink *pl, struct phylink_pcs *pcs);
 

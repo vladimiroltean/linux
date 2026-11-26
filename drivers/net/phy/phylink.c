@@ -46,6 +46,7 @@ struct phylink {
 	const struct phylink_mac_ops *mac_ops;
 	struct phylink_config *config;
 	struct phylink_pcs *pcs;
+	struct phylink_anlt *anlt;
 	struct device *dev;
 	unsigned int old_link_state:1;
 
@@ -77,6 +78,10 @@ struct phylink {
 	struct work_struct resolve;
 	unsigned int pcs_neg_mode;
 	unsigned int pcs_state;
+
+	DECLARE_PHY_INTERFACE_MASK(anlt_interfaces);
+	__ETHTOOL_DECLARE_LINK_MODE_MASK(anlt_linkmodes);
+	bool anlt_active;
 
 	bool link_failed;
 	bool suspend_link_up;
@@ -180,6 +185,52 @@ static int phylink_is_empty_linkmode(const unsigned long *linkmode)
 	phylink_set(tmp, Asym_Pause);
 
 	return linkmode_subset(linkmode, tmp);
+}
+
+/* Whether @interface is negotiated by the Clause 73 block, if any, that the
+ * MAC passed to phylink_create().
+ */
+static bool phylink_anlt_managed(struct phylink *pl, phy_interface_t interface)
+{
+	return pl->anlt && test_bit(interface, pl->anlt_interfaces);
+}
+
+/* Whether @modes holds any link mode the Clause 73 block can resolve to, as
+ * opposed to just Autoneg, Pause and the port bits that are always there.
+ */
+static bool phylink_anlt_has_linkmode(struct phylink *pl,
+				      const unsigned long *modes)
+{
+	__ETHTOOL_DECLARE_LINK_MODE_MASK(common);
+
+	linkmode_and(common, modes, pl->anlt_linkmodes);
+
+	return !phylink_is_empty_linkmode(common);
+}
+
+static int phylink_anlt_config(struct phylink *pl,
+			       const struct phylink_link_state *state)
+{
+	__ETHTOOL_DECLARE_LINK_MODE_MASK(advertising);
+
+	linkmode_and(advertising, state->advertising, pl->anlt_linkmodes);
+
+	return pl->anlt->ops->anlt_config(pl->anlt, state->interface,
+					  advertising);
+}
+
+static void phylink_anlt_restart(struct phylink *pl,
+				 const struct phylink_link_state *state)
+{
+	if (pl->anlt_active && phylink_anlt_managed(pl, state->interface) &&
+	    linkmode_test_bit(ETHTOOL_LINK_MODE_Autoneg_BIT, state->advertising))
+		pl->anlt->ops->anlt_restart(pl->anlt);
+}
+
+static void phylink_anlt_disable(struct phylink *pl)
+{
+	pl->anlt->ops->anlt_disable(pl->anlt);
+	pl->anlt_active = false;
 }
 
 static const char *phylink_an_mode_str(unsigned int mode)
@@ -577,6 +628,16 @@ static int phylink_validate_mac_and_pcs(struct phylink *pl,
 
 	phylink_validate_mask_caps(supported, state, capabilities);
 
+	/* The negotiation can only resolve to the link modes of the anlt */
+	if (phylink_anlt_managed(pl, state->interface)) {
+		__ETHTOOL_DECLARE_LINK_MODE_MASK(anlt_mask);
+
+		linkmode_copy(anlt_mask, pl->anlt_linkmodes);
+		phylink_set_port_modes(anlt_mask);
+		linkmode_and(supported, supported, anlt_mask);
+		linkmode_and(state->advertising, state->advertising, anlt_mask);
+	}
+
 	return phylink_is_empty_linkmode(supported) ? -EINVAL : 0;
 }
 
@@ -808,6 +869,14 @@ static int phylink_parse_mode(struct phylink *pl,
 		phylink_set(pl->supported, Pause);
 
 		switch (pl->link_config.interface) {
+		case PHY_INTERFACE_MODE_1000BASEKX:
+			if (!phylink_anlt_managed(pl, pl->link_config.interface)) {
+				phylink_err(pl,
+					    "incorrect link mode %s for in-band status\n",
+					    phy_modes(pl->link_config.interface));
+				return -EINVAL;
+			}
+			fallthrough;
 		case PHY_INTERFACE_MODE_SGMII:
 		case PHY_INTERFACE_MODE_PSGMII:
 		case PHY_INTERFACE_MODE_QSGMII:
@@ -1333,6 +1402,20 @@ static void phylink_major_config(struct phylink *pl, bool restart,
 	if (restart)
 		phylink_pcs_an_restart(pl);
 
+	if (phylink_anlt_managed(pl, state->interface)) {
+		err = phylink_anlt_config(pl, state);
+		if (err < 0) {
+			phylink_err(pl, "anlt_config failed: %pe\n",
+				    ERR_PTR(err));
+			pl->major_config_failed = true;
+			pl->anlt_active = false;
+		} else {
+			pl->anlt_active = true;
+			if (restart || err > 0)
+				phylink_anlt_restart(pl, state);
+		}
+	}
+
 	if (pl->mac_ops->mac_finish) {
 		err = pl->mac_ops->mac_finish(pl->config, pl->act_link_an_mode,
 					      state->interface);
@@ -1405,6 +1488,19 @@ static int phylink_change_inband_advert(struct phylink *pl)
 	if (ret > 0)
 		phylink_pcs_an_restart(pl);
 
+	if (pl->anlt_active &&
+	    phylink_anlt_managed(pl, pl->link_config.interface)) {
+		ret = phylink_anlt_config(pl, &pl->link_config);
+		if (ret < 0) {
+			phylink_err(pl, "anlt_config failed: %pe\n",
+				    ERR_PTR(ret));
+			return ret;
+		}
+
+		if (ret > 0)
+			phylink_anlt_restart(pl, &pl->link_config);
+	}
+
 	return 0;
 }
 
@@ -1437,6 +1533,9 @@ static void phylink_mac_pcs_get_state(struct phylink *pl,
 		pcs->ops->pcs_get_state(pcs, pl->pcs_neg_mode, state);
 	else
 		state->link = 0;
+
+	if (pl->anlt_active && phylink_anlt_managed(pl, state->interface))
+		pl->anlt->ops->anlt_get_state(pl->anlt, state);
 }
 
 /* The fixed state is... fixed except for the link state,
@@ -2075,6 +2174,16 @@ struct phylink *phylink_create(struct phylink_config *config,
 	INIT_WORK(&pl->resolve, phylink_resolve);
 
 	pl->config = config;
+	pl->anlt = config->anlt;
+	if (pl->anlt) {
+		pl->anlt->ops->anlt_get_caps(pl->anlt, pl->anlt_interfaces,
+					     pl->anlt_linkmodes);
+		if (WARN_ON(!linkmode_test_bit(ETHTOOL_LINK_MODE_Autoneg_BIT,
+					       pl->anlt_linkmodes))) {
+			ret = -EINVAL;
+			goto free_pl;
+		}
+	}
 	if (config->type == PHYLINK_NETDEV) {
 		pl->netdev = to_net_dev(config->dev);
 		netif_carrier_off(pl->netdev);
@@ -2130,6 +2239,9 @@ struct phylink *phylink_create(struct phylink_config *config,
 	if (ret < 0)
 		goto release_link_gpio;
 
+	if (pl->anlt)
+		pl->anlt->pl = pl;
+
 	return pl;
 
 release_link_gpio:
@@ -2156,6 +2268,11 @@ void phylink_destroy(struct phylink *pl)
 	phylink_destroy_sfp_cage_port(pl);
 	if (pl->link_gpio)
 		gpiod_put(pl->link_gpio);
+
+	if (pl->anlt) {
+		phylink_anlt_disable(pl);
+		pl->anlt->pl = NULL;
+	}
 
 	cancel_work_sync(&pl->resolve);
 	kfree(pl);
@@ -2628,6 +2745,27 @@ void phylink_pcs_change(struct phylink_pcs *pcs, bool up)
 }
 EXPORT_SYMBOL_GPL(phylink_pcs_change);
 
+/**
+ * phylink_anlt_change() - notify phylink of a change to the negotiation state
+ * @anlt: pointer to the &struct phylink_anlt passed in &phylink_config.anlt
+ * @up: indicates whether the link is currently up.
+ *
+ * The Clause 73 block should call this when the state of the negotiation
+ * changes (e.g. link failure, a new link partner ability, negotiation
+ * complete). It only schedules a link state resolution and takes no lock, so it
+ * may be called from the work that polls the block. The block must stop that
+ * work before phylink_destroy() returns, which it does from its
+ * &phylink_anlt_ops.anlt_disable method.
+ */
+void phylink_anlt_change(struct phylink_anlt *anlt, bool up)
+{
+	struct phylink *pl = anlt->pl;
+
+	if (pl)
+		phylink_link_changed(pl, up, "anlt");
+}
+EXPORT_SYMBOL_GPL(phylink_anlt_change);
+
 static irqreturn_t phylink_link_handler(int irq, void *data)
 {
 	struct phylink *pl = data;
@@ -2730,6 +2868,9 @@ void phylink_stop(struct phylink *pl)
 	}
 
 	phylink_run_resolve_and_disable(pl, PHYLINK_DISABLE_STOPPED);
+
+	if (pl->anlt)
+		phylink_anlt_disable(pl);
 
 	pl->pcs_state = PCS_STATE_DOWN;
 
@@ -3326,6 +3467,13 @@ int phylink_ethtool_ksettings_set(struct phylink *pl,
 	    phylink_is_empty_linkmode(config.advertising))
 		return -EINVAL;
 
+	/* The Clause 73 block can only advertise its own link modes */
+	if (phylink_anlt_managed(pl, config.interface) &&
+	    linkmode_test_bit(ETHTOOL_LINK_MODE_Autoneg_BIT,
+			      config.advertising) &&
+	    !phylink_anlt_has_linkmode(pl, config.advertising))
+		return -EINVAL;
+
 	/* Validate the autonegotiation state. We don't have a PHY in this
 	 * situation, so the PCS is the media-facing entity.
 	 */
@@ -3380,6 +3528,7 @@ int phylink_ethtool_nway_reset(struct phylink *pl)
 	if (pl->phydev)
 		ret = phy_restart_aneg(pl->phydev);
 	phylink_pcs_an_restart(pl);
+	phylink_anlt_restart(pl, &pl->link_config);
 
 	return ret;
 }

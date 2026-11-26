@@ -66,6 +66,48 @@ acknowledge the control word.  The :c:func:`mac_link_up` and
 :c:func:`mac_link_down` functions must not force the MAC side link
 up and down.
 
+Clause 73 autonegotiation
+=========================
+
+Some links negotiate their operating mode with the link partner using IEEE
+802.3 Clause 73 base pages, which are exchanged by a block that sits next to
+the PCS. For 1000BASE-KX this block replaces neither the PCS nor the MAC: the
+PCS still carries the link, and the interface mode is the one that was
+configured, not the result of the negotiation.
+
+Such a block is described by a :c:type:`struct phylink_anlt <phylink_anlt>`,
+usually embedded in the object of the driver that owns its registers (the PCS
+driver). The MAC driver obtains it from there and passes it to phylink in
+:c:member:`phylink_config.anlt <phylink_config.anlt>` before calling
+:c:func:`phylink_create`. Phylink does not look for the block by itself.
+
+When :c:member:`anlt` is set, and the interface mode in use is one of the
+interfaces that :c:func:`anlt_get_caps` reports (for example 1000base-kx),
+phylink:
+
+- limits the supported and the advertised link modes to the ones the block
+  can resolve to, and refuses an advertisement that holds none of them;
+- calls :c:func:`anlt_config` after :c:func:`pcs_config` when it configures
+  the interface, and when the advertisement or the pause settings change. The
+  Autoneg bit of the advertisement tells the block whether to negotiate or to
+  leave the link forced; the interface mode does not change with it;
+- calls :c:func:`anlt_restart` when the user asks for a new negotiation;
+- calls :c:func:`anlt_get_state` after :c:func:`pcs_get_state`. The PCS keeps
+  reporting whether its own link is up, the block may only report a link as
+  down, and fills in the speed, duplex, pause and the link partner's
+  advertisement;
+- calls :c:func:`anlt_disable` from :c:func:`phylink_stop` and
+  :c:func:`phylink_destroy`.
+
+The block reports changes by calling :c:func:`phylink_anlt_change`, which
+schedules a new resolution of the link state, in the same way as
+:c:func:`phylink_pcs_change` does for a PCS. It must stop the work from which
+it does so in :c:func:`anlt_disable`, because phylink forgets the block there.
+
+The methods of the block are called with the phylink state mutex held, or
+with no phylink lock held. They must not take that mutex, and must not call
+into phylink except through :c:func:`phylink_anlt_change`.
+
 Rough guide to converting a network driver to sfp/phylink
 =========================================================
 
