@@ -219,6 +219,22 @@ static const struct lynx_10g_proto_conf lynx_10g_proto_conf[LANE_MODE_MAX] = {
 		.amp_red = 6,
 		.ttlcr0 = 0x39000400,
 	},
+	[LANE_MODE_1000BASEKX] = {
+		.proto_sel = PROTO_SEL_SGMII_BASEX_KX_QSGMII,
+		.reidl_th = 0,
+		.reidl_ex_sel = 0,
+		.reidl_et_msb = 0,
+		.islew_rctl = 1,
+		.oslew_rctl = 1,
+		.gk2ovd = 15,
+		.gk3ovd = 15,
+		.gk2ovd_en = 1,
+		.gk3ovd_en = 1,
+		.teq_type = EQ_TYPE_NO_EQ,
+		.adpt_eq = 48,
+		.amp_red = 0,
+		.ttlcr0 = 0x39000400,
+	},
 	[LANE_MODE_2500BASEX] = {
 		.proto_sel = PROTO_SEL_SGMII_BASEX_KX_QSGMII,
 		.islew_rctl = 2,
@@ -297,6 +313,7 @@ static void lynx_10g_cdr_lock_check(struct lynx_lane *lane)
 
 static void lynx_10g_pll_read_configuration(struct lynx_pll *pll)
 {
+	int dlydiv_sel;
 	u32 val;
 
 	val = lynx_pll_read(pll, PLLnCR0);
@@ -311,7 +328,8 @@ static void lynx_10g_pll_read_configuration(struct lynx_pll *pll)
 	/* Someone else, e.g. the RCW for the Felix switch clock on LS1028A,
 	 * already uses EX_DLY_CLK: never turn it off.
 	 */
-	if (FIELD_GET(PLLnCR0_DLYDIV_SEL, val)) {
+	dlydiv_sel = FIELD_GET(PLLnCR0_DLYDIV_SEL, val);
+	if (dlydiv_sel) {
 		dev_dbg(pll->priv->dev, "PLL%c: PLLnCR0[DLYDIV_SEL] found set\n",
 			pll->id == 0 ? 'F' : 'S');
 		pll->ex_dly_clk_use_count = 1;
@@ -322,6 +340,15 @@ static void lynx_10g_pll_read_configuration(struct lynx_pll *pll)
 		/* 5GHz clock net */
 		__set_bit(LANE_MODE_1000BASEX_SGMII, pll->supported);
 		__set_bit(LANE_MODE_QSGMII, pll->supported);
+		/* 1000Base-KX needs EX_DLY_CLK at 312.5 MHz, which another
+		 * user of the PLL may have provisioned differently.
+		 */
+		if (dlydiv_sel && dlydiv_sel != PLLnCR0_DLYDIV_SEL_312_5_MHZ)
+			dev_dbg(pll->priv->dev,
+				"PLL%c has EX_DLY_CLK set up for another frequency, no 1000Base-KX\n",
+				pll->id == 0 ? 'F' : 'S');
+		else
+			__set_bit(LANE_MODE_1000BASEKX, pll->supported);
 		break;
 	case PLLnCR0_FRATE_3_125G:
 		__set_bit(LANE_MODE_2500BASEX, pll->supported);
@@ -381,6 +408,7 @@ static void lynx_10g_backup_pccr_val(struct lynx_lane *lane)
 	case LANE_MODE_1000BASEX_SGMII:
 	case LANE_MODE_2500BASEX:
 		lane->default_pccr[LANE_MODE_1000BASEX_SGMII] = val & ~PCCR8_SGMIIa_KX;
+		lane->default_pccr[LANE_MODE_1000BASEKX] = val | PCCR8_SGMIIa_KX;
 		lane->default_pccr[LANE_MODE_2500BASEX] = val & ~PCCR8_SGMIIa_KX;
 		break;
 	default:
@@ -739,6 +767,7 @@ static int ls2088a_serdes1_get_pccr(enum lynx_lane_mode lane_mode, int lane,
 {
 	switch (lane_mode) {
 	case LANE_MODE_1000BASEX_SGMII:
+	case LANE_MODE_1000BASEKX:
 	case LANE_MODE_2500BASEX:
 		pccr->offset = PCCR8;
 		pccr->width = 4;
@@ -784,6 +813,7 @@ static int ls2088a_serdes1_get_pcvt_offset(int lane, enum lynx_lane_mode mode)
 {
 	switch (mode) {
 	case LANE_MODE_1000BASEX_SGMII:
+	case LANE_MODE_1000BASEKX:
 	case LANE_MODE_2500BASEX:
 		return SGMIIaCR0(lane);
 	case LANE_MODE_QSGMII:
@@ -932,6 +962,7 @@ static void lynx_10g_lane_set_nrate(struct lynx_lane *lane,
 	case PLLnCR0_FRATE_5G:
 		switch (mode) {
 		case LANE_MODE_1000BASEX_SGMII:
+		case LANE_MODE_1000BASEKX:
 			nrate = RAT_SEL_QUARTER;
 			break;
 		case LANE_MODE_QSGMII:
@@ -1062,6 +1093,7 @@ static int lynx_10g_lane_disable_pcvt(struct lynx_lane *lane,
 
 	switch (mode) {
 	case LANE_MODE_1000BASEX_SGMII:
+	case LANE_MODE_1000BASEKX:
 	case LANE_MODE_2500BASEX:
 		err = lynx_pcvt_rmw(lane, mode, CR(1), SGMIIaCR1_SGPCS_DIS,
 				    SGMIIaCR1_SGPCS_EN);
@@ -1100,6 +1132,7 @@ static int lynx_10g_lane_enable_pcvt(struct lynx_lane *lane,
 
 	switch (mode) {
 	case LANE_MODE_1000BASEX_SGMII:
+	case LANE_MODE_1000BASEKX:
 	case LANE_MODE_2500BASEX:
 		err = lynx_pcvt_rmw(lane, mode, CR(1), SGMIIaCR1_SGPCS_EN,
 				    SGMIIaCR1_SGPCS_EN);
@@ -1144,6 +1177,9 @@ static int lynx_10g_lane_enable_pcvt(struct lynx_lane *lane,
 	val = 0;
 
 	switch (mode) {
+	case LANE_MODE_1000BASEKX:
+		val |= PCCR8_SGMIIa_KX;
+		fallthrough;
 	case LANE_MODE_1000BASEX_SGMII:
 	case LANE_MODE_2500BASEX:
 		val |= FIELD_PREP(PCCR8_SGMIIa_CFG, 1);
@@ -1210,11 +1246,11 @@ static int lynx_10g_validate(struct phy *phy, enum phy_mode mode, int submode,
 }
 
 /* Whether the lane mode needs the PLL to generate a 312.5 MHz clock through
- * EX_DLY_CLK. No lane mode does yet.
+ * EX_DLY_CLK.
  */
 static bool lynx_10g_lane_mode_needs_ex_dly_clk(enum lynx_lane_mode mode)
 {
-	return false;
+	return mode == LANE_MODE_1000BASEKX;
 }
 
 /* Is any lane other than @lane powered up and clocked by @pll? Lanes are

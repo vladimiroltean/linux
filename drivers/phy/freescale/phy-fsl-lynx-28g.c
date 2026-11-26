@@ -968,9 +968,19 @@ static int lynx_28g_lane_enable_pcvt(struct lynx_28g_lane *lane,
 	return err;
 }
 
+/* 1000Base-KX needs the PLL's EX_DLY_CLK, which this driver does not control */
+static bool lynx_28g_mode_rejected(enum phy_mode mode, int submode)
+{
+	return mode == PHY_MODE_ETHERNET &&
+	       phy_interface_to_lane_mode(submode) == LANE_MODE_1000BASEKX;
+}
+
 static int lynx_28g_validate(struct phy *phy, enum phy_mode mode, int submode,
 			     union phy_configure_opts *opts)
 {
+	if (lynx_28g_mode_rejected(mode, submode))
+		return -EOPNOTSUPP;
+
 	return lynx_phy_mode_to_lane_mode(phy, mode, submode, NULL);
 }
 
@@ -980,6 +990,9 @@ static int lynx_28g_set_mode(struct phy *phy, enum phy_mode mode, int submode)
 	int powered_up = lane->powered_up;
 	enum lynx_lane_mode lane_mode;
 	int err;
+
+	if (lynx_28g_mode_rejected(mode, submode))
+		return -EOPNOTSUPP;
 
 	err = lynx_phy_mode_to_lane_mode(phy, mode, submode, &lane_mode);
 	if (err)
