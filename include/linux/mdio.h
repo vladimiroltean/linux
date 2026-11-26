@@ -572,6 +572,46 @@ static inline void mii_c73_mod_linkmode(unsigned long *adv, u16 *lpa)
 	/* 5GBASE_KR not implemented */
 }
 
+/**
+ * mii_c73_linkmode_to_adv - convert linkmodes to a Clause 73 advertisement
+ * @adv: linkmode advertisement setting
+ * @lpa: array of three u16s that receives the advertisement
+ *
+ * The inverse of mii_c73_mod_linkmode(), for the link modes that it converts.
+ * Only the pause bits and the technology ability field are set: the selector,
+ * the nonces, and the acknowledge, next page and remote fault bits are the
+ * business of the caller.
+ */
+static inline void mii_c73_linkmode_to_adv(const unsigned long *adv, u16 *lpa)
+{
+	lpa[0] = 0;
+	lpa[1] = 0;
+	lpa[2] = 0;
+
+	if (linkmode_test_bit(ETHTOOL_LINK_MODE_Pause_BIT, adv))
+		lpa[0] |= MDIO_AN_C73_0_PAUSE;
+	if (linkmode_test_bit(ETHTOOL_LINK_MODE_Asym_Pause_BIT, adv))
+		lpa[0] |= MDIO_AN_C73_0_ASM_DIR;
+	if (linkmode_test_bit(ETHTOOL_LINK_MODE_1000baseKX_Full_BIT, adv))
+		lpa[1] |= MDIO_AN_C73_1_1000BASE_KX;
+	if (linkmode_test_bit(ETHTOOL_LINK_MODE_10000baseKX4_Full_BIT, adv))
+		lpa[1] |= MDIO_AN_C73_1_10GBASE_KX4;
+	if (linkmode_test_bit(ETHTOOL_LINK_MODE_10000baseKR_Full_BIT, adv))
+		lpa[1] |= MDIO_AN_C73_1_10GBASE_KR;
+	if (linkmode_test_bit(ETHTOOL_LINK_MODE_40000baseKR4_Full_BIT, adv))
+		lpa[1] |= MDIO_AN_C73_1_40GBASE_KR4;
+	if (linkmode_test_bit(ETHTOOL_LINK_MODE_40000baseCR4_Full_BIT, adv))
+		lpa[1] |= MDIO_AN_C73_1_40GBASE_CR4;
+	if (linkmode_test_bit(ETHTOOL_LINK_MODE_100000baseKR4_Full_BIT, adv))
+		lpa[1] |= MDIO_AN_C73_1_100GBASE_KR4;
+	if (linkmode_test_bit(ETHTOOL_LINK_MODE_100000baseCR4_Full_BIT, adv))
+		lpa[1] |= MDIO_AN_C73_1_100GBASE_CR4;
+	if (linkmode_test_bit(ETHTOOL_LINK_MODE_25000baseKR_Full_BIT, adv))
+		lpa[1] |= MDIO_AN_C73_1_25GBASE_R;
+	if (linkmode_test_bit(ETHTOOL_LINK_MODE_2500baseX_Full_BIT, adv))
+		lpa[2] |= MDIO_AN_C73_2_2500BASE_KX;
+}
+
 int __mdiobus_read(struct mii_bus *bus, int addr, u32 regnum);
 int __mdiobus_write(struct mii_bus *bus, int addr, u32 regnum, u16 val);
 int __mdiobus_modify(struct mii_bus *bus, int addr, u32 regnum, u16 mask,
